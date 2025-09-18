@@ -5,8 +5,13 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
-platform :ios, min_ios_version_supported
+platform :ios, '16.0'
 prepare_react_native_project!
+
+# Override the minimum iOS version check
+def min_ios_version_supported
+  return '16.0'
+end
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
@@ -17,10 +22,16 @@ end
 target 'EcommerceApp' do
   config = use_native_modules!
 
+  # Disable New Architecture
+  ENV['RCT_NEW_ARCH_ENABLED'] = '0'
+
   use_react_native!(
     :path => config[:reactNativePath],
     # An absolute path to your application root.
-    :app_path => "#{Pod::Config.instance.installation_root}/.."
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    # Disable New Architecture
+    :fabric_enabled => false,
+    :new_arch_enabled => false
   )
 
   post_install do |installer|
