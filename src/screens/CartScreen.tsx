@@ -1,44 +1,94 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   StatusBar,
   SafeAreaView,
   FlatList,
+  ListRenderItemInfo,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useCart } from '../context/CartContext';
 import CartItem from '../components/CartItem';
+import { SavedCartItemInterface } from '../api/interfaces';
+import { getSavedCartItems } from '../api/integrations';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+type NavigationProp = {
+  navigate: (screen: string, params?: any) => void;
+  goBack: () => void;
+};
 
-const CartScreen = ({ navigation }) => {
-  const { items, updateQuantity, removeFromCart, getCartTotal, clearCart } = useCart();
+type CartScreenProps = {
+  navigation: NavigationProp;
+};
 
-  const subtotal = getCartTotal();
-  const shippingTax = 15.00;
-  const total = subtotal + shippingTax;
+const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
+  const [cartItems, setCartItems] = useState<SavedCartItemInterface[]>([]);
+  
 
-  const handleUpdateQuantity = (item, quantity) => {
-    updateQuantity(item, quantity);
+  useEffect(() => {
+    const fetchSavedCartItems = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('userData');
+        if (userData) {
+          const user = JSON.parse(userData);
+          console.log("User Data: ", user);
+          getSavedCartItems(user.CustomerProfileCode)
+          .then(response => {
+            setCartItems(response.result || []);
+          })
+          .catch(err => console.error("Error fetching cart items: ", err));
+        }
+        
+      } catch (error) {
+        console.error('Error fetching saved cart items:', error);
+      }
+    };
+
+    fetchSavedCartItems();
+  }, []);
+
+  const getCartTotal = () => {
+    return cartItems.reduce((total, item) => total + item.Price * item.Quantity, 0);
   };
 
-  const handleRemoveItem = (item) => {
-    removeFromCart(item);
+  const subtotal: number = getCartTotal();
+  // const total: number = subtotal + shippingTax;
+  const total: number = subtotal;
+
+  const handleUpdateQuantity = (item: SavedCartItemInterface, quantity: number) => {
+    setCartItems(prev =>
+      prev.map(ci =>
+        ci.CartDetailsCode === item.CartDetailsCode
+          ? { ...ci, Quantity: quantity }
+          : ci
+      )
+    );
   };
 
-  const handleEditItem = (item) => {
-    // Navigate to product screen for editing
+  const handleRemoveItem = (item: SavedCartItemInterface) => {
+    setCartItems(prev =>
+      prev.filter(ci => ci.CartDetailsCode !== item.CartDetailsCode)
+    );
+  };
+
+  const handleEditItem = (item: SavedCartItemInterface) => {
     navigation.navigate('Product', { product: item });
   };
 
   const handleCheckout = () => {
     // Handle checkout logic
     console.log('Proceeding to checkout...');
+    console.log(cartItems)
+    navigation.navigate('Address', { cartItems: cartItems });
   };
 
-  const renderCartItem = ({ item }) => (
+  const clearCart = () => {
+    setCartItems([]);
+  };
+
+  const renderCartItem = ({ item }: ListRenderItemInfo<SavedCartItemInterface>) => (
     <CartItem
       item={item}
       onUpdateQuantity={handleUpdateQuantity}
@@ -52,7 +102,7 @@ const CartScreen = ({ navigation }) => {
       <Icon name="bag-outline" size={80} color="#CCC" />
       <Text style={styles.emptyCartTitle}>Your cart is empty</Text>
       <Text style={styles.emptyCartSubtitle}>Add some products to get started</Text>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.shopNowButton}
         onPress={() => navigation.navigate('Home')}
       >
@@ -64,11 +114,11 @@ const CartScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
@@ -76,8 +126,8 @@ const CartScreen = ({ navigation }) => {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Cart</Text>
         </View>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.deleteAllButton}
           onPress={clearCart}
         >
@@ -85,15 +135,17 @@ const CartScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {items.length === 0 ? (
+      {cartItems.length === 0 ? (
         renderEmptyCart()
       ) : (
         <>
           {/* Cart Items */}
           <FlatList
-            data={items}
+            data={cartItems}
             renderItem={renderCartItem}
-            keyExtractor={(item, index) => `${item.id}-${item.selectedColor}-${item.selectedStorage}-${index}`}
+            keyExtractor={(item: SavedCartItemInterface, index: number) =>
+              `${item.CartDetailsCode}-${index}`
+            }
             style={styles.cartList}
             contentContainerStyle={styles.cartListContent}
             showsVerticalScrollIndicator={false}
@@ -112,16 +164,11 @@ const CartScreen = ({ navigation }) => {
 
             {/* Order Summary */}
             <View style={styles.orderSummary}>
-              <View style={styles.summaryRow}>
+              {/* <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Sub Total</Text>
                 <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
-              </View>
-              
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Shipping & Tax</Text>
-                <Text style={styles.summaryValue}>${shippingTax.toFixed(2)}</Text>
-              </View>
-              
+              </View> */}
+
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
                 <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
@@ -139,49 +186,119 @@ const CartScreen = ({ navigation }) => {
   );
 };
 
+// ...styles remain unchanged
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
+    paddingTop: StatusBar.currentHeight || 0,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    paddingVertical: 14,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F2',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   backButton: {
-    padding: 8,
-    marginRight: 8,
+    marginRight: 12,
+    padding: 4,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: 'bold',
     color: '#333',
   },
   deleteAllButton: {
-    padding: 8,
+    padding: 4,
   },
   cartList: {
     flex: 1,
+    backgroundColor: '#FFF',
   },
   cartListContent: {
-    padding: 16,
-    paddingBottom: 100,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  bottomSection: {
+    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#F2F2F2',
+  },
+  promoCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  promoCodeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  promoCodeText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#666',
+  },
+  orderSummary: {
+    marginBottom: 18,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  summaryValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  totalRow: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F2F2F2',
+    paddingTop: 8,
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF6B6B',
+  },
+  checkoutButton: {
+    backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  checkoutButtonText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
   emptyCartContainer: {
     flex: 1,
@@ -190,107 +307,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyCartTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: 'bold',
     color: '#333',
-    marginTop: 24,
+    marginTop: 16,
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptyCartSubtitle: {
     fontSize: 16,
     color: '#666',
+    marginBottom: 24,
     textAlign: 'center',
-    marginBottom: 32,
   },
   shopNowButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    paddingVertical: 12,
     paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 25,
+    alignItems: 'center',
   },
   shopNowButtonText: {
+    color: '#FFF',
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  bottomSection: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  promoCodeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  promoCodeLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  promoCodeText: {
-    fontSize: 16,
-    color: '#666',
-    marginLeft: 12,
-  },
-  orderSummary: {
-    marginBottom: 24,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  summaryLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-    paddingTop: 16,
-    marginTop: 8,
-  },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-  },
-  totalValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
-  },
-  checkoutButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 25,
-    paddingVertical: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkoutButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
 });
 

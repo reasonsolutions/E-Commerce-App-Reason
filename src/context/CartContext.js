@@ -64,25 +64,25 @@ const cartReducer = (state, action) => {
 
 const initialState = {
   items: [
-    {
-      id: 1,
-      name: 'iPhone 16 Pro Max',
-      brand: 'Apple',
-      price: 1399.99,
-      image: 'https://picsum.photos/300/300?random=1',
-      selectedColor: 'Natural Titanium',
-      selectedStorage: '512 GB',
-      quantity: 1,
-    },
-    {
-      id: 2,
-      name: 'Smartwatch Ultra',
-      brand: 'Apple',
-      price: 99.99,
-      image: 'https://picsum.photos/300/300?random=5',
-      selectedColor: 'Black',
-      quantity: 1,
-    },
+    // {
+    //   id: 1,
+    //   name: 'iPhone 16 Pro Max',
+    //   brand: 'Apple',
+    //   price: 1399.99,
+    //   image: 'https://picsum.photos/300/300?random=1',
+    //   selectedColor: 'Natural Titanium',
+    //   selectedStorage: '512 GB',
+    //   quantity: 1,
+    // },
+    // {
+    //   id: 2,
+    //   name: 'Smartwatch Ultra',
+    //   brand: 'Apple',
+    //   price: 99.99,
+    //   image: 'https://picsum.photos/300/300?random=5',
+    //   selectedColor: 'Black',
+    //   quantity: 1,
+    // },
   ],
 };
 

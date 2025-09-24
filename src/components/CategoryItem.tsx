@@ -1,14 +1,21 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet , Image } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { CategoryInterface } from '../api/interfaces';
 
-const CategoryItem = ({ category, onPress }) => {
+interface CategoryItemProps {
+  category: CategoryInterface;
+  onPress: () => void;
+}
+
+const CategoryItem: React.FC<CategoryItemProps> = ({ category, onPress }) => {
+  console.log(category.CategoryImage)
   return (
     <TouchableOpacity style={styles.container} onPress={onPress}>
       <View style={styles.iconContainer}>
-        <Icon name={category.icon} size={24} color="#666" />
+        <Image source={{ uri: category.CategoryImage }} style={{ width: 48, height: 48 }} />
       </View>
-      <Text style={styles.name}>{category.name}</Text>
+      <Text style={styles.name}>{category.CategoryName}</Text>
     </TouchableOpacity>
   );
 };
@@ -22,14 +29,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     margin: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
     minHeight: 80,
   },
   iconContainer: {

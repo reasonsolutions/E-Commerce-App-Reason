@@ -2,13 +2,13 @@ export const categories = [
   {
     id: 1,
     name: 'Mobile',
-    icon: 'phone',
+    icon: 'phone-portrait-outline',
     iconType: 'Ionicons',
   },
   {
     id: 2,
     name: 'Headphone',
-    icon: 'headphones',
+    icon: 'headset-outline',
     iconType: 'Ionicons',
   },
   {

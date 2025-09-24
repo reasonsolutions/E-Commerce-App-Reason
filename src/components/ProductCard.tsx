@@ -1,27 +1,52 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, GestureResponderEvent } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { ProductInterface } from '../api/interfaces';
 
-const ProductCard = ({ product, onPress, onFavoritePress }) => {
+interface ProductCardProps {
+  product: ProductInterface;
+  onPress?: (event: GestureResponderEvent) => void;
+  onFavoritePress?: (product: ProductInterface) => void;
+}
+
+const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, onFavoritePress }) => {
   return (
     <TouchableOpacity style={styles.container} onPress={onPress}>
       <View style={styles.imageContainer}>
-        <Image source={{ uri: product.image }} style={styles.image} />
-        <TouchableOpacity 
-          style={styles.favoriteButton} 
+        <Image
+          source={{ uri: product.Images?.split(';')[0] || '' }}
+          style={styles.image}
+        />
+        {/* <TouchableOpacity
+          style={styles.favoriteButton}
           onPress={() => onFavoritePress && onFavoritePress(product)}
         >
-          <Icon 
-            name={product.isFavorite ? "heart" : "heart-outline"} 
-            size={20} 
-            color={product.isFavorite ? "#FF6B6B" : "#666"} 
-          />
-        </TouchableOpacity>
+          
+        </TouchableOpacity> */}
       </View>
       <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
-        {product.price && (
-          <Text style={styles.price}>${product.price}</Text>
+        <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
+        {product.Price && (
+          <Text style={styles.price}>${product.Price}</Text>
+        )}
+        {product.ComparePrice && (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text
+              style={[
+          styles.price,
+          {
+            color: 'red',
+            textDecorationLine: 'line-through',
+            marginRight: 6,
+            fontSize: 14,
+            fontWeight: '400',
+          },
+              ]}
+            >
+              ${product.ComparePrice}
+            </Text>
+            {/* Discounted price is already rendered above */}
+          </View>
         )}
       </View>
     </TouchableOpacity>

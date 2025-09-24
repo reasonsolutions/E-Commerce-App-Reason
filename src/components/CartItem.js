@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet , StatusBar } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 const CartItem = ({ item, onUpdateQuantity, onRemove, onEdit }) => {
   const handleQuantityChange = (change) => {
-    const newQuantity = item.quantity + change;
+    const newQuantity = item.Quantity + change;
     if (newQuantity > 0) {
       onUpdateQuantity(item, newQuantity);
     }
@@ -12,18 +12,15 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, onEdit }) => {
 
   return (
     <View style={styles.container}>
-      <Image source={{ uri: item.image }} style={styles.image} />
+      <Image source={{ uri: item.Images.split(";")[0] }} style={styles.image} />
       
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.productInfo}>
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.brand}>{item.brand}</Text>
-            {item.selectedColor && (
-              <Text style={styles.variant}>Color: {item.selectedColor}</Text>
-            )}
-            {item.selectedStorage && (
-              <Text style={styles.variant}>Storage: {item.selectedStorage}</Text>
+            <Text style={styles.name}>{item.Name}</Text>
+            <Text style={styles.brand}>{item.Brand_Name}</Text>
+            {item.Variant && (
+              <Text style={styles.variant}>Variant: {item.Variant}</Text>
             )}
           </View>
           <TouchableOpacity 
@@ -36,12 +33,11 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, onEdit }) => {
         
         <View style={styles.footer}>
           <View style={styles.priceContainer}>
-            <Text style={styles.price}>${item.price}</Text>
-            {onEdit && (
-              <TouchableOpacity onPress={() => onEdit(item)}>
-                <Text style={styles.editText}>Edit</Text>
-              </TouchableOpacity>
+            <Text style={styles.price}>${item.Price}</Text>
+            {item.ComparePrice && item.ComparePrice > item.Price && (
+              <Text style={styles.comparePrice}>${item.ComparePrice}</Text>
             )}
+            
           </View>
           
           <View style={styles.quantityContainer}>
@@ -51,7 +47,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, onEdit }) => {
             >
               <Icon name="remove" size={16} color="#666" />
             </TouchableOpacity>
-            <Text style={styles.quantity}>{item.quantity}</Text>
+            <Text style={styles.quantity}>{item.Quantity}</Text>
             <TouchableOpacity 
               style={styles.quantityButton}
               onPress={() => handleQuantityChange(1)}
@@ -133,6 +129,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
     marginRight: 12,
+  },
+  comparePrice: {
+    fontSize: 14,
+    color: '#888',
+    textDecorationLine: 'line-through',
+    marginRight: 8,
   },
   editText: {
     fontSize: 14,

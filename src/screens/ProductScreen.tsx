@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState , useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,32 +10,82 @@ import {
   Image,
   FlatList,
   Dimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
-import { products } from '../data/mockData';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ProductDetailInterface, VariantInterface , PostCartSaveInterface } from '../api/interfaces';
+import { postSaveCartItems, selectProduct } from '../api/integrations';
 
 const { width } = Dimensions.get('window');
 
-const ProductScreen = ({ navigation, route }) => {
+type ProductScreenProps = {
+  navigation: {
+    goBack: () => void;
+    navigate: (screen: string) => void;
+  };
+  route: {
+    params?: {
+      product?: string;
+    };
+  };
+};
+
+const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
+
+  const [productDetails,setProductDetails] = useState<ProductDetailInterface | null>(null);
+  const [variantDetails,setVariantDetails] = useState<VariantInterface[]>([]);
+  const [selectedVariant,setSelectedVariant] = useState<string>('');
   const { addToCart } = useCart();
-  const productId = route?.params?.product?.id || 1;
-  const product = products.find(p => p.id === productId) || products[0];
-  
-  const [selectedColor, setSelectedColor] = useState(product.selectedColor);
-  const [selectedStorage, setSelectedStorage] = useState(product.selectedStorage);
-  const [quantity, setQuantity] = useState(1);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+  const [profileCode,setProfileCode] = useState<number | null>(null)
+  useEffect(() => {
+    console.log(route?.params?.product)
+    selectProduct(route?.params?.product ?? "1").then(data => {
+      console.log(data.result[1]);
+      setProductDetails(data.result[0]);
+      setVariantDetails(data.result[1])
+    }).catch(err => console.error(err));
+  },[])
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('userData');
+        if (userData) {
+          const user = JSON.parse(userData);
+          setProfileCode(user.CustomerProfileCode);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   const handleAddToCart = () => {
-    const productToAdd = {
-      ...product,
-      selectedColor,
-      selectedStorage,
-      quantity,
+    let requestbody: PostCartSaveInterface = {
+      "CustomerLoginCode": null,
+      "CustomerProfileCode": profileCode!,
+      "Inventory_Id": selectedVariant ? parseInt(selectedVariant) : (productDetails?.Inventory_Id ?? 0),
+      "BranchCode": null,
+      "CountryCode": null,
+      "Quantity": quantity,
+      "SpecialRemarks": ""
     };
+    console.log("Request body for adding to cart: ", requestbody);
+    const productToAdd = {
+
+    };
+    postSaveCartItems(requestbody).then(response => {
+      console.log("Add to cart response: ", response);
+      navigation.navigate('Cart');
+    }).catch(err => console.error("Error adding to cart: ", err));
     addToCart(productToAdd);
-    navigation.goBack();
   };
 
   const handleBuyNow = () => {
@@ -43,11 +93,11 @@ const ProductScreen = ({ navigation, route }) => {
     navigation.navigate('Cart');
   };
 
-  const renderVariantImage = ({ item, index }) => (
-    <TouchableOpacity 
+  const renderVariantImage = ({ item, index }: { item: string; index: number }) => (
+    <TouchableOpacity
       style={[
         styles.variantImage,
-        selectedImageIndex === index && styles.selectedVariantImage
+        selectedImageIndex === index && styles.selectedVariantImage,
       ]}
       onPress={() => setSelectedImageIndex(index)}
     >
@@ -55,37 +105,41 @@ const ProductScreen = ({ navigation, route }) => {
     </TouchableOpacity>
   );
 
-  const renderColorOption = (color, index) => (
+  // const renderColorOption = (color: { name: string; color: string }, index: number) => (
+  //   <TouchableOpacity
+  //     key={index}
+  //     style={[
+  //       styles.colorOption,
+  //       { backgroundColor: color.color },
+  //       selectedColor === color.name && styles.selectedColorOption,
+  //     ]}
+  //     onPress={() => setSelectedColor(color.name)}
+  //   />
+  // );
+
+  const renderVariantOption = (storage:VariantInterface) => (
     <TouchableOpacity
-      key={index}
+      key={storage.Inventory_Id}
+      disabled={storage.Count === 0}
       style={[
         styles.colorOption,
-        { backgroundColor: color.color },
-        selectedColor === color.name && styles.selectedColorOption,
+        { opacity: storage.Count === 0 ? 0.5 : 1 },
+        selectedVariant === String(storage.Inventory_Id) && styles.selectedColorOption,
       ]}
-      onPress={() => setSelectedColor(color.name)}
-    />
-  );
-
-  const renderStorageOption = (storage, index) => (
-    <TouchableOpacity
-      key={index}
-      style={[
-        styles.storageOption,
-        selectedStorage === storage && styles.selectedStorageOption,
-      ]}
-      onPress={() => setSelectedStorage(storage)}
+      onPress={() => setSelectedVariant(String(storage.Inventory_Id))}
     >
-      <Text style={[
-        styles.storageText,
-        selectedStorage === storage && styles.selectedStorageText,
-      ]}>
-        {storage}
+      <Text
+        style={[
+          styles.storageText,
+          selectedVariant === String(storage.Inventory_Id) && styles.selectedColorOption,
+        ]}
+      >
+        {storage.Variant}
       </Text>
     </TouchableOpacity>
   );
 
-  const renderFeature = (feature, index) => (
+  const renderFeature = (feature: { icon: string; title: string }, index: number) => (
     <View key={index} style={styles.featureItem}>
       <Icon name={feature.icon} size={20} color="#007AFF" />
       <Text style={styles.featureText}>{feature.title}</Text>
@@ -95,16 +149,16 @@ const ProductScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      
+
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.headerButton}
           onPress={() => navigation.goBack()}
         >
           <Icon name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        
+
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.headerButton}>
             <Icon name="heart-outline" size={24} color="#333" />
@@ -112,7 +166,7 @@ const ProductScreen = ({ navigation, route }) => {
           <TouchableOpacity style={styles.headerButton}>
             <Icon name="share-outline" size={24} color="#333" />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.headerButton}
             onPress={() => navigation.navigate('Cart')}
           >
@@ -124,15 +178,24 @@ const ProductScreen = ({ navigation, route }) => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Product Images */}
         <View style={styles.imageSection}>
-          <Image 
-            source={{ uri: product.images[selectedImageIndex] }} 
-            style={styles.mainImage} 
+          <Image
+            source={{
+              uri:
+          productDetails?.Images
+            ? productDetails.Images.split(';')[selectedImageIndex]
+            : undefined,
+            }}
+            style={styles.mainImage}
           />
-          
+
           <FlatList
-            data={product.images}
+            data={
+              productDetails?.Images
+          ? productDetails.Images.split(';')
+          : []
+            }
             renderItem={renderVariantImage}
-            keyExtractor={(item, index) => index.toString()}
+            keyExtractor={(_, index) => index.toString()}
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.variantImagesList}
@@ -142,33 +205,37 @@ const ProductScreen = ({ navigation, route }) => {
 
         {/* Product Information */}
         <View style={styles.productInfo}>
-          <Text style={styles.productName}>{product.name}</Text>
+          <Text style={styles.productName}>{productDetails?.Name}</Text>
           <View style={styles.brandRatingContainer}>
-            <Text style={styles.brandText}>By {product.brand}</Text>
-            <View style={styles.ratingContainer}>
-              <Icon name="star" size={16} color="#FFD700" />
-              <Text style={styles.ratingText}>{product.rating}</Text>
-              <Text style={styles.reviewText}>({product.reviewCount}k)</Text>
-            </View>
+            <Text style={styles.brandText}>By {productDetails?.Brand_Name}</Text>
           </View>
-          
           <View style={styles.priceContainer}>
-            <Text style={styles.price}>${product.price}</Text>
-            {product.originalPrice && (
-              <Text style={styles.originalPrice}>${product.originalPrice}</Text>
+            <Text style={styles.price}>${productDetails?.Price}</Text>
+            {productDetails?.ComparePrice && (
+              <Text style={styles.originalPrice}>${productDetails?.ComparePrice}</Text>
             )}
           </View>
           
+           {/* variant Options */}
+          {variantDetails && (
+            <View style={styles.optionsSection}>
+              <Text style={styles.optionTitle}>Variant</Text>
+              <View style={styles.colorOptions}>
+                {variantDetails.map(renderVariantOption)}
+              </View>
+            </View>
+          )}
+
           {/* Quantity Selector */}
           <View style={styles.quantityContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.quantityButton}
               onPress={() => setQuantity(Math.max(1, quantity - 1))}
             >
               <Icon name="remove" size={20} color="#666" />
             </TouchableOpacity>
             <Text style={styles.quantityText}>{quantity}</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.quantityButton}
               onPress={() => setQuantity(quantity + 1)}
             >
@@ -176,31 +243,16 @@ const ProductScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Color Options */}
-        <View style={styles.optionsSection}>
-          <Text style={styles.optionTitle}>Color</Text>
-          <View style={styles.colorOptions}>
-            {product.colors.map(renderColorOption)}
-          </View>
-          <Text style={styles.selectedOptionText}>{selectedColor}</Text>
-        </View>
-
-        {/* Storage Options */}
-        {product.storage && (
-          <View style={styles.optionsSection}>
-            <Text style={styles.optionTitle}>Storage</Text>
-            <View style={styles.storageOptions}>
-              {product.storage.map(renderStorageOption)}
-            </View>
-          </View>
-        )}
-
+        
+        {/* Options Section */}
+            
         {/* Features Section */}
-        <View style={styles.featuresSection}>
-          <Text style={styles.featuresTitle}>A Snapshot View</Text>
-          {product.features.map(renderFeature)}
-        </View>
+      <View style={styles.featuresSection}>
+        <Text style={styles.featuresTitle}>Description</Text>
+        <Text style={[styles.featureText, { color: '#555', fontSize: 16, lineHeight: 22 }]}>
+          {productDetails?.Description}
+        </Text>
+      </View>
       </ScrollView>
 
       {/* Action Buttons */}
@@ -223,6 +275,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    paddingTop: StatusBar.currentHeight || 0,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -355,7 +408,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
   optionsSection: {
-    paddingHorizontal: 16,
     paddingBottom: 24,
   },
   optionTitle: {
@@ -367,14 +419,22 @@ const styles = StyleSheet.create({
   colorOptions: {
     flexDirection: 'row',
     marginBottom: 8,
+    alignContent:'center',
+    alignItems:'center',
+    gap:8
+    
   },
   colorOption: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: 12,
+    alignSelf:'center',
+    alignContent:'center',
+    justifyContent:'center',
+    
     borderWidth: 3,
     borderColor: 'transparent',
+    backgroundColor: '#F5F5F5',
   },
   selectedColorOption: {
     borderColor: '#007AFF',
@@ -404,6 +464,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#333',
+    alignSelf:'center',
+
   },
   selectedStorageText: {
     color: '#FFFFFF',
