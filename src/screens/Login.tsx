@@ -1,11 +1,15 @@
 import React, { useState , useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert , useWindowDimensions } from 'react-native';
-import { loginCustomer } from '../api/integrations';
+import { View, Text, TextInput, StyleSheet, Alert, useWindowDimensions } from 'react-native';
+// import { loginCustomer } from '../api/integrations';
+import { loginCustomer } from '../api/services';
 import { postLoginInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/storageKeys';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { WebView } from "react-native-webview";
+import { Button } from '../components/ui';
+import { Colors, Space, Radius, FontSize, FontWeight, Shadow } from '../theme';
 type RootStackParamList = {
     Home: undefined;
     // Add other screens here if needed
@@ -25,7 +29,7 @@ const Login: React.FC = () => {
   `;
     useEffect(() => {
         const checkUserData = async () => {
-            const userData = await AsyncStorage.getItem('userData');
+            const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
             if (userData) {
                 navigation.navigate('Home');
             }
@@ -39,25 +43,26 @@ const Login: React.FC = () => {
 
         return unsubscribe;
     }, [navigation]);
-    const handleLogin = () => {
+    const handleLogin = async () => {
         if (username === '' || password === '') {
             Alert.alert('Error', 'Please enter both username and password.');
             return;
         }
-        var data: postLoginInterface = {
-            "LoginID": username,
-            "Password": password    
+        const data: postLoginInterface = {
+            LoginID: username,
+            Password: password,
+        };
+        try {
+            const result = await loginCustomer(data);
+            if (result.statusCode !== 1) {
+                Alert.alert('Login Failed', result.userMessage || 'Invalid credentials.');
+                return;
+            }
+            await AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(result.result));
+            navigation.navigate('Home');
+        } catch (error: any) {
+            Alert.alert('Login Failed', error?.message ?? 'Something went wrong. Please try again.');
         }
-        loginCustomer(data)
-            .then((result) => {
-                console.log(result)
-                AsyncStorage.setItem('userData', JSON.stringify(result.result));
-                navigation.navigate('Home');
-                Alert.alert('Login Successful', 'Welcome to the E-Commerce App!');
-            })
-            .catch((error) => {
-                Alert.alert('Login Failed', error.message);
-            });
     };
 
     return (
@@ -92,7 +97,7 @@ const Login: React.FC = () => {
                     autoCapitalize="none"
                     value={username}
                     onChangeText={setUsername}
-                    placeholderTextColor="#aaa"
+                    placeholderTextColor={Colors.ink4}
                 />
                 <TextInput
                     style={styles.input}
@@ -100,11 +105,11 @@ const Login: React.FC = () => {
                     secureTextEntry
                     value={password}
                     onChangeText={setPassword}
-                    placeholderTextColor="#aaa"
+                    placeholderTextColor={Colors.ink4}
                 />
-                <TouchableOpacity style={styles.button} onPress={handleLogin}>
-                    <Text style={styles.buttonText}>Login</Text>
-                </TouchableOpacity>
+                <Button variant="primary" size="lg" fullWidth onPress={handleLogin}>
+                    Login
+                </Button>
             </View>
         </View>
     );
@@ -115,51 +120,34 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#f3f6fa',
+        backgroundColor: Colors.surfaceMute,
     },
     card: {
         width: '90%',
         maxWidth: 400,
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 32,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 6,
+        backgroundColor: Colors.surface,
+        borderRadius: Radius.lg,
+        padding: Space[8],
+        ...Shadow.md,
     },
     title: {
-        fontSize: 32,
-        fontWeight: '700',
-        color: '#2d2d2d',
-        marginBottom: 28,
+        fontSize: FontSize['2xl'],
+        fontWeight: FontWeight.bold,
+        color: Colors.ink1,
+        marginBottom: Space[6] + Space[1],
         textAlign: 'center',
-        letterSpacing: 1,
+        letterSpacing: -0.6,
     },
     input: {
         height: 50,
-        borderColor: '#e0e0e0',
+        borderColor: Colors.lineStrong,
         borderWidth: 1,
-        borderRadius: 10,
-        marginBottom: 18,
-        paddingHorizontal: 16,
-        fontSize: 17,
-        backgroundColor: '#f8f9fb',
-        color: '#333',
-    },
-    button: {
-        backgroundColor: '#1976d2',
-        paddingVertical: 14,
-        borderRadius: 10,
-        alignItems: 'center',
-        marginTop: 8,
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '600',
-        letterSpacing: 0.5,
+        borderRadius: Radius.sm,
+        marginBottom: Space[4],
+        paddingHorizontal: Space[4],
+        fontSize: FontSize.md,
+        backgroundColor: Colors.surfaceAlt,
+        color: Colors.ink1,
     },
 });
 

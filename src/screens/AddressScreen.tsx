@@ -6,15 +6,18 @@ import {
     TouchableOpacity,
     FlatList,
     StyleSheet,
-    SafeAreaView,
     KeyboardAvoidingView,
     Platform,
-    StatusBar
+    Alert,
 } from "react-native";
-import { getDeliveryAddresses, postCreateDeliveryAddress, postPlacedMultipleOrder } from "../api/integrations";
-import { postPlacedMultipleOrderInterface , SavedCartItemInterface } from "../api/interfaces";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { EmptyState, ScreenHeader } from "../components/ui";
+import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from "../theme";
+import { getDeliveryAddresses, postCreateDeliveryAddress, postPlacedMultipleOrder } from "../api/services";
+import { postPlacedMultipleOrderInterface, SavedCartItemInterface } from "../api/interfaces";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// Interface for delivery address
+import { STORAGE_KEYS } from '../config/storageKeys';
+
 export interface DeliveryAddress {
     OrderDeliveryAddressCode: number;
     CustomerName: string;
@@ -24,230 +27,253 @@ export interface DeliveryAddress {
     CreatedDate: string;
     UpdatedDate: string | null;
 }
+
 type AddressScreenProps = {
-  navigation: {
-    goBack: () => void;
-    navigate: {
-    (screen: string): void;
-    (screen: string, params: Record<string, any>): void;
-  };
-  };
-  route: {
-    params?: {
-      cartItems?: SavedCartItemInterface[];
+    navigation: {
+        goBack: () => void;
+        navigate: {
+            (screen: string): void;
+            (screen: string, params: Record<string, any>): void;
+        };
     };
-  };
+    route: {
+        params?: {
+            cartItems?: SavedCartItemInterface[];
+        };
+    };
 };
 
-const AddressScreen: React.FC<AddressScreenProps> = ( { route  , navigation }) => {
+const EMPTY_FORM = { CustomerName: '', MobileNumber: '', FullAddress: '' };
 
+const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
     const [selectedAddressCode, setSelectedAddressCode] = useState<number | null>(null);
-    const [form, setForm] = useState<Omit<DeliveryAddress, "OrderDeliveryAddressCode" | "CreatedDate" | "UpdatedDate">>({
-        CustomerName: "",
-        MobileNumber: 0,
-        FullAddress: "",
-        CustomerProfileCode: 0,
-    });
-    const [profileCode,setProfileCode] = useState<number | null>(null)
+    const [form, setForm] = useState(EMPTY_FORM);
+    const [profileCode, setProfileCode] = useState<number | null>(null);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
-            const userData = await AsyncStorage.getItem('userData');
+            const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
             if (userData) {
                 const user = JSON.parse(userData);
-                console.log(user)
-                setProfileCode(user.CustomerProfileCode)
+                setProfileCode(user.CustomerProfileCode);
                 getDeliveryAddresses(user.CustomerProfileCode).then(response => {
                     if (response.statusCode === 1) {
-                        setAddresses(response.result || []);
-                    } else {
-                        console.error("Failed to fetch addresses: ", response.message);
+                        const list: DeliveryAddress[] = response.result || [];
+                        setAddresses(list);
+                        // Auto-select the most recent address
+                        if (list.length > 0 && selectedAddressCode === null) {
+                            setSelectedAddressCode(list[list.length - 1].OrderDeliveryAddressCode);
+                        }
                     }
                 });
             }
-        }
-        fetchData()
-        
-    },[])
+        };
+        fetchData();
+    }, []);
 
     const handleChange = (name: string, value: string) => {
-        setForm({
-            ...form,
-            [name]: name === "MobileNumber" || name === "CustomerProfileCode" ? Number(value) : value,
-        });
+        setForm(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleAddAddress = () => {
-        if (
-            form.CustomerName &&
-            form.MobileNumber &&
-            form.FullAddress &&
-            form.CustomerProfileCode
-        ) {
-            postCreateDeliveryAddress({
-                ...form,
-                MobileNumber: String(form.MobileNumber)
-            }).then(response => {
-                console.log("Address creation response: ", response);
-                if (response.statusCode === 1) {
-                    getDeliveryAddresses(profileCode!).then(response => {
-                    if (response.statusCode === 1) {
-                        setAddresses(response.result || []);
-                    } else {
-                        console.error("Failed to fetch addresses: ", response.message);
-                    }
-                });
-                    setForm({
-                        CustomerName: "",
-                        MobileNumber: 0,
-                        FullAddress: "",
-                        CustomerProfileCode: 0,
-                    });
-                }
-            }).catch(err => {
-                console.error("Error creating address: ", err);
+    const handleAddAddress = async () => {
+        if (!form.CustomerName.trim() || !form.MobileNumber.trim() || !form.FullAddress.trim()) {
+            Alert.alert('Missing fields', 'Please fill in all address fields.');
+            return;
+        }
+        if (!profileCode) return;
+
+        setSubmitting(true);
+        try {
+            const response = await postCreateDeliveryAddress({
+                CustomerName: form.CustomerName.trim(),
+                MobileNumber: form.MobileNumber.trim(),
+                FullAddress: form.FullAddress.trim(),
+                CustomerProfileCode: profileCode,
             });
+            if (response.statusCode === 1) {
+                const refreshed = await getDeliveryAddresses(profileCode);
+                if (refreshed.statusCode === 1) {
+                    const list: DeliveryAddress[] = refreshed.result || [];
+                    setAddresses(list);
+                    // Auto-select the newly created address (last in list)
+                    if (list.length > 0) {
+                        setSelectedAddressCode(list[list.length - 1].OrderDeliveryAddressCode);
+                    }
+                }
+                setForm(EMPTY_FORM);
+            } else {
+                Alert.alert('Error', 'Failed to save address. Please try again.');
+            }
+        } catch (err) {
+            console.error('Error creating address:', err);
+            Alert.alert('Error', 'Something went wrong. Please try again.');
+        } finally {
+            setSubmitting(false);
         }
     };
 
-    const buyProducts = () => {
-        console.log("Buying products to address code: ", selectedAddressCode);
-        let transformedArray = route!.params!.cartItems!.map((item: SavedCartItemInterface) => ({
-            Inventory_Id: item.Inventory_Id,
-            Quantity: item.Quantity,
-            Amount: item.Price * item.Quantity,
-            DeliveryCharges: 0,
-            DeliveryChargesVAT: 0,
-            ItemCharges: 0,
-            ItemChargesVAT: 0,
-            Discount: 0,
-            VAT: 0,
-            OrderStatus: 1
-        }))
-        let result : postPlacedMultipleOrderInterface = {
-            CustomerProfileCode: profileCode!,
-            OrderDeliveryAddressCode: selectedAddressCode!,
-            BranchCode: "NULL",
-            CountryCode: "NULL",
-            CartMasterCode: route.params!.cartItems![0].CartMasterCode,
-            OrderDetails: transformedArray
+    const buyProducts = async () => {
+        if (submitting) return;
+
+        if (!selectedAddressCode) {
+            Alert.alert('Select address', 'Please select a delivery address before continuing.');
+            return;
         }
 
-        postPlacedMultipleOrder(result).then(response => {
-            console.log("Order placed response: ", response);
-            navigation.navigate("OrderSuccess" , { orderNumber : response.result.OrderNumber });
-        }).catch(err => {
-            console.error("Error placing order: ", err);
-        });
+        const cartItems = route.params?.cartItems;
 
-    }
+        if (!cartItems || cartItems.length === 0) {
+            Alert.alert('Empty cart', 'Your cart is empty. Please add items before checking out.');
+            return;
+        }
+
+        if (!cartItems[0].CartMasterCode) {
+            Alert.alert('Cart error', 'There was a problem with your cart. Please go back and try again.');
+            return;
+        }
+
+        if (!profileCode) {
+            Alert.alert('Session expired', 'Please log in again to continue.');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const transformedArray = cartItems.map((item: SavedCartItemInterface) => ({
+                Inventory_Id: item.Inventory_Id,
+                Quantity: item.Quantity,
+                Amount: item.Price * item.Quantity,
+                DeliveryCharges: 0,
+                DeliveryChargesVAT: 0,
+                ItemCharges: 0,
+                ItemChargesVAT: 0,
+                Discount: 0,
+                VAT: 0,
+                OrderStatus: 1,
+            }));
+
+            const payload: postPlacedMultipleOrderInterface = {
+                CustomerProfileCode: profileCode,
+                OrderDeliveryAddressCode: selectedAddressCode,
+                BranchCode: 'NULL',
+                CountryCode: 'NULL',
+                CartMasterCode: cartItems[0].CartMasterCode,
+                OrderDetails: transformedArray,
+            };
+
+            const response = await postPlacedMultipleOrder(payload);
+            navigation.navigate('OrderSuccess', { orderNumber: response.result.OrderNumber });
+        } catch (err) {
+            console.error('Error placing order:', err);
+            Alert.alert('Order failed', 'Could not place your order. Please try again.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+            <ScreenHeader title="Choose Address" back onBack={() => navigation.goBack()} />
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
-                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={styles.flex}
             >
-                <Text style={styles.title}>Choose your address</Text>
-                
-                <View style={styles.paper}>
-                    <Text style={styles.formTitle}>Saved Addresses</Text>
-                    <FlatList
-                        data={addresses}
-                        keyExtractor={item => item.OrderDeliveryAddressCode.toString()}
-                        renderItem={({ item }) => (
+                <FlatList
+                    data={addresses}
+                    keyExtractor={item => String(item.OrderDeliveryAddressCode)}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    ListHeaderComponent={
+                        <Text style={styles.sectionTitle}>Saved Addresses</Text>
+                    }
+                    renderItem={({ item }) => {
+                        const isSelected = selectedAddressCode === item.OrderDeliveryAddressCode;
+                        return (
                             <TouchableOpacity
-                                style={[
-                                    styles.addressItem,
-                                    { paddingHorizontal: 12 }, // Added horizontal padding
-                                    selectedAddressCode === item.OrderDeliveryAddressCode && {
-                                        backgroundColor: "#e3f2fd",
-                                        borderLeftWidth: 4,
-                                        borderLeftColor: "#1976d2",
-                                        shadowColor: "#1976d2",
-                                        shadowOffset: { width: 0, height: 2 },
-                                        shadowOpacity: 0.15,
-                                        shadowRadius: 6,
-                                        elevation: 4,
-                                        transform: [{ scale: 1.02 }],
-                                    },
-                                ]}
+                                style={[styles.addressCard, isSelected && styles.addressCardSelected]}
                                 onPress={() => setSelectedAddressCode(item.OrderDeliveryAddressCode)}
-                                activeOpacity={0.85}
+                                activeOpacity={0.82}
                             >
-                                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                                    {selectedAddressCode === item.OrderDeliveryAddressCode && (
-                                        <View
-                                            style={{
-                                                width: 22,
-                                                height: 22,
-                                                borderRadius: 11,
-                                                backgroundColor: "#1976d2",
-                                                justifyContent: "center",
-                                                alignItems: "center",
-                                                marginRight: 10,
-                                            }}
-                                        >
-                                            <Text style={{ color: "#fff", fontWeight: "bold" }}>✓</Text>
-                                        </View>
-                                    )}
-                                    <View style={{ flex: 1 }}>
+                                <View style={styles.addressCardInner}>
+                                    <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+                                        {isSelected && <View style={styles.radioInner} />}
+                                    </View>
+                                    <View style={styles.addressText}>
                                         <Text style={styles.addressName}>{item.CustomerName}</Text>
-                                        <Text style={styles.addressDetail}>Mobile: {item.MobileNumber}</Text>
-                                        <Text style={styles.addressDetail}>Address: {item.FullAddress}</Text>
-                                        <Text style={styles.addressDetail}>Profile Code: {item.CustomerProfileCode}</Text>
-                                        <Text style={styles.addressMeta}>
-                                            Created: {new Date(item.CreatedDate).toLocaleString()}
-                                        </Text>
+                                        <Text style={styles.addressLine}>{item.FullAddress}</Text>
+                                        <Text style={styles.addressMobile}>{item.MobileNumber}</Text>
                                     </View>
                                 </View>
                             </TouchableOpacity>
-                        )}
-                        ListEmptyComponent={
-                            <Text style={{ color: "#888", textAlign: "center", marginTop: 12 }}>
-                                No addresses found.
-                            </Text>
-                        }
-                    />
+                        );
+                    }}
+                    ListEmptyComponent={
+                        <EmptyState
+                            icon={null}
+                            title="No saved addresses"
+                            body="Add a new address below"
+                        />
+                    }
+                    ListFooterComponent={
+                        <View>
+                            <Text style={[styles.sectionTitle, { marginTop: Space[6] }]}>Add New Address</Text>
+                            <View style={styles.formCard}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Full name"
+                                    placeholderTextColor={Colors.ink4}
+                                    value={form.CustomerName}
+                                    onChangeText={text => handleChange('CustomerName', text)}
+                                />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Mobile number"
+                                    placeholderTextColor={Colors.ink4}
+                                    value={form.MobileNumber}
+                                    onChangeText={text => handleChange('MobileNumber', text)}
+                                    keyboardType="numeric"
+                                />
+                                <TextInput
+                                    style={[styles.input, styles.inputMultiline]}
+                                    placeholder="Full address"
+                                    placeholderTextColor={Colors.ink4}
+                                    value={form.FullAddress}
+                                    onChangeText={text => handleChange('FullAddress', text)}
+                                    multiline
+                                    numberOfLines={3}
+                                />
+                                <TouchableOpacity
+                                    style={[styles.addBtn, submitting && styles.addBtnDisabled]}
+                                    onPress={handleAddAddress}
+                                    disabled={submitting}
+                                    activeOpacity={0.82}
+                                >
+                                    <Text style={styles.addBtnText}>
+                                        {submitting ? 'Saving…' : 'Save Address'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    }
+                />
+
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={[
+                            styles.checkoutBtn,
+                            (!selectedAddressCode || submitting) && styles.checkoutBtnDisabled,
+                        ]}
+                        onPress={buyProducts}
+                        disabled={submitting}
+                        activeOpacity={0.85}
+                    >
+                        <Text style={styles.checkoutBtnText}>
+                            {submitting ? 'Placing order…' : 'Place Order'}
+                        </Text>
+                    </TouchableOpacity>
                 </View>
-                <View style={styles.paper}>
-                    <Text style={styles.formTitle}>Add New Address</Text>
-                    <View style={styles.form}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Customer Name"
-                            value={form.CustomerName}
-                            placeholderTextColor={"#888"}
-                            onChangeText={text => handleChange("CustomerName", text)}
-                        />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Mobile Number"
-                            placeholderTextColor={"#888"}
-                            value={form.MobileNumber ? String(form.MobileNumber) : ""}
-                            onChangeText={text => handleChange("MobileNumber", text)}
-                            keyboardType="numeric"
-                        />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Full Address"
-                            value={form.FullAddress}
-                            placeholderTextColor={"#888"}
-                            onChangeText={text => handleChange("FullAddress", text)}
-                        />
-                       
-                        <TouchableOpacity style={styles.button} onPress={handleAddAddress}>
-                            <Text style={styles.buttonText}>Add Address</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-                <TouchableOpacity style={styles.checkoutButton} onPress={() =>{
-                     console.log("Proceeding to buy...")
-                     buyProducts()
-                }}>
-                    <Text style={styles.checkoutButtonText}>Proceed to Buy</Text>
-                </TouchableOpacity>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -256,95 +282,141 @@ const AddressScreen: React.FC<AddressScreenProps> = ( { route  , navigation }) =
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#f5f6fa",
-        padding: 16,
-        paddingTop: StatusBar.currentHeight || 0,
+        backgroundColor: Colors.surfaceAlt,
     },
-    title: {
-        fontSize: 28,
-        fontWeight: "bold",
-        marginBottom: 16,
-        textAlign: "center",
-        color: "#222",
+    flex: {
+        flex: 1,
     },
-    paper: {
-        backgroundColor: "#fff",
+    listContent: {
+        padding: Space.screenH,
+        paddingBottom: Space[4],
+    },
+    sectionTitle: {
+        fontSize: FontSize.base,
+        fontWeight: FontWeight.bold,
+        color: Colors.ink1,
+        letterSpacing: -0.2,
+        marginBottom: Space[3],
+    },
+
+    // ── Address cards ──
+    addressCard: {
+        backgroundColor: Colors.surface,
+        borderRadius: Radius.lg,
+        marginBottom: Space[3],
+        ...Shadow.sm,
+        borderWidth: 1.5,
+        borderColor: 'transparent',
+    },
+    addressCardSelected: {
+        borderColor: Colors.ink1,
+    },
+    addressCardInner: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        padding: Space[4],
+        gap: Space[3],
+    },
+    radioOuter: {
+        width: 20,
+        height: 20,
         borderRadius: 10,
-        padding: 18,
-        marginBottom: 24,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        elevation: 2,
+        borderWidth: 1.5,
+        borderColor: Colors.ink5,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
+        flexShrink: 0,
     },
-    formTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        marginBottom: 10,
-        color: "#1976d2",
+    radioOuterSelected: {
+        borderColor: Colors.ink1,
     },
-    form: {
-        flexDirection: "column",
-        gap: 12,
+    radioInner: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: Colors.ink1,
     },
-    input: {
-        padding: 10,
-        fontSize: 16,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: "#ccc",
-        marginBottom: 8,
-        backgroundColor: "#f9f9f9",
-    },
-    button: {
-        backgroundColor: "#1976d2",
-        borderRadius: 6,
-        paddingVertical: 12,
-        paddingHorizontal: 18,
-        alignItems: "center",
-        marginTop: 8,
-        alignSelf: "flex-start",
-    },
-    buttonText: {
-        color: "#fff",
-        fontWeight: "600",
-        fontSize: 16,
-    },
-    addressItem: {
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: "#eee",
-        borderRadius: 6,
+    addressText: {
+        flex: 1,
+        gap: 3,
     },
     addressName: {
-        fontWeight: "bold",
-        fontSize: 17,
-        color: "#222",
+        fontSize: FontSize.base,
+        fontWeight: FontWeight.semibold,
+        color: Colors.ink1,
     },
-    addressDetail: {
-        fontSize: 15,
-        color: "#333",
-        marginVertical: 1,
+    addressLine: {
+        fontSize: FontSize.sm,
+        color: Colors.ink3,
+        lineHeight: FontSize.sm * 1.45,
     },
-    addressMeta: {
-        fontSize: 13,
-        color: "#888",
-        marginTop: 4,
+    addressMobile: {
+        fontSize: FontSize.sm,
+        color: Colors.ink4,
     },
-    checkoutButton: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  checkoutButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
+
+    // ── Form ──
+    formCard: {
+        backgroundColor: Colors.surface,
+        borderRadius: Radius.lg,
+        padding: Space[4],
+        gap: Space[3],
+        ...Shadow.sm,
+    },
+    input: {
+        fontSize: FontSize.base,
+        color: Colors.ink1,
+        borderWidth: 1,
+        borderColor: Colors.line,
+        borderRadius: Radius.md,
+        paddingHorizontal: Space[3],
+        paddingVertical: Space[3],
+        backgroundColor: Colors.surfaceAlt,
+    },
+    inputMultiline: {
+        minHeight: 72,
+        textAlignVertical: 'top',
+    },
+    addBtn: {
+        backgroundColor: Colors.ink1,
+        borderRadius: Radius.md,
+        paddingVertical: Space[3] + 2,
+        alignItems: 'center',
+    },
+    addBtnDisabled: {
+        opacity: 0.4,
+    },
+    addBtnText: {
+        fontSize: FontSize.base,
+        fontWeight: FontWeight.semibold,
+        color: '#FFFFFF',
+        letterSpacing: -0.1,
+    },
+
+    // ── Footer CTA ──
+    footer: {
+        paddingHorizontal: Space.screenH,
+        paddingVertical: Space[4],
+        backgroundColor: Colors.surfaceAlt,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: Colors.line,
+    },
+    checkoutBtn: {
+        backgroundColor: Colors.ink1,
+        borderRadius: Radius.pill,
+        paddingVertical: Space[4],
+        alignItems: 'center',
+    },
+    checkoutBtnDisabled: {
+        opacity: 0.35,
+    },
+    checkoutBtnText: {
+        fontSize: FontSize.base,
+        fontWeight: FontWeight.bold,
+        color: '#FFFFFF',
+        letterSpacing: -0.1,
+    },
 });
 
 export default AddressScreen;

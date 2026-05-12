@@ -1,4 +1,11 @@
 {
   "name": "EcommerceApp",
-  "displayName": "EcommerceApp"
+  "displayName": "EcommerceApp",
+  "expo": {
+    "name": "EcommerceApp",
+    "slug": "ecommerceapp",
+    "version": "1.0.0",
+    "platforms": ["ios", "android"],
+    "jsEngine": "hermes"
+  }
 }

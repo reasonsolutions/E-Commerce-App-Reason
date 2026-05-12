@@ -304,6 +304,32 @@ const postOrderHistory = async (customerprofilecode: number) => {
   }
 };
 
+// ─── Wishlist ─────────────────────────────────────────────────────────────────
+// TODO: Backend endpoints not yet finalized. Replace stubs with real calls once
+// the following are available:
+//   GET  /getWishlist?CustomerProfileCode={}
+//   POST /addToWishlist       { CustomerProfileCode, Inventory_Id }
+//   POST /removeFromWishlist  { CustomerProfileCode, WishlistItemCode }
+// All three should return the standard { statusCode, result, userMessage } envelope.
+
+const getWishlist = async (_customerprofilecode: number): Promise<never> => {
+  throw new Error('getWishlist: real endpoint not yet available');
+};
+
+const addToWishlist = async (
+  _customerprofilecode: number,
+  _inventory_id: number,
+): Promise<never> => {
+  throw new Error('addToWishlist: real endpoint not yet available');
+};
+
+const removeFromWishlist = async (
+  _customerprofilecode: number,
+  _wishlistItemCode: number,
+): Promise<never> => {
+  throw new Error('removeFromWishlist: real endpoint not yet available');
+};
+
 export {
     getAllProducts,
     getBrands,
@@ -328,5 +354,8 @@ export {
     postPlacedMultipleOrder,
     postCnfOrderDetail,
     postDeleteCartItem,
-    postOrderHistory
+    postOrderHistory,
+    getWishlist,
+    addToWishlist,
+    removeFromWishlist,
 };

@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet , Image } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { CategoryInterface } from '../api/interfaces';
+import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
 
 interface CategoryItemProps {
   category: CategoryInterface;
@@ -9,36 +9,42 @@ interface CategoryItemProps {
 }
 
 const CategoryItem: React.FC<CategoryItemProps> = ({ category, onPress }) => {
-  console.log(category.CategoryImage)
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
-      <View style={styles.iconContainer}>
-        <Image source={{ uri: category.CategoryImage }} style={{ width: 48, height: 48 }} />
+    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.78}>
+      <View style={styles.circle}>
+        <Image source={{ uri: category.CategoryImage }} style={styles.image} resizeMode="contain" />
       </View>
-      <Text style={styles.name}>{category.CategoryName}</Text>
+      <Text style={styles.name} numberOfLines={2}>{category.CategoryName}</Text>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    margin: 4,
-    minHeight: 80,
+    width: 64,
+    gap: Space[2],
   },
-  iconContainer: {
-    marginBottom: 8,
+  circle: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    ...Shadow.md,
+  },
+  image: {
+    width: 38,
+    height: 38,
   },
   name: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#333',
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.medium,
+    color: Colors.ink2,
     textAlign: 'center',
+    lineHeight: 14,
   },
 });
 

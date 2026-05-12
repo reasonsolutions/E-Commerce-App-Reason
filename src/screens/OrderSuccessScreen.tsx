@@ -3,10 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button } from '../components/ui';
+import { Colors, Space, Radius, FontSize, FontWeight, Shadow } from '../theme';
+import { Type } from '../theme/typography';
 
 type NavigationProp = {
   navigate: {
@@ -25,9 +27,8 @@ type OrderSuccessScreenProps = {
   };
 };
 
-const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation , route }) => {
+const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, route }) => {
 
-  // Get order number from route params
   const orderNumber = route.params?.orderNumber;
 
   const handleContinueShopping = () => {
@@ -40,48 +41,41 @@ const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation , ro
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
+
       <View style={styles.content}>
-        {/* Success Icon */}
+        {/* Success icon */}
         <View style={styles.iconContainer}>
           <View style={styles.checkIcon}>
             <Text style={styles.checkMark}>✓</Text>
           </View>
         </View>
 
-        {/* Success Message */}
+        {/* Success message */}
         <Text style={styles.title}>Order Placed Successfully!</Text>
         <Text style={styles.subtitle}>
           Thank you for your purchase. Your order has been confirmed.
         </Text>
 
-        {/* Order Number */}
+        {/* Order number card */}
         <View style={styles.orderContainer}>
           <Text style={styles.orderLabel}>Order Number</Text>
           <Text style={styles.orderNumber}>#{orderNumber}</Text>
         </View>
 
-        {/* Additional Info */}
+        {/* Additional info */}
         <Text style={styles.infoText}>
           You will receive a confirmation email shortly with your order details.
         </Text>
 
-        {/* Action Buttons */}
+        {/* Action buttons */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={styles.primaryButton} 
-            onPress={handleViewOrders}
-          >
-            <Text style={styles.primaryButtonText}>View My Orders</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.secondaryButton} 
-            onPress={handleContinueShopping}
-          >
-            <Text style={styles.secondaryButtonText}>Continue Shopping</Text>
-          </TouchableOpacity>
+          <Button variant="primary" size="lg" fullWidth onPress={handleViewOrders}>
+            View My Orders
+          </Button>
+          <Button variant="secondary" size="lg" fullWidth onPress={handleContinueShopping}>
+            Continue Shopping
+          </Button>
         </View>
       </View>
     </SafeAreaView>
@@ -91,122 +85,75 @@ const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation , ro
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: Colors.surface,
   },
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: Space[6],
+    paddingVertical: Space[8],
   },
   iconContainer: {
-    marginBottom: 32,
+    marginBottom: Space[8],
   },
   checkIcon: {
     width: 80,
     height: 80,
-    backgroundColor: '#4CAF50',
-    borderRadius: 40,
+    backgroundColor: Colors.success,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4CAF50',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...Shadow.md,
   },
   checkMark: {
-    fontSize: 40,
-    color: '#ffffff',
-    fontWeight: 'bold',
+    fontSize: FontSize['3xl'],
+    color: Colors.accentInk,
+    fontWeight: FontWeight.bold,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    ...Type.title,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: Space[3],
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666666',
+    ...Type.body,
+    color: Colors.ink3,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+    lineHeight: FontSize.base * 1.6,
+    marginBottom: Space[8],
   },
   orderContainer: {
-    backgroundColor: '#f8f9fa',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: Space[5],
+    paddingHorizontal: Space[6],
+    borderRadius: Radius.md,
     width: '100%',
     alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
+    marginBottom: Space[6],
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.line,
   },
   orderLabel: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    ...Type.label,
+    marginBottom: Space[2],
   },
   orderNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    letterSpacing: 2,
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    color: Colors.ink1,
+    letterSpacing: 1.5,
   },
   infoText: {
-    fontSize: 14,
-    color: '#666666',
+    ...Type.caption,
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 40,
-    paddingHorizontal: 16,
+    lineHeight: FontSize.sm * 1.5,
+    marginBottom: Space[10],
+    paddingHorizontal: Space[4],
   },
   buttonContainer: {
     width: '100%',
-    gap: 12,
-  },
-  primaryButton: {
-    backgroundColor: '#007bff',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    shadowColor: '#007bff',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#007bff',
-  },
-  secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007bff',
+    gap: Space[3],
   },
 });
 

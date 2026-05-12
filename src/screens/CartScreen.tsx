@@ -1,19 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  SafeAreaView,
-  FlatList,
-  ListRenderItemInfo,
+  ScrollView,
+  Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
-import CartItem from '../components/CartItem';
 import { SavedCartItemInterface } from '../api/interfaces';
-import { getSavedCartItems } from '../api/integrations';
+import { EmptyState, Button, QuantityStepper } from '../components/ui';
+import { ErrorState } from '../components/system';
+import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { getSavedCartItems } from '../api/services';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/storageKeys';
+import { useAsyncState } from '../hooks/useAsyncState';
+
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
   goBack: () => void;
@@ -23,315 +30,561 @@ type CartScreenProps = {
   navigation: NavigationProp;
 };
 
+function useEntrance(delay = 0) {
+  const opacity    = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity,    { toValue: 1, duration: 480, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 420, delay, useNativeDriver: true }),
+    ]).start();
+  }, [opacity, translateY, delay]);
+  return { opacity, transform: [{ translateY }] };
+}
+
+// ── Single cart row ───────────────────────────────────────────────────────────
+const CartRow: React.FC<{
+  item: SavedCartItemInterface;
+  onUpdateQuantity: (item: SavedCartItemInterface, qty: number) => void;
+  onRemove: (item: SavedCartItemInterface) => void;
+  delay: number;
+}> = ({ item, onUpdateQuantity, onRemove, delay }) => {
+  const anim       = useEntrance(delay);
+  const imgOpacity = useRef(new Animated.Value(0)).current;
+  const onLoad     = useCallback(() => {
+    Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  }, [imgOpacity]);
+
+  const lineTotal = item.Price * item.Quantity;
+  const hasDiscount = item.ComparePrice > item.Price;
+
+  return (
+    <Animated.View style={[styles.cartRow, anim]}>
+      {/* Product image */}
+      <View style={styles.cartImgWrap}>
+        <Animated.Image
+          source={{ uri: item.Images?.split(';')[0] || '' }}
+          style={[styles.cartImg, { opacity: imgOpacity }]}
+          resizeMode="cover"
+          onLoad={onLoad}
+        />
+      </View>
+
+      {/* Content */}
+      <View style={styles.cartContent}>
+        <View style={styles.cartTop}>
+          <View style={styles.cartMeta}>
+            {item.Brand_Name ? (
+              <Text style={styles.cartBrand}>{item.Brand_Name}</Text>
+            ) : null}
+            <Text style={styles.cartName} numberOfLines={2}>{item.Name}</Text>
+            {item.Variant ? (
+              <Text style={styles.cartVariant}>{item.Variant}</Text>
+            ) : null}
+          </View>
+          {/* Remove */}
+          <TouchableOpacity
+            style={styles.removeBtn}
+            onPress={() => onRemove(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Icon name="close" size={15} color={Colors.ink4} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.cartBottom}>
+          <QuantityStepper
+            value={item.Quantity}
+            onChange={(next: number) => onUpdateQuantity(item, next)}
+            min={1}
+            size="sm"
+          />
+          <View style={styles.cartPriceBlock}>
+            <Text style={styles.cartLineTotal}>${lineTotal.toFixed(2)}</Text>
+            {hasDiscount && (
+              <Text style={styles.cartUnitWas}>
+                ${item.Price.toFixed(2)} ea
+              </Text>
+            )}
+          </View>
+        </View>
+      </View>
+    </Animated.View>
+  );
+};
+
+// ── Main screen ───────────────────────────────────────────────────────────────
 const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
+
+  // Fetch lifecycle — provides loading/error/data from the API call
+  const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
+
+  // Local mutable list seeded from fetched — optimistic quantity/remove mutations
+  // write here without triggering a refetch on every interaction.
   const [cartItems, setCartItems] = useState<SavedCartItemInterface[]>([]);
-  
 
   useEffect(() => {
-    const fetchSavedCartItems = async () => {
-      try {
-        const userData = await AsyncStorage.getItem('userData');
-        if (userData) {
-          const user = JSON.parse(userData);
-          console.log("User Data: ", user);
-          getSavedCartItems(user.CustomerProfileCode)
-          .then(response => {
-            setCartItems(response.result || []);
-          })
-          .catch(err => console.error("Error fetching cart items: ", err));
-        }
-        
-      } catch (error) {
-        console.error('Error fetching saved cart items:', error);
-      }
-    };
+    if (fetched !== null) setCartItems(fetched);
+  }, [fetched]);
 
-    fetchSavedCartItems();
-  }, []);
+  const fetchCart = useCallback(
+    (cancelled?: { current: boolean }) =>
+      run(async () => {
+        const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+        if (!userData) return [];
+        const user = JSON.parse(userData);
+        const response = await getSavedCartItems(user.CustomerProfileCode);
+        return response.result || [];
+      }, cancelled),
+    [run],
+  );
 
-  const getCartTotal = () => {
-    return cartItems.reduce((total, item) => total + item.Price * item.Quantity, 0);
-  };
+  useFocusEffect(
+    useCallback(() => {
+      const cancelled = { current: false };
+      fetchCart(cancelled);
+      return () => { cancelled.current = true; };
+    }, [fetchCart]),
+  );
 
-  const subtotal: number = getCartTotal();
-  // const total: number = subtotal + shippingTax;
-  const total: number = subtotal;
+  const headerAnim = useEntrance(40);
+
+  const subtotal  = cartItems.reduce((sum, item) => sum + item.Price * item.Quantity, 0);
+  const itemCount = cartItems.reduce((sum, item) => sum + item.Quantity, 0);
+
+  // Summary entrance fires after items — delay scales with list length
+  const summaryDelay = Math.min(140 + cartItems.length * 50, 480);
+  const summaryAnim  = useEntrance(summaryDelay);
 
   const handleUpdateQuantity = (item: SavedCartItemInterface, quantity: number) => {
     setCartItems(prev =>
       prev.map(ci =>
-        ci.CartDetailsCode === item.CartDetailsCode
-          ? { ...ci, Quantity: quantity }
-          : ci
-      )
+        ci.CartDetailsCode === item.CartDetailsCode ? { ...ci, Quantity: quantity } : ci,
+      ),
     );
   };
 
   const handleRemoveItem = (item: SavedCartItemInterface) => {
-    setCartItems(prev =>
-      prev.filter(ci => ci.CartDetailsCode !== item.CartDetailsCode)
-    );
-  };
-
-  const handleEditItem = (item: SavedCartItemInterface) => {
-    navigation.navigate('Product', { product: item });
+    setCartItems(prev => prev.filter(ci => ci.CartDetailsCode !== item.CartDetailsCode));
   };
 
   const handleCheckout = () => {
-    // Handle checkout logic
-    console.log('Proceeding to checkout...');
-    console.log(cartItems)
-    navigation.navigate('Address', { cartItems: cartItems });
+    navigation.navigate('Address', { cartItems });
   };
 
-  const clearCart = () => {
-    setCartItems([]);
-  };
+  const clearCart = () => setCartItems([]);
 
-  const renderCartItem = ({ item }: ListRenderItemInfo<SavedCartItemInterface>) => (
-    <CartItem
-      item={item}
-      onUpdateQuantity={handleUpdateQuantity}
-      onRemove={handleRemoveItem}
-      onEdit={handleEditItem}
-    />
-  );
+  const renderBody = () => {
+    if (isError) {
+      return (
+        <View style={styles.errorWrap}>
+          <ErrorState
+            title="Couldn't load your bag"
+            message={error ?? 'An unexpected error occurred.'}
+            onRetry={() => fetchCart()}
+            retryLoading={loading}
+            icon={<Icon name="bag-outline" size={32} color={Colors.ink3} />}
+          />
+        </View>
+      );
+    }
 
-  const renderEmptyCart = () => (
-    <View style={styles.emptyCartContainer}>
-      <Icon name="bag-outline" size={80} color="#CCC" />
-      <Text style={styles.emptyCartTitle}>Your cart is empty</Text>
-      <Text style={styles.emptyCartSubtitle}>Add some products to get started</Text>
-      <TouchableOpacity
-        style={styles.shopNowButton}
-        onPress={() => navigation.navigate('Home')}
+    if (cartItems.length === 0 && !loading) {
+      return (
+        <View style={styles.emptyWrap}>
+          <EmptyState
+            icon={<Icon name="bag-outline" size={36} color={Colors.ink4} />}
+            title="Your bag is empty"
+            body="Looks like you haven't added anything yet"
+            action={
+              <Button variant="primary" size="md" onPress={() => navigation.navigate('Home')}>
+                Continue Shopping
+              </Button>
+            }
+          />
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Space[4] },
+        ]}
       >
-        <Text style={styles.shopNowButtonText}>Shop Now</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Icon name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Cart</Text>
+        {/* ── Cart rows ─────────────────────────────────────────────── */}
+        <View style={styles.itemsSection}>
+          {cartItems.map((item, index) => (
+            <React.Fragment key={`${item.CartDetailsCode}-${index}`}>
+              <CartRow
+                item={item}
+                onUpdateQuantity={handleUpdateQuantity}
+                onRemove={handleRemoveItem}
+                delay={Math.min(120 + index * 55, 400)}
+              />
+              {index < cartItems.length - 1 && <View style={styles.itemDivider} />}
+            </React.Fragment>
+          ))}
         </View>
 
-        <TouchableOpacity
-          style={styles.deleteAllButton}
-          onPress={clearCart}
-        >
-          <Icon name="trash-outline" size={24} color="#FF6B6B" />
-        </TouchableOpacity>
-      </View>
-
-      {cartItems.length === 0 ? (
-        renderEmptyCart()
-      ) : (
-        <>
-          {/* Cart Items */}
-          <FlatList
-            data={cartItems}
-            renderItem={renderCartItem}
-            keyExtractor={(item: SavedCartItemInterface, index: number) =>
-              `${item.CartDetailsCode}-${index}`
-            }
-            style={styles.cartList}
-            contentContainerStyle={styles.cartListContent}
-            showsVerticalScrollIndicator={false}
-          />
-
-          {/* Bottom Section */}
-          <View style={styles.bottomSection}>
-            {/* Promo Code */}
-            <TouchableOpacity style={styles.promoCodeContainer}>
-              <View style={styles.promoCodeLeft}>
-                <Icon name="pricetag-outline" size={20} color="#666" />
-                <Text style={styles.promoCodeText}>Enter Promo Code</Text>
-              </View>
-              <Icon name="chevron-forward" size={20} color="#666" />
-            </TouchableOpacity>
-
-            {/* Order Summary */}
-            <View style={styles.orderSummary}>
-              {/* <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Sub Total</Text>
-                <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
-              </View> */}
-
-              <View style={[styles.summaryRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
-              </View>
-            </View>
-
-            {/* Checkout Button */}
-            <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout}>
-              <Text style={styles.checkoutButtonText}>Checkout</Text>
-            </TouchableOpacity>
+        {/* ── Purchase summary — dark editorial block ────────────────── */}
+        <Animated.View style={[styles.summaryCard, summaryAnim]}>
+          {/* Subtotal row */}
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              Subtotal
+              <Text style={styles.summaryLabelMeta}>  ·  {itemCount} {itemCount === 1 ? 'item' : 'items'}</Text>
+            </Text>
+            <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
           </View>
-        </>
-      )}
-    </SafeAreaView>
+
+          {/* Delivery */}
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Delivery</Text>
+            <Text style={styles.summaryFree}>Free</Text>
+          </View>
+
+          {/* Total — display-scale */}
+          <View style={styles.summaryTotalRow}>
+            <Text style={styles.summaryTotalLabel}>Total</Text>
+            <Text style={styles.summaryTotalValue}>${subtotal.toFixed(2)}</Text>
+          </View>
+
+          {/* Hairline above CTA */}
+          <View style={styles.summaryRule} />
+
+          {/* Checkout CTA */}
+          <TouchableOpacity
+            style={styles.checkoutBtn}
+            onPress={handleCheckout}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.checkoutBtnText}>Checkout</Text>
+            <Icon name="arrow-forward" size={16} color="#0A0A0A" />
+          </TouchableOpacity>
+
+          <Text style={styles.summaryNote}>
+            Address & payment details on the next step
+          </Text>
+        </Animated.View>
+      </ScrollView>
+    );
+  };
+
+  return (
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" translucent />
+
+      {/* ── Dark editorial header ─────────────────────────────────────── */}
+      <Animated.View
+        style={[styles.header, { paddingTop: insets.top + Space[2] }, headerAnim]}
+      >
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Icon name="chevron-back" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerEyebrow}>YOUR BAG</Text>
+            <Text style={styles.headerTitle}>
+              {cartItems.length === 0
+                ? 'Empty'
+                : `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
+            </Text>
+          </View>
+
+          {/* Clear-all — only shown when cart has items */}
+          {cartItems.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearBtn}
+              onPress={clearCart}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.clearBtnText}>Clear</Text>
+            </TouchableOpacity>
+          )}
+          {cartItems.length === 0 && <View style={styles.headerRight} />}
+        </View>
+      </Animated.View>
+
+      {/* Tonal bridge — dark → surfaceAlt */}
+      <LinearGradient
+        colors={['#0A0A0A', Colors.surfaceAlt]}
+        style={styles.tonalBridge}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        pointerEvents="none"
+      />
+
+      {renderBody()}
+    </View>
   );
 };
 
-// ...styles remain unchanged
-
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    paddingTop: StatusBar.currentHeight || 0,
+    backgroundColor: '#0A0A0A',
   },
+
+  // ── Header ──────────────────────────────────────────────────────────────
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F2',
+    backgroundColor: '#0A0A0A',
+    paddingHorizontal: Space.screenH,
+    paddingBottom: Space[4],
+    zIndex: 2,
   },
-  headerLeft: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  backButton: {
-    marginRight: 12,
-    padding: 4,
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    paddingHorizontal: Space[3],
+    gap: 1,
+  },
+  headerEyebrow: {
+    fontSize: 9,
+    fontWeight: FontWeight.bold,
+    color: 'rgba(255,255,255,0.28)',
+    letterSpacing: 1.8,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: FontSize['2xl'],
+    fontWeight: FontWeight.bold,
+    color: '#FFFFFF',
+    letterSpacing: -0.8,
   },
-  deleteAllButton: {
-    padding: 4,
+  headerRight: {
+    width: 36,
   },
-  cartList: {
+  clearBtn: {
+    paddingHorizontal: Space[2],
+    paddingVertical: Space[1],
+  },
+  clearBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: 'rgba(255,255,255,0.35)',
+  },
+
+  // Tonal bridge
+  tonalBridge: {
+    height: 48,
+    marginTop: -1,
+    zIndex: 1,
+  },
+
+  // ── Empty state ──────────────────────────────────────────────────────────
+  emptyWrap: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.surfaceAlt,
+    marginTop: -1,
   },
-  cartListContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+
+  // ── Error state ──────────────────────────────────────────────────────────
+  errorWrap: {
+    flex: 1,
+    backgroundColor: Colors.surfaceAlt,
+    marginTop: -1,
   },
-  bottomSection: {
-    backgroundColor: '#FFF',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#F2F2F2',
+
+  // ── Scroll ───────────────────────────────────────────────────────────────
+  scroll: {
+    flex: 1,
+    backgroundColor: Colors.surfaceAlt,
+    marginTop: -1,
   },
-  promoCodeContainer: {
+  scrollContent: {
+    paddingTop: Space[3],
+    paddingHorizontal: Space.screenH,
+    gap: Space[5],
+  },
+
+  // ── Items section ────────────────────────────────────────────────────────
+  itemsSection: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    paddingVertical: Space[2],
+    paddingHorizontal: Space[4],
+    ...Shadow.md,
+  },
+  itemDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.line,
+    marginVertical: Space[2],
+  },
+
+  // ── Cart row ─────────────────────────────────────────────────────────────
+  cartRow: {
+    flexDirection: 'row',
+    gap: Space[3],
+    paddingVertical: Space[3],
+  },
+  cartImgWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceAlt,
+  },
+  cartImg: {
+    width: '100%',
+    height: '100%',
+  },
+  cartContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  cartTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space[2],
+  },
+  cartMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  cartBrand: {
+    fontSize: 9,
+    fontWeight: FontWeight.bold,
+    color: Colors.ink4,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
+  cartName: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: Colors.ink1,
+    letterSpacing: -0.1,
+    lineHeight: FontSize.sm * 1.35,
+  },
+  cartVariant: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.medium,
+    color: Colors.ink4,
+    letterSpacing: 0.2,
+  },
+  removeBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cartBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F7F7F7',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
+    marginTop: Space[2],
   },
-  promoCodeLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  cartPriceBlock: {
+    alignItems: 'flex-end',
+    gap: 1,
   },
-  promoCodeText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#666',
+  cartLineTotal: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.ink1,
+    letterSpacing: -0.3,
   },
-  orderSummary: {
-    marginBottom: 18,
+  cartUnitWas: {
+    fontSize: FontSize.xs,
+    color: Colors.ink4,
+  },
+
+  // ── Summary card — dark editorial block ──────────────────────────────────
+  summaryCard: {
+    backgroundColor: '#0E0E0E',
+    borderRadius: Radius.lg,
+    padding: Space[5],
+    gap: Space[3],
+    ...Shadow.lg,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'baseline',
   },
   summaryLabel: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.regular,
+    color: 'rgba(255,255,255,0.45)',
+  },
+  summaryLabelMeta: {
+    fontSize: FontSize.xs,
+    color: 'rgba(255,255,255,0.28)',
   },
   summaryValue: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: 'rgba(255,255,255,0.7)',
   },
-  totalRow: {
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F2F2F2',
-    paddingTop: 8,
+  summaryFree: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 0.1,
   },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  summaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: Space[4],
   },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF6B6B',
+  summaryTotalLabel: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.semibold,
+    color: 'rgba(255,255,255,0.6)',
   },
-  checkoutButton: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
+  summaryTotalValue: {
+    fontSize: FontSize['2xl'],
+    fontWeight: FontWeight.bold,
+    color: '#FFFFFF',
+    letterSpacing: -0.8,
   },
-  checkoutButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+  summaryRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginVertical: Space[1],
   },
-  emptyCartContainer: {
-    flex: 1,
+  checkoutBtn: {
+    height: 52,
+    borderRadius: Radius.pill,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    gap: Space[2],
   },
-  emptyCartTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 16,
-    marginBottom: 8,
+  checkoutBtnText: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: '#0A0A0A',
+    letterSpacing: 0.1,
+  },
+  summaryNote: {
+    fontSize: FontSize.xs,
+    color: 'rgba(255,255,255,0.30)',
     textAlign: 'center',
-  },
-  emptyCartSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  shopNowButton: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-  },
-  shopNowButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.1,
   },
 });
 

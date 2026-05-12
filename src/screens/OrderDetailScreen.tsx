@@ -1,8 +1,15 @@
-import React from "react";
-import { View, Text, Image, ScrollView, StyleSheet, StatusBar } from "react-native";
+import React, { useCallback } from "react";
+import { View, Text, Image, ScrollView, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { RouteProp, useRoute } from "@react-navigation/native";
-import { postCnfOrderDetail } from "../api/integrations";
+import type { StackNavigationProp } from "@react-navigation/stack";
+import { postCnfOrderDetail } from "../api/services";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { STORAGE_KEYS } from '../config/storageKeys';
+import { Skeleton, SkeletonRow, ScreenHeader } from "../components/ui";
+import { ErrorState } from "../components/system";
+import { Space, Colors } from "../theme";
+import { useAsyncState } from "../hooks/useAsyncState";
 type OrderItem = {
     Inventory_Id: number;
     Item_Id: number;
@@ -36,6 +43,10 @@ type OrderDetailScreenRouteParams = {
     orderItem: OrderItem;
 };
 
+type OrderDetailScreenProps = {
+    navigation: StackNavigationProp<any>;
+};
+
 const getOrderStatusText = (status: number) => {
     switch (status) {
         case 1:
@@ -51,44 +62,101 @@ const getOrderStatusText = (status: number) => {
     }
 };
 
-const OrderDetailScreen: React.FC = () => {
+const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => {
     const route = useRoute<RouteProp<{ params: OrderDetailScreenRouteParams }, 'params'>>();
-    const [orderDetails, setOrderDetails] = React.useState<OrderDetailProps | null>(null);
+    const orderItem = route.params?.orderItem;
+    const orderNumber = orderItem?.OrderNumber;
+
+    const { data: orderDetails, loading, isError, error, run } = useAsyncState<OrderDetailProps>(null);
+
+    const fetchOrderDetails = useCallback(
+        (cancelled?: { current: boolean }) =>
+            run(async () => {
+                const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+                if (!userData) throw new Error('Session expired. Please log in again.');
+                const user = JSON.parse(userData);
+                const response = await postCnfOrderDetail(String(orderNumber), user.CustomerProfileCode);
+                return response.result;
+            }, cancelled),
+        [run, orderNumber],
+    );
 
     React.useEffect(() => {
-        // Simulate fetching order details from an API
-        const fetchOrderDetails = async () => {
-            const userData = await AsyncStorage.getItem('userData');
-            if (userData) {
-                const user = JSON.parse(userData);
-                console.log(user)
-                postCnfOrderDetail(route.params?.orderItem.OrderNumber ? String(route.params?.orderItem.OrderNumber) : "ORDNO_2309164922152", user.CustomerProfileCode).then(response => {
-                console.log("Order detail response: ", response);
-                setOrderDetails(response.result);
-            }).catch(err => {
-                console.error("Error fetching order details: ", err);
-            });
-            }
-            
-        };
+        if (!orderNumber) return;
+        const cancelled = { current: false };
+        fetchOrderDetails(cancelled);
+        return () => { cancelled.current = true; };
+    }, [fetchOrderDetails, orderNumber]);
 
-        fetchOrderDetails();
-    }, []);
+    // No order number — cannot fetch. Show static error (no retry possible).
+    if (!orderNumber) {
+        return (
+            <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
+                <ScreenHeader title="Order Details" back onBack={() => navigation.goBack()} />
+                <View style={styles.errorWrap}>
+                    <Text style={styles.errorTitle}>Order details unavailable</Text>
+                    <Text style={styles.errorBody}>
+                        The order reference is missing. Please go back and try again.
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
-    const order = route.params?.orderItem ?? orderDetails?.OrderDetails[0];
+    // Fetch failed — show retryable error state instead of a stuck skeleton.
+    if (isError) {
+        return (
+            <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
+                <ScreenHeader title="Order Details" back onBack={() => navigation.goBack()} />
+                <View style={styles.errorWrap}>
+                    <ErrorState
+                        title="Couldn't load order"
+                        message={error ?? 'An unexpected error occurred.'}
+                        onRetry={() => fetchOrderDetails()}
+                        retryLoading={loading}
+                    />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const order = orderItem ?? orderDetails?.OrderDetails[0];
     const delivery = orderDetails?.DeliveryDetail[0];
     const imageList = order?.Images?.split(";").filter(Boolean) ?? [];
 
     if (!order || !delivery) {
         return (
-            <View style={styles.container}>
-                <Text>Loading...</Text>
-            </View>
+            <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
+                <ScreenHeader title="Order Details" back onBack={() => navigation.goBack()} />
+                <ScrollView contentContainerStyle={styles.container}>
+                    <Skeleton height={22} width="40%" style={{ marginBottom: Space[3] }} />
+                    <View style={{ marginBottom: Space[6] }}>
+                        <Skeleton height={16} style={{ marginBottom: Space[2] }} />
+                        <Skeleton height={100} radius={8} style={{ marginBottom: Space[2] }} />
+                        <SkeletonRow gap={Space[2]} style={{ marginBottom: Space[2] }}>
+                            <Skeleton height={14} width="30%" />
+                            <Skeleton height={14} width="40%" />
+                        </SkeletonRow>
+                        <SkeletonRow gap={Space[2]} style={{ marginBottom: Space[2] }}>
+                            <Skeleton height={14} width="25%" />
+                            <Skeleton height={14} width="20%" />
+                        </SkeletonRow>
+                    </View>
+                    <Skeleton height={22} width="45%" style={{ marginBottom: Space[3] }} />
+                    <View>
+                        <Skeleton height={14} style={{ marginBottom: Space[2] }} />
+                        <Skeleton height={14} style={{ marginBottom: Space[2] }} />
+                        <Skeleton height={14} width="70%" />
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
         );
     }
 
     return (
-        <ScrollView contentContainerStyle={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
+            <ScreenHeader title="Order Details" back onBack={() => navigation.goBack()} />
+            <ScrollView contentContainerStyle={styles.container}>
             <Text style={styles.heading}>Order Details</Text>
             <View style={styles.card}>
                 <Text style={styles.title}>{order.Name}</Text>
@@ -137,15 +205,38 @@ const OrderDetailScreen: React.FC = () => {
                     Address: <Text style={styles.value}>{delivery.FullAddress}</Text>
                 </Text>
             </View>
-        </ScrollView>
+            </ScrollView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: Colors.surface,
+    },
+    errorWrap: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: Space[8],
+        gap: Space[3],
+    },
+    errorTitle: {
+        fontSize: 18,
+        fontWeight: '600' as const,
+        color: Colors.ink1,
+        textAlign: 'center',
+    },
+    errorBody: {
+        fontSize: 15,
+        color: Colors.ink3,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
     container: {
         padding: 24,
-        backgroundColor: "#fff",
-        paddingTop:StatusBar.currentHeight || 0,
+        backgroundColor: Colors.surface,
     },
     heading: {
         fontSize: 22,
