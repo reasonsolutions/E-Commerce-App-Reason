@@ -94,8 +94,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   useCustomBackHandler(navigation);
   const insets = useSafeAreaInsets();
 
-  const { getCartItemsCount } = useCart();
-  const cartItemsCount: number = getCartItemsCount();
+  const { items: cartItems } = useCart();
+  const cartItemsCount: number = cartItems.reduce((total: number, item: any) => total + item.quantity, 0);
   const [categories, setCategories]   = useState<CategoryInterface[] | null>(null);
   const [products, setProducts]       = useState<ProductInterface[] | null>(null);
   const [searchQuery, setSearchQuery] = useState('');

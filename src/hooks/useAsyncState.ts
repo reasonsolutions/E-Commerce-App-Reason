@@ -48,6 +48,7 @@ export function useAsyncState<T>(
 
   // Internal cancelled ref used when caller does not supply one
   const internalCancelledRef = useRef(false);
+  const initialDataRef = useRef(initialData);
 
   const run = useCallback(
     async (fn: () => Promise<T>, cancelled?: { current: boolean }) => {
@@ -63,15 +64,15 @@ export function useAsyncState<T>(
         const result = await fn();
         set({ status: 'success', data: result, error: null });
       } catch (err) {
-        set({ status: 'error', error: userFacingMessage(err), data: initialData });
+        set({ status: 'error', error: userFacingMessage(err), data: initialDataRef.current });
       }
     },
-    [initialData],
+    [],
   );
 
   const reset = useCallback(() => {
-    setState({ status: 'idle', data: initialData, error: null });
-  }, [initialData]);
+    setState({ status: 'idle', data: initialDataRef.current, error: null });
+  }, []);
 
   return {
     status: state.status,
