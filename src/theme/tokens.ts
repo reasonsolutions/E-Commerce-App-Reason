@@ -1,44 +1,52 @@
 import { Platform } from 'react-native';
 
 export const Colors = {
-  // Accent
-  accent:      '#0A0A0A',
+  // ── Accent ────────────────────────────────────────────────────────────────
+  // Ember/terracotta — primary CTA states, success moments. Use sparingly (≤3
+  // appearances per session). Was #0A0A0A (near-black) in the pre-premium era.
+  accent:      '#B25A3D',
   accentInk:   '#FFFFFF',
-  accentTint:  'rgba(10, 10, 10, 0.06)',
+  accentTint:  'rgba(178, 90, 61, 0.07)',
 
-  // Surfaces
-  bg:          '#FFFFFF',
-  surface:     '#FFFFFF',
-  surfaceAlt:  '#F5F5F3',
-  surfaceMute: '#FAFAF8',
-  surfaceDeep: '#0E0E0E',
+  // ── Surfaces ──────────────────────────────────────────────────────────────
+  // Three warm off-white levels replace the flat #FFFFFF + drop-shadow system.
+  // Depth is expressed through tone, not elevation.
+  bg:          '#F8F7F4',  // legacy alias — prefer `surface`
+  surface:     '#F8F7F4',  // page background (was #FFFFFF)
+  surfaceSoft: '#F2F0EC',  // cards, list rows, input fills
+  surfaceAlt:  '#F2F0EC',  // legacy alias — maps to surfaceSoft for compatibility
+  surfaceMute: '#FAFAF8',  // legacy alias — retained for compatibility
+  surfaceDeep: '#E8E5DF',  // sheets, cart summary panel, bottom sheet backdrops
 
-  // Ink (text + iconography)
-  ink1: '#0A0A0A',
-  ink2: '#2E2E2E',
-  ink3: '#6B6B6B',
-  ink4: '#9A9A9A',
-  ink5: '#C9C9C7',
+  // ── Ink (text + iconography) ───────────────────────────────────────────────
+  ink1: '#111111',  // primary — headings, active icons
+  ink2: '#2E2E2E',  // secondary text
+  ink3: '#6B6B6B',  // tertiary — captions, inactive icons, placeholders
+  ink4: '#A8A8A8',  // quaternary — disabled, subtle meta (was #9A9A9A)
+  ink5: '#C9C9C7',  // quinary — hairlines, skeleton base
 
-  // Lines
-  line:       '#ECECEA',
-  lineStrong: '#DCDCD9',
+  // ── Dividers ──────────────────────────────────────────────────────────────
+  rule:       '#E2DED7',  // warm hairline dividers (premium register)
+  line:       '#ECECEA',  // legacy alias — retained for compatibility
+  lineStrong: '#DCDCD9',  // legacy alias — retained for compatibility
 
-  // Semantic
-  danger:      '#D7263D',
+  // ── Semantic ──────────────────────────────────────────────────────────────
+  // danger is desaturated — reserved for destructive actions only, not promos.
+  // Discount badges and flash-deal chips must NOT use danger (see spec A7).
+  danger:      '#C0394F',  // desaturated from #D7263D — destructive only
   success:     '#1F7A3A',
   warning:     '#B47914',
   info:        '#2454FF',
 
-  dangerTint:  '#FBE9EC',
+  dangerTint:  '#FAE9EC',
   successTint: '#E6F3EB',
   warningTint: '#F7EFDD',
   infoTint:    '#E7EDFF',
 
   // Semantic borders (used alongside tints)
-  dangerBorder:  '#F4C5CC',
+  dangerBorder: '#F0C2C9',
 
-  // Ratings
+  // ── Ratings ───────────────────────────────────────────────────────────────
   star: '#F5A623',
 } as const;
 
@@ -55,10 +63,11 @@ export const Space = {
   12: 48,
 
   // Named density constants matching design tokens
-  screenH: 16,  // horizontal screen edge padding
-  gapRow:  12,  // between list rows
-  padCard: 16,  // inside cards
-  padTap:  12,  // inside tap targets
+  screenH:  20,  // horizontal screen edge padding (was 16 pre-premium)
+  gapRow:   12,  // between list rows
+  gapBlock: 20,  // between content blocks inside a card
+  padCard:  20,  // inside cards (was 16 pre-premium)
+  padTap:   12,  // inside tap targets
 } as const;
 
 export const Radius = {
