@@ -14,6 +14,7 @@ interface SectionLabelProps {
   action?: SectionAction;
 }
 
+/** @deprecated Not used in any screen. Migrate HomeScreen section headers to this before adopting. */
 export const SectionLabel: React.FC<SectionLabelProps> = ({
   children,
   kicker,

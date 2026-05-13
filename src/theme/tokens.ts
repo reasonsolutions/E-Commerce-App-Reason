@@ -37,6 +37,9 @@ export const Colors = {
 
   // Semantic borders (used alongside tints)
   dangerBorder:  '#F4C5CC',
+
+  // Ratings
+  star: '#F5A623',
 } as const;
 
 // 4px base grid

@@ -10,6 +10,7 @@ interface RatingProps {
   compact?: boolean;
 }
 
+/** @deprecated Not used in any screen. Token violation fixed — adopt before use. */
 export const Rating: React.FC<RatingProps> = ({
   value,
   count,
@@ -18,7 +19,7 @@ export const Rating: React.FC<RatingProps> = ({
 }) => {
   return (
     <View style={styles.row}>
-      <Icon name="star" size={size} color="#F5A623" />
+      <Icon name="star" size={size} color={Colors.star} />
       <Text style={[styles.value, { fontSize: size }]}>{value.toFixed(1)}</Text>
       {count != null && !compact ? (
         <Text style={[styles.count, { fontSize: size }]}>

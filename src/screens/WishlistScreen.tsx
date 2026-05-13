@@ -17,10 +17,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { getWishlist, removeFromWishlist } from '../api/services';
 import { WishlistItemInterface } from '../api/mock/mockData';
-import { EmptyState, Button, BottomNavBar } from '../components/ui';
+import { EmptyState, Button, BottomNavBar, Price } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
 import { useAsyncState } from '../hooks/useAsyncState';
+import { useEntrance } from '../hooks/useEntrance';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -30,18 +31,6 @@ type NavigationProp = {
 type WishlistScreenProps = {
   navigation: NavigationProp;
 };
-
-function useEntrance(delay = 0) {
-  const opacity    = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(10)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 480, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 420, delay, useNativeDriver: true }),
-    ]).start();
-  }, [opacity, translateY, delay]);
-  return { opacity, transform: [{ translateY }] };
-}
 
 // ── Single wishlist row ───────────────────────────────────────────────────────
 const WishlistRow: React.FC<{
@@ -55,8 +44,6 @@ const WishlistRow: React.FC<{
   const onLoad     = useCallback(() => {
     Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, [imgOpacity]);
-
-  const hasDiscount = item.ComparePrice > item.Price;
 
   return (
     <Animated.View style={[styles.row, anim]}>
@@ -84,12 +71,11 @@ const WishlistRow: React.FC<{
           {item.Variant ? (
             <Text style={styles.variant}>{item.Variant}</Text>
           ) : null}
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>${item.Price.toFixed(2)}</Text>
-            {hasDiscount && (
-              <Text style={styles.comparePrice}>${item.ComparePrice.toFixed(2)}</Text>
-            )}
-          </View>
+          <Price
+            value={item.Price}
+            was={item.ComparePrice > item.Price ? item.ComparePrice : undefined}
+            size="base"
+          />
         </View>
 
         {/* Remove */}
@@ -360,24 +346,6 @@ const styles = StyleSheet.create({
   variant: {
     fontSize: FontSize.xs,
     color: Colors.ink4,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Space[2],
-    marginTop: 2,
-  },
-  price: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.bold,
-    color: Colors.ink1,
-    letterSpacing: -0.2,
-  },
-  comparePrice: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.regular,
-    color: Colors.ink4,
-    textDecorationLine: 'line-through',
   },
   removeBtn: {
     width: 28,

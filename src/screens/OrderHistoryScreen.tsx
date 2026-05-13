@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { ErrorState } from '../components/system';
 import type { OrderStatus } from '../components/ui';
 import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
 import { useAsyncState } from '../hooks/useAsyncState';
+import { useEntrance } from '../hooks/useEntrance';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -53,18 +54,6 @@ const STATUS_MAP: Record<number, OrderStatus> = {
   3: 'Delivered',
   4: 'Cancelled',
 };
-
-function useEntrance(delay = 0) {
-  const opacity    = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(10)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 480, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 420, delay, useNativeDriver: true }),
-    ]).start();
-  }, [opacity, translateY, delay]);
-  return { opacity, transform: [{ translateY }] };
-}
 
 // ── Single order row ──────────────────────────────────────────────────────────
 const OrderRow: React.FC<{

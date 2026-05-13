@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BottomNavBar } from '../components/ui';
 import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { useEntrance } from '../hooks/useEntrance';
 
 type Profile = {
   CustomerProfileCode: number;
@@ -34,18 +35,6 @@ type ProfileScreenProps = {
     goBack: () => void;
   };
 };
-
-function useEntrance(delay = 0) {
-  const opacity    = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(10)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 480, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 420, delay, useNativeDriver: true }),
-    ]).start();
-  }, [opacity, translateY, delay]);
-  return { opacity, transform: [{ translateY }] };
-}
 
 // ── Section group ────────────────────────────────────────────────────────────
 const Section: React.FC<{ children: React.ReactNode }> = ({ children }) => (

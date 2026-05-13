@@ -16,10 +16,11 @@ import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { getProductsByCategory, getAllProducts } from '../api/services';
 import { ProductByCategoryProductDetails } from '../api/interfaces';
-import { Skeleton } from '../components/ui';
+import { Skeleton, Price } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
 import { useAsyncState } from '../hooks/useAsyncState';
+import { useEntrance } from '../hooks/useEntrance';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const COL_GAP   = Space[3];
@@ -47,18 +48,6 @@ function deduplicateProducts(
 // Index 0 is the hero — handled separately above the grid.
 function isFeaturedSpan(indexInGrid: number): boolean {
   return indexInGrid > 0 && indexInGrid % 5 === 0;
-}
-
-function useEntrance(delay = 0) {
-  const opacity    = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(12)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 480, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 420, delay, useNativeDriver: true }),
-    ]).start();
-  }, [opacity, translateY, delay]);
-  return { opacity, transform: [{ translateY }] };
 }
 
 // ── Hero card — first product, full-bleed cinematic ───────────────────────────
@@ -124,7 +113,7 @@ const GridTile: React.FC<{
   onPress: () => void;
   delay: number;
 }> = ({ product, onPress, delay }) => {
-  const animStyle  = useEntrance(delay);
+  const animStyle  = useEntrance(delay, false, 12);
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -156,12 +145,11 @@ const GridTile: React.FC<{
             <Text style={styles.gridBrand} numberOfLines={1}>{product.Brand_Name}</Text>
           ) : null}
           <Text style={styles.gridName} numberOfLines={2}>{product.Name}</Text>
-          <View style={styles.gridPriceRow}>
-            <Text style={styles.gridPrice}>${product.Price.toFixed(2)}</Text>
-            {hasDiscount && (
-              <Text style={styles.gridWas}>${product.ComparePrice.toFixed(2)}</Text>
-            )}
-          </View>
+          <Price
+            value={product.Price}
+            was={hasDiscount ? product.ComparePrice : undefined}
+            size="sm"
+          />
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -174,7 +162,7 @@ const SpanCard: React.FC<{
   onPress: () => void;
   delay: number;
 }> = ({ product, onPress, delay }) => {
-  const animStyle  = useEntrance(delay);
+  const animStyle  = useEntrance(delay, false, 12);
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -229,8 +217,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
   const { data: products, loading, isError, error, run } = useAsyncState<ProductByCategoryProductDetails[]>([]);
 
-  const headerAnim = useEntrance(40);
-  const heroAnim   = useEntrance(140);
+  const headerAnim = useEntrance(40, false, 12);
+  const heroAnim   = useEntrance(140, false, 12);
 
   const fetchProducts = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -671,23 +659,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
     lineHeight: FontSize.sm * 1.35,
   },
-  gridPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space[1],
-    marginTop: 2,
-  },
-  gridPrice: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    color: Colors.ink1,
-  },
-  gridWas: {
-    fontSize: FontSize.xs,
-    color: Colors.ink4,
-    textDecorationLine: 'line-through',
-  },
-
   // ── Span card (full-width featured) ─────────────────────────────────────
   spanCard: {
     width: SPAN_W,

@@ -14,17 +14,23 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { ProductDetailInterface, VariantInterface, PostCartSaveInterface } from '../api/interfaces';
 import { postSaveCartItems, selectProduct, addToWishlist, removeFromWishlist, getWishlist } from '../api/services';
 import { QuantityStepper, Skeleton, SkeletonRow, ErrorBanner } from '../components/ui';
 import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { useAsyncState } from '../hooks/useAsyncState';
+import { useCart } from '../context/CartContext';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 // Hero occupies 55% of screen height — image-first, cinematic
 const HERO_H = Math.round(SCREEN_H * 0.55);
+
+type ProductFetch = {
+  product: ProductDetailInterface;
+  variants: VariantInterface[];
+};
 
 type ProductScreenProps = {
   navigation: {
@@ -40,48 +46,45 @@ type ProductScreenProps = {
 
 const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const [productDetails, setProductDetails] = useState<ProductDetailInterface | null>(null);
-  const [variantDetails, setVariantDetails] = useState<VariantInterface[]>([]);
+  const { setCartCount } = useCart();
   const [selectedVariant, setSelectedVariant] = useState<string>('');
-  const { addToCart } = useCart();
   const [quantity, setQuantity] = useState<number>(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [profileCode, setProfileCode] = useState<number | null>(null);
-  const [fetchError, setFetchError] = useState<boolean>(false);
   const [wishlisted, setWishlisted] = useState<boolean>(false);
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
 
   // Entrance animation for content below hero
-  const contentOpacity  = useRef(new Animated.Value(0)).current;
+  const contentOpacity   = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(20)).current;
   // Hero image fade-in
   const heroImgOpacity = useRef(new Animated.Value(0)).current;
-  // Cancellation flag shared between fetchProduct and its useEffect cleanup
-  const fetchCancelledRef = useRef(false);
 
-  const fetchProduct = () => {
-    setFetchError(false);
-    selectProduct(route?.params?.product ?? '1').then(data => {
-      if (fetchCancelledRef.current) return;
-      setProductDetails(data.result[0]);
-      setVariantDetails(data.result[1]);
-      // Staggered content reveal after data arrives
-      Animated.parallel([
-        Animated.timing(contentOpacity,   { toValue: 1, duration: 480, delay: 80, useNativeDriver: true }),
-        Animated.timing(contentTranslateY,{ toValue: 0, duration: 420, delay: 80, useNativeDriver: true }),
-      ]).start();
-    }).catch(err => {
-      if (fetchCancelledRef.current) return;
-      console.error(err);
-      setFetchError(true);
-    });
-  };
+  const { data, isError, error, run } = useAsyncState<ProductFetch>(null);
+
+  const fetchProduct = useCallback(
+    (cancelled?: { current: boolean }) =>
+      run(async () => {
+        const res = await selectProduct(route?.params?.product ?? '1');
+        return { product: res.result[0], variants: res.result[1] };
+      }, cancelled),
+    [run, route?.params?.product],
+  );
 
   useEffect(() => {
-    fetchCancelledRef.current = false;
-    fetchProduct();
-    return () => { fetchCancelledRef.current = true; };
-  }, []);
+    const cancelled = { current: false };
+    fetchProduct(cancelled);
+    return () => { cancelled.current = true; };
+  }, [fetchProduct]);
+
+  // Staggered content reveal fires once fetch succeeds
+  useEffect(() => {
+    if (!data) return;
+    Animated.parallel([
+      Animated.timing(contentOpacity,    { toValue: 1, duration: 480, delay: 80, useNativeDriver: true }),
+      Animated.timing(contentTranslateY, { toValue: 0, duration: 420, delay: 80, useNativeDriver: true }),
+    ]).start();
+  }, [data, contentOpacity, contentTranslateY]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,29 +112,29 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     Animated.timing(heroImgOpacity, { toValue: 1, duration: 800, useNativeDriver: true }).start();
   }, [heroImgOpacity]);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     const requestbody: PostCartSaveInterface = {
       CustomerLoginCode: null,
       CustomerProfileCode: profileCode!,
       Inventory_Id: selectedVariant
         ? parseInt(selectedVariant)
-        : (productDetails?.Inventory_Id ?? 0),
+        : (data?.product?.Inventory_Id ?? 0),
       BranchCode: null,
       CountryCode: null,
       Quantity: quantity,
       SpecialRemarks: '',
     };
-    const productToAdd = {};
-    postSaveCartItems(requestbody).then(response => {
-      console.log('Add to cart response: ', response);
+    try {
+      await postSaveCartItems(requestbody);
+      setCartCount((prev: number) => prev + quantity);
       navigation.navigate('Cart');
-    }).catch(err => console.error('Error adding to cart: ', err));
-    addToCart(productToAdd);
+    } catch (err) {
+      console.error('Error adding to cart: ', err);
+    }
   };
 
   const handleBuyNow = () => {
     handleAddToCart();
-    navigation.navigate('Cart');
   };
 
   const handleWishlistToggle = async () => {
@@ -155,6 +158,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       }
     }
   };
+
+  const productDetails = data?.product ?? null;
+  const variantDetails = data?.variants ?? [];
 
   const imageUri = productDetails?.Images
     ? productDetails.Images.split(';')[selectedImageIndex]
@@ -186,7 +192,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {fetchError ? (
+      {isError ? (
         <View style={[styles.errorWrap, { paddingTop: insets.top + Space[12] }]}>
           {/* Back button in error state */}
           <TouchableOpacity
@@ -198,8 +204,8 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           </TouchableOpacity>
           <ErrorBanner
             title="Couldn't load product"
-            body="Check your connection and try again."
-            onRetry={fetchProduct}
+            body={error ?? 'Check your connection and try again.'}
+            onRetry={() => fetchProduct()}
           />
         </View>
       ) : (

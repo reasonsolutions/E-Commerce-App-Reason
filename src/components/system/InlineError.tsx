@@ -10,6 +10,7 @@ interface InlineErrorProps {
   retryLoading?: boolean;
 }
 
+/** @deprecated Use ErrorBanner (already adopted in ProductScreen). Extend ErrorBanner with onRetry if inline-retry is needed. */
 export const InlineError: React.FC<InlineErrorProps> = ({
   message,
   onRetry,

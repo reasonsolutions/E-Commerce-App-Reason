@@ -16,10 +16,12 @@ import { SavedCartItemInterface } from '../api/interfaces';
 import { EmptyState, Button, QuantityStepper } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
-import { getSavedCartItems } from '../api/services';
+import { getSavedCartItems, quantityIncrement, quantityDecrement, postDeleteCartItem } from '../api/services';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
+import { useCart } from '../context/CartContext';
+import { useEntrance } from '../hooks/useEntrance';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -30,18 +32,6 @@ type CartScreenProps = {
   navigation: NavigationProp;
 };
 
-function useEntrance(delay = 0) {
-  const opacity    = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(12)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 480, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 420, delay, useNativeDriver: true }),
-    ]).start();
-  }, [opacity, translateY, delay]);
-  return { opacity, transform: [{ translateY }] };
-}
-
 // ── Single cart row ───────────────────────────────────────────────────────────
 const CartRow: React.FC<{
   item: SavedCartItemInterface;
@@ -49,7 +39,7 @@ const CartRow: React.FC<{
   onRemove: (item: SavedCartItemInterface) => void;
   delay: number;
 }> = ({ item, onUpdateQuantity, onRemove, delay }) => {
-  const anim       = useEntrance(delay);
+  const anim       = useEntrance(delay, false, 12);
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const onLoad     = useCallback(() => {
     Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -116,6 +106,7 @@ const CartRow: React.FC<{
 // ── Main screen ───────────────────────────────────────────────────────────────
 const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { setCartCount } = useCart();
 
   // Fetch lifecycle — provides loading/error/data from the API call
   const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
@@ -125,8 +116,13 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const [cartItems, setCartItems] = useState<SavedCartItemInterface[]>([]);
 
   useEffect(() => {
-    if (fetched !== null) setCartItems(fetched);
-  }, [fetched]);
+    if (fetched !== null) {
+      setCartItems(fetched);
+      // Sync badge to server-authoritative total after every fetch
+      const total = fetched.reduce((sum, item) => sum + item.Quantity, 0);
+      setCartCount(total);
+    }
+  }, [fetched, setCartCount]);
 
   const fetchCart = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -148,32 +144,60 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     }, [fetchCart]),
   );
 
-  const headerAnim = useEntrance(40);
+  const headerAnim = useEntrance(40, false, 12);
 
   const subtotal  = cartItems.reduce((sum, item) => sum + item.Price * item.Quantity, 0);
   const itemCount = cartItems.reduce((sum, item) => sum + item.Quantity, 0);
 
   // Summary entrance fires after items — delay scales with list length
   const summaryDelay = Math.min(140 + cartItems.length * 50, 480);
-  const summaryAnim  = useEntrance(summaryDelay);
+  const summaryAnim  = useEntrance(summaryDelay, false, 12);
 
-  const handleUpdateQuantity = (item: SavedCartItemInterface, quantity: number) => {
+  const handleUpdateQuantity = async (item: SavedCartItemInterface, quantity: number) => {
+    const delta = quantity - item.Quantity;
+    if (delta === 0) return;
+
+    // Optimistic update — local list and badge
     setCartItems(prev =>
       prev.map(ci =>
         ci.CartDetailsCode === item.CartDetailsCode ? { ...ci, Quantity: quantity } : ci,
       ),
     );
+    setCartCount((prev: number) => prev + delta);
+
+    try {
+      if (delta > 0) {
+        await quantityIncrement(item.CartDetailsCode, item.Inventory_Id);
+      } else {
+        await quantityDecrement(item.CartDetailsCode, item.Inventory_Id);
+      }
+    } catch {
+      // Revert optimistic update and refetch authoritative state
+      fetchCart();
+    }
   };
 
-  const handleRemoveItem = (item: SavedCartItemInterface) => {
+  const handleRemoveItem = async (item: SavedCartItemInterface) => {
+    // Optimistic update — local list and badge
     setCartItems(prev => prev.filter(ci => ci.CartDetailsCode !== item.CartDetailsCode));
+    setCartCount((prev: number) => Math.max(0, prev - item.Quantity));
+
+    try {
+      await postDeleteCartItem(String(item.CartDetailsCode));
+    } catch {
+      // Revert optimistic update and refetch authoritative state
+      fetchCart();
+    }
   };
 
   const handleCheckout = () => {
     navigation.navigate('Address', { cartItems });
   };
 
-  const clearCart = () => setCartItems([]);
+  const clearCart = () => {
+    setCartItems([]);
+    setCartCount(0);
+  };
 
   const renderBody = () => {
     if (isError) {

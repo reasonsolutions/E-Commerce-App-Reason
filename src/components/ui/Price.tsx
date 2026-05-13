@@ -25,7 +25,7 @@ export const Price: React.FC<PriceProps> = ({
   value,
   was,
   size = 'base',
-  currency = '₹',
+  currency = '$',
 }) => {
   const fs = mainSize[size];
   const strikeFs = Math.max(FontSize.xs, fs - strikeSizeOffset);
@@ -34,12 +34,12 @@ export const Price: React.FC<PriceProps> = ({
   return (
     <View style={styles.row}>
       <Text style={[styles.main, { fontSize: fs }]}>
-        {currency}{value.toLocaleString('en-IN')}
+        {currency}{value.toFixed(2)}
       </Text>
 
       {was && was > value ? (
         <Text style={[styles.strike, { fontSize: strikeFs }]}>
-          {currency}{was.toLocaleString('en-IN')}
+          {currency}{was.toFixed(2)}
         </Text>
       ) : null}
 

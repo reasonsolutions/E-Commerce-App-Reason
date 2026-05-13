@@ -94,8 +94,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   useCustomBackHandler(navigation);
   const insets = useSafeAreaInsets();
 
-  const { items: cartItems } = useCart();
-  const cartItemsCount: number = cartItems.reduce((total: number, item: any) => total + item.quantity, 0);
+  const { cartCount: cartItemsCount } = useCart();
   const [categories, setCategories]   = useState<CategoryInterface[] | null>(null);
   const [products, setProducts]       = useState<ProductInterface[] | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,12 +107,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const editAnim  = useEntrance(460);
 
   useEffect(() => {
+    let cancelled = false;
     getCategories()
-      .then((d) => setCategories(d.result))
-      .catch((e) => console.error('Error fetching categories:', e));
+      .then((d) => { if (!cancelled) setCategories(d.result); })
+      .catch((e) => { if (!cancelled) console.error('Error fetching categories:', e); });
     getAllProducts()
-      .then((d) => setProducts(d.result))
-      .catch((e) => console.error('Error fetching products:', e));
+      .then((d) => { if (!cancelled) setProducts(d.result); })
+      .catch((e) => { if (!cancelled) console.error('Error fetching products:', e); });
+    return () => { cancelled = true; };
   }, []);
 
   const deduplicatedProducts = products
