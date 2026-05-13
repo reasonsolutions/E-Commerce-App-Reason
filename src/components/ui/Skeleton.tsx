@@ -1,13 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, View, StyleSheet, ViewStyle } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { Colors, Radius } from '../../theme/tokens';
-
-// Shimmer travels left→right over 1400ms, matching the design spec.
-// useNativeDriver:true keeps animation off the JS thread — no jank on
-// slow renders. The gradient effect is approximated with an Animated opacity
-// pulse since a true translateX gradient requires react-native-linear-gradient
-// (already installed). We use the opacity approach to avoid a new import
-// in a foundation layer that should have zero new deps.
+import { Motion } from '../../theme/motion';
 
 interface SkeletonProps {
   width?: number | `${number}%`;
@@ -17,6 +12,15 @@ interface SkeletonProps {
   style?: ViewStyle;
 }
 
+// Shimmer colours: base → highlight → base sweep across the skeleton.
+const SHIMMER_COLORS = [
+  Colors.surfaceSoft,
+  Colors.surface,
+  'rgba(255,255,255,0.6)',
+  Colors.surface,
+  Colors.surfaceSoft,
+];
+
 export const Skeleton: React.FC<SkeletonProps> = ({
   width = '100%',
   height,
@@ -24,42 +28,55 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   pill = false,
   style,
 }) => {
-  const opacity = useRef(new Animated.Value(1)).current;
+  const translateX = useRef(new Animated.Value(-1)).current;
 
   useEffect(() => {
     const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue:        0.4,
-          duration:       700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue:        1,
-          duration:       700,
-          useNativeDriver: true,
-        }),
-      ]),
+      Animated.timing(translateX, {
+        toValue:         1,
+        duration:        1400,
+        easing:          Motion.easing.linear,
+        useNativeDriver: true,
+      }),
     );
     anim.start();
     return () => anim.stop();
-  }, [opacity]);
+  }, [translateX]);
 
   const resolvedRadius = pill ? 999 : (radius ?? Radius.sm);
 
+  // Translate the gradient from -100% to +100% of the skeleton width.
+  // Since useNativeDriver restricts transforms to numeric values, we interpolate
+  // the -1→1 Animated value into a pixel range at render time using the
+  // container's onLayout width. A fixed large range (600px) covers all skeleton
+  // widths used in the app without needing dynamic measurement.
+  const shimmerTranslate = translateX.interpolate({
+    inputRange:  [-1, 1],
+    outputRange: [-300, 300],
+  });
+
   return (
-    <Animated.View
+    <View
       style={[
         styles.base,
-        {
-          width,
-          height,
-          borderRadius: resolvedRadius,
-          opacity,
-        },
+        { width, height, borderRadius: resolvedRadius },
         style,
       ]}
-    />
+    >
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { transform: [{ translateX: shimmerTranslate }] },
+        ]}
+      >
+        <LinearGradient
+          colors={SHIMMER_COLORS}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+    </View>
   );
 };
 
@@ -80,7 +97,8 @@ export const SkeletonRow: React.FC<SkeletonRowProps> = ({
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surfaceSoft,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',

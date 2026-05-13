@@ -25,6 +25,7 @@ import { getAllProducts, getCategories } from '../api/services';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { useAsyncState } from '../hooks/useAsyncState';
 import { SearchBar, Skeleton, SkeletonRow, BottomNavBar } from '../components/ui';
 import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
 
@@ -95,10 +96,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
   const { cartCount: cartItemsCount } = useCart();
-  const [categories, setCategories]   = useState<CategoryInterface[] | null>(null);
-  const [products, setProducts]       = useState<ProductInterface[] | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const heroImgOpacity = useRef(new Animated.Value(0)).current;
+
+  const {
+    data: categories,
+    run: runCategories,
+  } = useAsyncState<CategoryInterface[]>(null);
+
+  const {
+    data: products,
+    run: runProducts,
+  } = useAsyncState<ProductInterface[]>(null);
 
   const heroAnim  = useEntrance(60, true);  // scale materialisation on hero only
   const catAnim   = useEntrance(200);
@@ -106,16 +115,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const shelfAnim = useEntrance(380);
   const editAnim  = useEntrance(460);
 
-  useEffect(() => {
-    let cancelled = false;
-    getCategories()
-      .then((d) => { if (!cancelled) setCategories(d.result); })
-      .catch((e) => { if (!cancelled) console.error('Error fetching categories:', e); });
-    getAllProducts()
-      .then((d) => { if (!cancelled) setProducts(d.result); })
-      .catch((e) => { if (!cancelled) console.error('Error fetching products:', e); });
-    return () => { cancelled = true; };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const cancelled = { current: false };
+      runCategories(() => getCategories().then((d) => d.result), cancelled);
+      runProducts(() => getAllProducts().then((d) => d.result), cancelled);
+      return () => { cancelled.current = true; };
+    }, [runCategories, runProducts]),
+  );
 
   const deduplicatedProducts = products
     ? Array.from(new Map(products.map((p) => [p.Item_Id, p])).values())

@@ -5,10 +5,14 @@ import {
   View,
   ActivityIndicator,
   StyleSheet,
+  Animated,
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { Colors, Space, Radius, FontSize, FontWeight } from '../../theme/tokens';
+import { Colors, Space, Radius, FontSize } from '../../theme/tokens';
+import { Type } from '../../theme/typography';
+import { useTactile } from '../../hooks/useTactile';
+import { useHaptic } from '../../hooks/useHaptic';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive';
 type Size = 'sm' | 'md' | 'lg';
@@ -74,47 +78,58 @@ export const Button: React.FC<ButtonProps> = ({
   const v = variantStyles[variant];
   const s = sizeStyles[size];
   const inactive = disabled || loading;
+  const { animatedStyle, handlers } = useTactile();
+  const haptic = useHaptic();
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={inactive}
-      activeOpacity={0.75}
+    <Animated.View
       style={[
-        styles.base,
-        {
-          backgroundColor:  v.bg,
-          borderColor:      v.borderColor,
-          borderWidth:      v.borderWidth,
-          paddingVertical:  s.paddingVertical,
-          paddingHorizontal: s.paddingHorizontal,
-          borderRadius:     s.borderRadius,
-          width:            fullWidth ? '100%' : undefined,
-          opacity:          inactive ? 0.45 : 1,
-        },
-        style,
+        animatedStyle,
+        fullWidth ? styles.fullWidth : undefined,
       ]}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: inactive, busy: loading }}
     >
-      {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={v.fg}
-          style={styles.spinner}
-        />
-      ) : (
-        leading ? <View style={styles.icon}>{leading}</View> : null
-      )}
+      <TouchableOpacity
+        onPress={onPress}
+        disabled={inactive}
+        activeOpacity={1}
+        {...handlers}
+        onPressIn={(e) => { haptic.light(); handlers.onPressIn(e); }}
+        style={[
+          styles.base,
+          {
+            backgroundColor:   v.bg,
+            borderColor:       v.borderColor,
+            borderWidth:       v.borderWidth,
+            paddingVertical:   s.paddingVertical,
+            paddingHorizontal: s.paddingHorizontal,
+            borderRadius:      s.borderRadius,
+            width:             fullWidth ? '100%' : undefined,
+            opacity:           inactive ? 0.45 : 1,
+          },
+          style,
+        ]}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: inactive, busy: loading }}
+      >
+        {loading ? (
+          <ActivityIndicator
+            size="small"
+            color={v.fg}
+            style={styles.spinner}
+          />
+        ) : (
+          leading ? <View style={styles.icon}>{leading}</View> : null
+        )}
 
-      <Text style={[styles.label, { color: v.fg, fontSize: s.fontSize } as TextStyle]}>
-        {children}
-      </Text>
+        <Text style={[styles.label, { color: v.fg, fontSize: s.fontSize } as TextStyle]}>
+          {children}
+        </Text>
 
-      {!loading && trailing ? (
-        <View style={styles.icon}>{trailing}</View>
-      ) : null}
-    </TouchableOpacity>
+        {!loading && trailing ? (
+          <View style={styles.icon}>{trailing}</View>
+        ) : null}
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
@@ -125,8 +140,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space[2],
   },
+  fullWidth: {
+    width: '100%',
+  },
   label: {
-    fontWeight:    FontWeight.semibold,
+    // Type.bodyStrong base: weight 500, lineHeight 24. fontSize and color are
+    // overridden per-render by the size/variant inline style.
+    ...Type.bodyStrong,
     letterSpacing: -0.1,
   },
   icon: {

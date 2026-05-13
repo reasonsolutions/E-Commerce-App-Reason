@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors, Space, Radius, FontSize, FontWeight } from '../../theme/tokens';
+import { Colors, Space, Radius } from '../../theme/tokens';
+import { Type } from '../../theme/typography';
 
 interface EmptyStateProps {
   icon: React.ReactNode;
@@ -38,24 +39,18 @@ const styles = StyleSheet.create({
     width:           64,
     height:          64,
     borderRadius:    Radius.pill,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surfaceSoft,
     alignItems:      'center',
     justifyContent:  'center',
   },
   title: {
-    fontSize:      FontSize.lg,
-    fontWeight:    FontWeight.semibold,
-    letterSpacing: -0.2,
-    color:         Colors.ink1,
-    textAlign:     'center',
+    ...Type.title,
+    textAlign: 'center',
   },
   body: {
-    fontSize:   FontSize.sm,
-    fontWeight: '400',
-    color:      Colors.ink3,
-    lineHeight: FontSize.sm * 1.45,
-    textAlign:  'center',
-    maxWidth:   280,
+    ...Type.caption,
+    textAlign: 'center',
+    maxWidth:  280,
   },
   actionSlot: {
     marginTop: Space[2],

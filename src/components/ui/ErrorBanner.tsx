@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Colors, Space, Radius, FontSize, FontWeight } from '../../theme/tokens';
+import { Colors, Space, Radius } from '../../theme/tokens';
+import { Type } from '../../theme/typography';
 
 interface ErrorBannerProps {
   title?: string;
@@ -19,7 +20,7 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({
       <Icon
         name="alert-circle-outline"
         size={20}
-        color={Colors.danger}
+        color={Colors.ink3}
         style={styles.icon}
       />
 
@@ -49,9 +50,7 @@ const styles = StyleSheet.create({
     margin:           Space.screenH,
     padding:          Space[3],
     borderRadius:     Radius.md,
-    backgroundColor:  Colors.dangerTint,
-    borderWidth:      1,
-    borderColor:      Colors.dangerBorder,
+    backgroundColor:  Colors.surfaceDeep,
     gap: Space[3],
   },
   icon: {
@@ -62,27 +61,22 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontSize:   FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color:      Colors.ink1,
+    ...Type.captionStrong,
+    color: Colors.ink1,
   },
   body: {
-    fontSize:   FontSize.xs,
-    fontWeight: '400',
-    color:      Colors.ink2,
-    marginTop:  2,
-    lineHeight: FontSize.xs * 1.45,
+    ...Type.caption,
+    marginTop: 2,
   },
   retryBtn: {
-    paddingVertical:  6,
+    paddingVertical:   6,
     paddingHorizontal: Space[3],
-    borderRadius:     Radius.pill,
-    borderWidth:      1,
-    borderColor:      Colors.ink1,
+    borderRadius:      Radius.pill,
+    borderWidth:       1,
+    borderColor:       Colors.rule,
   },
   retryLabel: {
-    fontSize:   FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color:      Colors.ink1,
+    ...Type.caption,
+    color: Colors.ink1,
   },
 });

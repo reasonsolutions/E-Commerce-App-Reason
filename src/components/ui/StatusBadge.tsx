@@ -15,12 +15,14 @@ interface StatusBadgeProps {
 
 type StatusPalette = { fg: string; bg: string; dot: string };
 
+// Premium register: ember for in-progress, ink for completed, muted danger for cancelled.
+// Retired: saturated semantic tints (warningTint/infoTint) — too noisy.
 const palette: Record<OrderStatus, StatusPalette> = {
-  Confirmed:   { fg: Colors.warning, bg: Colors.warningTint, dot: Colors.warning },
-  Shipped:     { fg: Colors.info,    bg: Colors.infoTint,    dot: Colors.info },
-  'In transit':{ fg: Colors.info,    bg: Colors.infoTint,    dot: Colors.info },
-  Delivered:   { fg: Colors.success, bg: Colors.successTint, dot: Colors.success },
-  Cancelled:   { fg: Colors.danger,  bg: Colors.dangerTint,  dot: Colors.danger },
+  Confirmed:    { fg: Colors.accent,   bg: Colors.accentTint,   dot: Colors.accent },
+  Shipped:      { fg: Colors.accent,   bg: Colors.accentTint,   dot: Colors.accent },
+  'In transit': { fg: Colors.accent,   bg: Colors.accentTint,   dot: Colors.accent },
+  Delivered:    { fg: Colors.ink2,     bg: Colors.surfaceDeep,  dot: Colors.ink3 },
+  Cancelled:    { fg: Colors.danger,   bg: Colors.dangerTint,   dot: Colors.danger },
 };
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
@@ -36,22 +38,22 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
 
 const styles = StyleSheet.create({
   pill: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    alignSelf:      'flex-start',
-    paddingVertical:  4,
+    flexDirection:     'row',
+    alignItems:        'center',
+    alignSelf:         'flex-start',
+    paddingVertical:   4,
     paddingHorizontal: 10,
-    borderRadius:   Radius.pill,
+    borderRadius:      Radius.pill,
     gap: 6,
   },
   dot: {
-    width:        6,
-    height:       6,
+    width:        5,
+    height:       5,
     borderRadius: 3,
   },
   label: {
     fontSize:      FontSize.xs,
-    fontWeight:    FontWeight.semibold,
-    letterSpacing: 0.1,
+    fontWeight:    FontWeight.medium,
+    letterSpacing: 0.2,
   },
 });

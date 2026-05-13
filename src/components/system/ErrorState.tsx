@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Colors, Space, Radius, FontSize, FontWeight } from '../../theme';
+import { Colors, Space } from '../../theme';
+import { Type } from '../../theme/typography';
 import { RetryButton } from './RetryButton';
 
 interface ErrorStateProps {
@@ -20,9 +21,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   icon,
 }) => (
   <View style={styles.wrap}>
-    <View style={styles.iconWrap}>
-      {icon ?? <Icon name="cloud-offline-outline" size={32} color={Colors.ink3} />}
-    </View>
+    {icon ?? <Icon name="cloud-offline-outline" size={32} color={Colors.ink4} />}
     <Text style={styles.title}>{title}</Text>
     <Text style={styles.message}>{message}</Text>
     {onRetry ? (
@@ -42,26 +41,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space[8],
     gap: Space[3],
   },
-  iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   title: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    color: Colors.ink1,
-    letterSpacing: -0.2,
+    ...Type.title,
     textAlign: 'center',
   },
   message: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.regular,
-    color: Colors.ink3,
-    lineHeight: FontSize.sm * 1.45,
+    ...Type.caption,
     textAlign: 'center',
     maxWidth: 280,
   },

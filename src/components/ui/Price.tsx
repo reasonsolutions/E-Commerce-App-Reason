@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, FontSize, FontWeight } from '../../theme/tokens';
+import { Type } from '../../theme/typography';
+import { FontFamily } from '../../theme/fonts';
 
-type PriceSize = 'sm' | 'base' | 'lg' | 'xl';
+type PriceSize = 'sm' | 'base' | 'lg' | 'xl' | 'large';
 
 interface PriceProps {
   value: number;
@@ -11,14 +13,15 @@ interface PriceProps {
   currency?: string;
 }
 
-const mainSize: Record<PriceSize, number> = {
-  sm:   FontSize.sm,
-  base: FontSize.base,
-  lg:   FontSize.lg,
-  xl:   FontSize.xl,
+const mainFontSize: Record<PriceSize, number> = {
+  sm:    FontSize.sm,
+  base:  FontSize.base,
+  lg:    FontSize.lg,
+  xl:    FontSize.xl,
+  large: 32,
 };
 
-const strikeSizeOffset = 4; // strike price is always smaller than main
+const strikeSizeOffset = 4;
 const discountSize = FontSize.xs;
 
 export const Price: React.FC<PriceProps> = ({
@@ -27,7 +30,7 @@ export const Price: React.FC<PriceProps> = ({
   size = 'base',
   currency = '$',
 }) => {
-  const fs = mainSize[size];
+  const fs = mainFontSize[size];
   const strikeFs = Math.max(FontSize.xs, fs - strikeSizeOffset);
   const discount = was && was > value ? Math.round((1 - value / was) * 100) : 0;
 
@@ -60,11 +63,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   main: {
-    fontWeight:    FontWeight.bold,
+    fontFamily:    FontFamily.serif,
+    fontWeight:    FontWeight.regular,
     letterSpacing: -0.4,
     color:         Colors.ink1,
   },
   strike: {
+    fontFamily:         FontFamily.mono,
     fontWeight:         FontWeight.regular,
     color:              Colors.ink4,
     textDecorationLine: 'line-through',

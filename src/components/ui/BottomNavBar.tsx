@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, FontSize, FontWeight, Radius, Shadow } from '../../theme';
+import { useHaptic } from '../../hooks/useHaptic';
 
 export type NavTab = 'Home' | 'Orders' | 'Wishlist' | 'Cart' | 'Profile';
 
@@ -47,13 +48,14 @@ const NavItem: React.FC<{
   cartCount?: number;
 }> = ({ tab, isActive, onPress, cartCount }) => {
   const scale = useTabScale(isActive);
+  const haptic = useHaptic();
   const iconName  = isActive ? tab.activeIcon : tab.inactiveIcon;
   const iconColor = isActive ? Colors.ink1 : Colors.ink4;
 
   return (
     <TouchableOpacity
       style={styles.tab}
-      onPress={onPress}
+      onPress={() => { haptic.light(); onPress(); }}
       activeOpacity={0.65}
       accessibilityRole="button"
       accessibilityLabel={tab.label}
@@ -114,7 +116,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingHorizontal: Space[1],
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.line,
+    borderTopColor: Colors.rule,
     ...Shadow.md,
   },
   tab: {
@@ -148,7 +150,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -3,
     right: -8,
-    backgroundColor: Colors.danger,
+    backgroundColor: Colors.accent,
     borderRadius: Radius.pill,
     minWidth: 16,
     height: 16,

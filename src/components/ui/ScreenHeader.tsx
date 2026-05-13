@@ -8,7 +8,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Colors, Space, FontSize, FontWeight } from '../../theme/tokens';
+import { Colors, Space } from '../../theme/tokens';
+import { Type } from '../../theme/typography';
 
 type Variant = 'plain' | 'transparent';
 
@@ -87,7 +88,7 @@ const styles = StyleSheet.create({
   containerPlain: {
     backgroundColor: Colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.line,
+    borderBottomColor: Colors.rule,
   },
   containerTransparent: {
     backgroundColor: 'transparent',
@@ -121,15 +122,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
+    ...Type.heading,
     letterSpacing: -0.2,
-    color: Colors.ink1,
   },
   subtitle: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.regular,
-    color: Colors.ink3,
+    ...Type.caption,
     marginTop: 2,
   },
   rightSlot: {
