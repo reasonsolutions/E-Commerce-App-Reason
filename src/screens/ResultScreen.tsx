@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,23 +16,32 @@ import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { getProductsByCategory, getAllProducts } from '../api/services';
 import { ProductByCategoryProductDetails } from '../api/interfaces';
-import { Skeleton, Price } from '../components/ui';
+import { Skeleton, Price, EmptyState } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { Colors, Space, Radius } from '../theme';
+import { Type } from '../theme/typography';
+import { FontFamily } from '../theme/fonts';
+import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
+import { useHaptic } from '../hooks/useHaptic';
+import { useTactile } from '../hooks/useTactile';
+import { useEffect } from 'react';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const COL_GAP   = Space[3];
-const COL_W     = (SCREEN_W - Space.screenH * 2 - COL_GAP) / 2;
-// Featured span card occupies full canvas width
-const SPAN_W    = SCREEN_W - Space.screenH * 2;
+const COL_GAP = Space[3];
+const COL_W   = (SCREEN_W - Space.screenH * 2 - COL_GAP) / 2;
+const SPAN_W  = SCREEN_W - Space.screenH * 2;
+
+// 4:5 portrait aspect — canonical card ratio across all Phase 2/3 screens
+const GRID_IMG_H = COL_W * 1.25;
+const SPAN_IMG_H = SPAN_W * 0.58;
+const HERO_IMG_H = SCREEN_W * 0.56;
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
 };
 
-// Deduplicate by Item_Id, keep first occurrence (lowest Inventory_Id / first variant)
 function deduplicateProducts(
   products: ProductByCategoryProductDetails[],
 ): ProductByCategoryProductDetails[] {
@@ -44,21 +53,33 @@ function deduplicateProducts(
   });
 }
 
-// Every 5th item (0-indexed: 0, 5, 10…) is a featured span.
-// Index 0 is the hero — handled separately above the grid.
 function isFeaturedSpan(indexInGrid: number): boolean {
   return indexInGrid > 0 && indexInGrid % 5 === 0;
 }
 
-// ── Hero card — first product, full-bleed cinematic ───────────────────────────
+// ── Ember discount badge — shared across all three card types ─────────────────
+const DiscountBadge: React.FC<{ pct: number }> = ({ pct }) => (
+  <View style={styles.discountBadge}>
+    <Text style={styles.discountBadgeText}>−{pct}%</Text>
+  </View>
+);
+
+// ── Hero card — first product, cinematic full-bleed ───────────────────────────
 const HeroCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onPress: () => void;
-  style?: object | object[];
-}> = ({ product, onPress, style }) => {
+}> = ({ product, onPress }) => {
+  const haptic    = useHaptic();
+  const { animatedStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
+
   const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    Animated.timing(imgOpacity, {
+      toValue:         1,
+      duration:        Motion.duration.carry,
+      easing:          Motion.easing.inOut,
+      useNativeDriver: true,
+    }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
@@ -67,56 +88,75 @@ const HeroCard: React.FC<{
     : 0;
 
   return (
-    <TouchableOpacity style={[styles.heroCard, style]} onPress={onPress} activeOpacity={0.88}>
-      <Animated.Image
-        source={{ uri: product.Images?.split(';')[0] || '' }}
-        style={[styles.heroCardImg, { opacity: imgOpacity }]}
-        resizeMode="cover"
-        onLoad={onLoad}
-      />
-      <LinearGradient
-        colors={['transparent', 'transparent', 'rgba(0,0,0,0.42)', 'rgba(0,0,0,0.82)']}
-        locations={[0, 0.2, 0.6, 1]}
-        style={StyleSheet.absoluteFillObject}
-        pointerEvents="none"
-      />
-      {hasDiscount && (
-        <View style={styles.heroBadge}>
-          <Text style={styles.heroBadgeText}>-{discountPct}%</Text>
+    <Animated.View style={[styles.heroCard, animatedStyle]}>
+      <TouchableOpacity
+        {...handlers}
+        onPress={() => { haptic.light(); onPress(); }}
+        activeOpacity={1}
+      >
+        <View style={styles.heroImgWrap}>
+          <Animated.Image
+            source={{ uri: product.Images?.split(';')[0] || '' }}
+            style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+            resizeMode="cover"
+            onLoad={onLoad}
+          />
         </View>
-      )}
-      <View style={styles.heroFooter}>
-        <View style={styles.heroFooterLeft}>
-          {product.Brand_Name ? (
-            <Text style={styles.heroCardBrand}>{product.Brand_Name}</Text>
-          ) : null}
-          <Text style={styles.heroCardName} numberOfLines={1}>{product.Name}</Text>
-          <View style={styles.heroPriceRow}>
-            <Text style={styles.heroCardPrice}>${product.Price.toFixed(2)}</Text>
-            {hasDiscount && (
-              <Text style={styles.heroCardWas}>${product.ComparePrice.toFixed(2)}</Text>
-            )}
+        {/* Gradient only for text legibility — starts from 40% down */}
+        <LinearGradient
+          colors={['transparent', 'transparent', 'rgba(8,8,8,0.38)', 'rgba(8,8,8,0.78)']}
+          locations={[0, 0.35, 0.65, 1]}
+          style={[StyleSheet.absoluteFillObject, { height: HERO_IMG_H }]}
+          pointerEvents="none"
+        />
+        {hasDiscount && (
+          <View style={styles.heroBadgeWrap}>
+            <DiscountBadge pct={discountPct} />
+          </View>
+        )}
+        <View style={styles.heroFooter}>
+          <View style={styles.heroFooterLeft}>
+            {product.Brand_Name ? (
+              <Text style={styles.heroCardBrand}>{product.Brand_Name.toUpperCase()}</Text>
+            ) : null}
+            <Text style={styles.heroCardName} numberOfLines={1}>{product.Name}</Text>
+            <View style={styles.heroPriceRow}>
+              {/* White-on-dark context — cannot use Price component */}
+              <Text style={styles.heroCardPrice}>${product.Price.toFixed(2)}</Text>
+              {hasDiscount && (
+                <Text style={styles.heroCardWas}>${product.ComparePrice.toFixed(2)}</Text>
+              )}
+            </View>
+          </View>
+          {/* Underlined text CTA — matches frozen screen secondary action pattern */}
+          <View style={styles.heroViewLink}>
+            <Text style={styles.heroViewLinkText}>View</Text>
+            <View style={styles.heroViewLinkUnderline} />
           </View>
         </View>
-        <View style={styles.heroViewBtn}>
-          <Text style={styles.heroViewBtnText}>View</Text>
-          <Icon name="arrow-forward" size={11} color="#0A0A0A" />
-        </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 
-// ── Standard 2-column tile ────────────────────────────────────────────────────
+// ── Standard 2-column grid tile ───────────────────────────────────────────────
 const GridTile: React.FC<{
   product: ProductByCategoryProductDetails;
   onPress: () => void;
   delay: number;
 }> = ({ product, onPress, delay }) => {
-  const animStyle  = useEntrance(delay, false, 12);
+  const haptic    = useHaptic();
+  const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, 12) };
+  const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
+
   const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    Animated.timing(imgOpacity, {
+      toValue:         1,
+      duration:        Motion.duration.settle,
+      easing:          Motion.easing.out,
+      useNativeDriver: true,
+    }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
@@ -125,47 +165,64 @@ const GridTile: React.FC<{
     : 0;
 
   return (
-    <Animated.View style={[styles.gridTile, animStyle]}>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.82}>
-        <View style={styles.gridImgWrap}>
-          <Animated.Image
-            source={{ uri: product.Images?.split(';')[0] || '' }}
-            style={[styles.gridImg, { opacity: imgOpacity }]}
-            resizeMode="cover"
-            onLoad={onLoad}
-          />
-          {hasDiscount && (
-            <View style={styles.gridBadge}>
-              <Text style={styles.gridBadgeText}>-{discountPct}%</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.gridInfo}>
-          {product.Brand_Name ? (
-            <Text style={styles.gridBrand} numberOfLines={1}>{product.Brand_Name}</Text>
-          ) : null}
-          <Text style={styles.gridName} numberOfLines={2}>{product.Name}</Text>
-          <Price
-            value={product.Price}
-            was={hasDiscount ? product.ComparePrice : undefined}
-            size="sm"
-          />
-        </View>
-      </TouchableOpacity>
+    <Animated.View style={[styles.gridTile, entranceStyle]}>
+      <Animated.View style={pressStyle}>
+        <TouchableOpacity
+          {...handlers}
+          onPress={() => { haptic.light(); onPress(); }}
+          activeOpacity={1}
+        >
+          <View style={styles.gridImgWrap}>
+            <Animated.Image
+              source={{ uri: product.Images?.split(';')[0] || '' }}
+              style={[styles.gridImg, { opacity: imgOpacity }]}
+              resizeMode="cover"
+              onLoad={onLoad}
+            />
+            {hasDiscount && (
+              <View style={styles.gridBadgeWrap}>
+                <DiscountBadge pct={discountPct} />
+              </View>
+            )}
+          </View>
+          <View style={styles.gridInfo}>
+            {product.Brand_Name ? (
+              <Text style={styles.gridBrand} numberOfLines={1}>
+                {product.Brand_Name.toUpperCase()}
+              </Text>
+            ) : null}
+            <Text style={styles.gridName} numberOfLines={2}>{product.Name}</Text>
+            {/* Light-surface context — Price component is safe here */}
+            <Price
+              value={product.Price}
+              was={hasDiscount ? product.ComparePrice : undefined}
+              size="sm"
+            />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     </Animated.View>
   );
 };
 
-// ── Featured span card — full-width within grid ────────────────────────────────
+// ── Featured span card — full-width editorial break ───────────────────────────
 const SpanCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onPress: () => void;
   delay: number;
 }> = ({ product, onPress, delay }) => {
-  const animStyle  = useEntrance(delay, false, 12);
+  const haptic    = useHaptic();
+  const entranceStyle = useEntrance(delay, false, 12);
+  const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
+
   const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    Animated.timing(imgOpacity, {
+      toValue:         1,
+      duration:        Motion.duration.carry,
+      easing:          Motion.easing.inOut,
+      useNativeDriver: true,
+    }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
@@ -174,41 +231,84 @@ const SpanCard: React.FC<{
     : 0;
 
   return (
-    <Animated.View style={[styles.spanCard, animStyle]}>
-      <TouchableOpacity style={{ flex: 1 }} onPress={onPress} activeOpacity={0.88}>
-        <Animated.Image
-          source={{ uri: product.Images?.split(';')[0] || '' }}
-          style={[styles.spanImg, { opacity: imgOpacity }]}
-          resizeMode="cover"
-          onLoad={onLoad}
-        />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.82)']}
-          locations={[0.3, 0.7, 1]}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
-        {hasDiscount && (
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>-{discountPct}%</Text>
+    <Animated.View style={[styles.spanCard, entranceStyle]}>
+      <Animated.View style={[{ flex: 1 }, pressStyle]}>
+        <TouchableOpacity
+          {...handlers}
+          onPress={() => { haptic.light(); onPress(); }}
+          activeOpacity={1}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.spanImgWrap}>
+            <Animated.Image
+              source={{ uri: product.Images?.split(';')[0] || '' }}
+              style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+              resizeMode="cover"
+              onLoad={onLoad}
+            />
           </View>
-        )}
-        <View style={styles.spanFooter}>
-          {product.Brand_Name ? (
-            <Text style={styles.spanBrand}>{product.Brand_Name}</Text>
-          ) : null}
-          <Text style={styles.spanName} numberOfLines={1}>{product.Name}</Text>
-          <Text style={styles.spanPrice}>${product.Price.toFixed(2)}</Text>
-        </View>
-      </TouchableOpacity>
+          <LinearGradient
+            colors={['transparent', 'rgba(8,8,8,0.48)', 'rgba(8,8,8,0.80)']}
+            locations={[0.28, 0.65, 1]}
+            style={[StyleSheet.absoluteFillObject, { height: SPAN_IMG_H }]}
+            pointerEvents="none"
+          />
+          {hasDiscount && (
+            <View style={styles.spanBadgeWrap}>
+              <DiscountBadge pct={discountPct} />
+            </View>
+          )}
+          <View style={styles.spanFooter}>
+            {product.Brand_Name ? (
+              <Text style={styles.spanBrand}>{product.Brand_Name.toUpperCase()}</Text>
+            ) : null}
+            <Text style={styles.spanName} numberOfLines={1}>{product.Name}</Text>
+            {/* White-on-dark overlay — inline price required */}
+            <Text style={styles.spanPrice}>${product.Price.toFixed(2)}</Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     </Animated.View>
   );
 };
 
+// ── Skeleton — matches loaded layout shape ────────────────────────────────────
+const ResultSkeleton: React.FC = () => (
+  <View style={styles.skeletonWrap}>
+    <Skeleton height={HERO_IMG_H} radius={Radius.md} style={{ marginBottom: Space[6] }} />
+    <View style={styles.gridRow}>
+      <View style={{ width: COL_W }}>
+        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton height={9} width="45%" style={{ marginBottom: Space[1] }} />
+        <Skeleton height={13} width="80%" style={{ marginBottom: Space[1] }} />
+        <Skeleton height={12} width="35%" />
+      </View>
+      <View style={{ width: COL_W }}>
+        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton height={9} width="55%" style={{ marginBottom: Space[1] }} />
+        <Skeleton height={13} width="70%" style={{ marginBottom: Space[1] }} />
+        <Skeleton height={12} width="40%" />
+      </View>
+    </View>
+    <View style={[styles.gridRow, { marginTop: Space[5] }]}>
+      <View style={{ width: COL_W }}>
+        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton height={9} width="38%" style={{ marginBottom: Space[1] }} />
+        <Skeleton height={13} width="85%" />
+      </View>
+      <View style={{ width: COL_W }}>
+        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton height={9} width="50%" style={{ marginBottom: Space[1] }} />
+        <Skeleton height={13} width="65%" />
+      </View>
+    </View>
+  </View>
+);
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const route = useRoute();
+  const route  = useRoute();
   const {
     categoryId,
     categoryName = 'Browse',
@@ -218,7 +318,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const { data: products, loading, isError, error, run } = useAsyncState<ProductByCategoryProductDetails[]>([]);
 
   const headerAnim = useEntrance(40, false, 12);
-  const heroAnim   = useEntrance(140, false, 12);
+  const heroAnim   = useEntrance(160, false, 12);
 
   const fetchProducts = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -253,18 +353,14 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const heroProduct  = deduplicated[0] ?? null;
   const gridProducts = deduplicated.slice(1);
 
-  // Build rows: pairs of grid tiles, with span cards injected at featured intervals
-  // gridProducts indices: 0,1 → row; 2,3 → row; 4 → span; 5,6 → row; etc.
-  // We use 0-based index in gridProducts; span trigger: every 4 items (indices 4,9,14…)
   const rows: Array<
     | { type: 'pair'; left: ProductByCategoryProductDetails; right?: ProductByCategoryProductDetails; leftIdx: number; rightIdx?: number }
     | { type: 'span'; product: ProductByCategoryProductDetails; idx: number }
   > = [];
 
   let i = 0;
-  let pairIdx = 0; // counts pairs for span insertion
+  let pairIdx = 0;
   while (i < gridProducts.length) {
-    // Insert a span every 4 items in the grid (after 2 pairs)
     if (pairIdx > 0 && pairIdx % 2 === 0 && isFeaturedSpan(i)) {
       rows.push({ type: 'span', product: gridProducts[i], idx: i });
       i++;
@@ -285,9 +381,9 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" translucent />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
 
-      {/* ── Dark editorial header — continues HomeScreen/ProductScreen tonal language */}
+      {/* Dark editorial header */}
       <Animated.View
         style={[
           styles.header,
@@ -299,33 +395,27 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Icon name="chevron-back" size={20} color="#FFFFFF" />
           </TouchableOpacity>
+
           <View style={styles.headerTitleBlock}>
             <Text style={styles.headerEyebrow}>COLLECTION</Text>
             <Text style={styles.headerTitle} numberOfLines={1}>{categoryName}</Text>
           </View>
-          {/* Spacer to balance back btn */}
+
           <View style={styles.headerRight}>
-            {!loading && (
+            {!loading && deduplicated.length > 0 && (
               <Text style={styles.headerCount}>
-                {deduplicated.length} {deduplicated.length === 1 ? 'item' : 'items'}
+                {deduplicated.length}
               </Text>
             )}
           </View>
         </View>
+        {/* Single hairline seam — matches frozen screen header pattern */}
+        <View style={styles.headerSeam} />
       </Animated.View>
-
-      {/* Tonal bridge — dark → surfaceAlt, matching HomeScreen bridge */}
-      <LinearGradient
-        colors={['#0A0A0A', Colors.surfaceAlt]}
-        style={styles.tonalBridge}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        pointerEvents="none"
-      />
 
       <ScrollView
         style={styles.scroll}
@@ -336,67 +426,41 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         ]}
       >
         {loading ? (
-          // ── Skeleton state ───────────────────────────────────────────────
-          <View style={styles.skeletonWrap}>
-            {/* Hero skeleton */}
-            <Skeleton height={220} radius={Radius.lg} style={{ marginBottom: Space[5] }} />
-            {/* Grid skeleton */}
-            <View style={styles.gridRow}>
-              <Skeleton height={COL_W * 1.15} width={COL_W} radius={Radius.md} />
-              <Skeleton height={COL_W * 1.15} width={COL_W} radius={Radius.md} />
-            </View>
-            <View style={[styles.gridRow, { marginTop: Space[5] }]}>
-              <View style={{ width: COL_W }}>
-                <Skeleton height={COL_W} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
-                <Skeleton height={10} width="55%" style={{ marginBottom: Space[1] }} />
-                <Skeleton height={14} width="85%" />
-              </View>
-              <View style={{ width: COL_W }}>
-                <Skeleton height={COL_W} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
-                <Skeleton height={10} width="40%" style={{ marginBottom: Space[1] }} />
-                <Skeleton height={14} width="70%" />
-              </View>
-            </View>
-          </View>
+          <ResultSkeleton />
         ) : isError ? (
-          // ── Error state ──────────────────────────────────────────────────
-          <View style={styles.emptyWrap}>
+          <View style={styles.stateWrap}>
             <ErrorState
               title="Couldn't load products"
-              message={error ?? 'An unexpected error occurred.'}
+              message={error ?? 'Something went wrong.'}
               onRetry={() => fetchProducts()}
               retryLoading={loading}
-              icon={<Icon name="bag-outline" size={32} color={Colors.ink3} />}
             />
           </View>
         ) : deduplicated.length === 0 ? (
-          // ── Empty state ──────────────────────────────────────────────────
-          <View style={styles.emptyWrap}>
-            <Icon name="bag-outline" size={40} color={Colors.ink5} />
-            <Text style={styles.emptyTitle}>Nothing here yet</Text>
-            <Text style={styles.emptyBody}>This collection is empty. Check back soon.</Text>
+          <View style={styles.stateWrap}>
+            <EmptyState
+              icon={<Icon name="bag-outline" size={28} color={Colors.ink4} />}
+              title="Nothing here yet."
+              body="This collection is empty. Check back soon."
+            />
           </View>
         ) : (
-          // ── Content ──────────────────────────────────────────────────────
           <>
-            {/* Hero — first product */}
             {heroProduct && (
               <Animated.View style={heroAnim}>
                 <HeroCard
                   product={heroProduct}
                   onPress={() => navigateToProduct(heroProduct.Inventory_Id)}
-                  style={styles.heroCardContainer}
                 />
               </Animated.View>
             )}
 
-            {/* Hairline breath before grid */}
+            {/* Hairline divider — breath between hero and grid */}
             <View style={styles.gridDivider} />
 
-            {/* Grid rows */}
             {rows.map((row, rowIndex) => {
               if (row.type === 'span') {
-                const delay = Math.min(160 + rowIndex * 40, 400);
+                const delay = Math.min(180 + rowIndex * 40, 420);
                 return (
                   <SpanCard
                     key={`span-${row.idx}`}
@@ -407,8 +471,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                 );
               }
 
-              const leftDelay  = Math.min(160 + rowIndex * 35, 400);
-              const rightDelay = Math.min(160 + rowIndex * 35 + 60, 440);
+              const leftDelay  = Math.min(180 + rowIndex * 35, 400);
+              const rightDelay = Math.min(180 + rowIndex * 35 + 55, 440);
 
               return (
                 <View key={`pair-${row.leftIdx}`} style={styles.gridRow}>
@@ -439,12 +503,12 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.ink1,
   },
 
-  // ── Header ──────────────────────────────────────────────────────────────
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.ink1,
     paddingHorizontal: Space.screenH,
     paddingBottom: Space[4],
     zIndex: 2,
@@ -456,275 +520,260 @@ const styles = StyleSheet.create({
   backBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitleBlock: {
     flex: 1,
     paddingHorizontal: Space[3],
-    gap: 2,
+    gap: 3,
   },
   headerEyebrow: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.28)',
-    letterSpacing: 1.8,
+    ...Type.label,
+    color: 'rgba(255,255,255,0.30)',
   },
   headerTitle: {
-    fontSize: FontSize['2xl'],
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: -0.8,
+    fontFamily: FontFamily.serif,
+    fontSize:   26,
+    fontWeight: '400',
+    color:      '#FFFFFF',
+    letterSpacing: -0.5,
+    lineHeight: 26 * 1.1,
   },
   headerRight: {
     width: 36,
     alignItems: 'flex-end',
   },
   headerCount: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.medium,
-    color: 'rgba(255,255,255,0.35)',
+    fontFamily: FontFamily.mono,
+    fontSize:   11,
+    color:      'rgba(255,255,255,0.28)',
+    letterSpacing: 0.5,
+  },
+  headerSeam: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop: Space[4],
+    marginHorizontal: -Space.screenH,
   },
 
-  // Tonal bridge
-  tonalBridge: {
-    height: 56,
-    marginTop: -1,
-    zIndex: 1,
-  },
-
-  // ── Scroll canvas ────────────────────────────────────────────────────────
+  // ── Scroll canvas ────────────────────────────────────────────────────────────
   scroll: {
     flex: 1,
-    backgroundColor: Colors.surfaceAlt,
-    marginTop: -1,
+    backgroundColor: Colors.surface,
   },
   scrollContent: {
     paddingHorizontal: Space.screenH,
-    paddingTop: Space[1],
+    paddingTop: Space[5],
   },
 
-  // ── Hero card ────────────────────────────────────────────────────────────
-  heroCardContainer: {
+  // ── Hero card ────────────────────────────────────────────────────────────────
+  heroCard: {
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceDeep,
     marginBottom: Space[1],
   },
-  heroCard: {
+  heroImgWrap: {
     width: '100%',
-    height: 230,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    backgroundColor: '#1A1A1A',
-    ...Shadow.lg,
+    height: HERO_IMG_H,
+    backgroundColor: Colors.surfaceDeep,
   },
-  heroCardImg: {
-    width: '100%',
-    height: '100%',
-  },
-  heroBadge: {
+  heroBadgeWrap: {
     position: 'absolute',
     top: Space[3],
     left: Space[3],
-    backgroundColor: Colors.danger,
-    borderRadius: Radius.xs,
-    paddingVertical: 3,
-    paddingHorizontal: Space[2],
-  },
-  heroBadgeText: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
   },
   heroFooter: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: Space[4],
+    paddingHorizontal: Space[5],
+    paddingBottom: Space[5],
+    paddingTop: Space[4],
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
   },
   heroFooterLeft: {
     flex: 1,
-    gap: 3,
-    paddingRight: Space[3],
+    gap: 4,
+    paddingRight: Space[4],
   },
   heroCardBrand: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.52)',
-    letterSpacing: 1.3,
-    textTransform: 'uppercase',
+    ...Type.label,
+    color: 'rgba(255,255,255,0.46)',
   },
   heroCardName: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
+    fontFamily: FontFamily.serif,
+    fontSize:   20,
+    fontWeight: '400',
+    color:      '#FFFFFF',
     letterSpacing: -0.3,
+    lineHeight: 20 * 1.2,
   },
   heroPriceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: Space[2],
     marginTop: 2,
   },
   heroCardPrice: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
+    fontFamily: FontFamily.serif,
+    fontSize:   18,
+    fontWeight: '400',
+    color:      '#FFFFFF',
+    letterSpacing: -0.3,
   },
   heroCardWas: {
-    fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.38)',
+    fontFamily: FontFamily.mono,
+    fontSize:   12,
+    color:      'rgba(255,255,255,0.36)',
     textDecorationLine: 'line-through',
   },
-  heroViewBtn: {
-    flexDirection: 'row',
+  // Underlined text link — matches frozen secondary action pattern
+  heroViewLink: {
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.pill,
-    paddingVertical: 7,
-    paddingHorizontal: Space[3],
+    paddingBottom: 2,
   },
-  heroViewBtnText: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    color: '#0A0A0A',
+  heroViewLinkText: {
+    ...Type.caption,
+    color: 'rgba(255,255,255,0.72)',
+    letterSpacing: 0.2,
+  },
+  heroViewLinkUnderline: {
+    height: 1,
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.32)',
+    marginTop: 2,
   },
 
-  // ── Grid divider breath ──────────────────────────────────────────────────
+  // ── Ember discount badge ──────────────────────────────────────────────────────
+  discountBadge: {
+    backgroundColor: Colors.accentTint,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    borderRadius: Radius.xs,
+    paddingVertical: 2,
+    paddingHorizontal: Space[2],
+  },
+  discountBadgeText: {
+    ...Type.label,
+    color: Colors.accent,
+    letterSpacing: 0.8,
+  },
+
+  // ── Grid divider ─────────────────────────────────────────────────────────────
   gridDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.line,
-    marginVertical: Space[5],
+    backgroundColor: Colors.rule,
+    marginVertical: Space[6],
   },
 
-  // ── Grid row ─────────────────────────────────────────────────────────────
+  // ── Grid row ──────────────────────────────────────────────────────────────────
   gridRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Space[5],
+    marginBottom: Space[6],
   },
 
-  // ── Grid tile (2-col) ────────────────────────────────────────────────────
+  // ── Grid tile ─────────────────────────────────────────────────────────────────
   gridTile: {
     width: COL_W,
   },
   gridImgWrap: {
     width: COL_W,
-    height: COL_W * 1.1,
-    borderRadius: Radius.md,
+    height: GRID_IMG_H,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
-    position: 'relative',
+    backgroundColor: Colors.surfaceDeep,
   },
   gridImg: {
     width: '100%',
     height: '100%',
   },
-  gridBadge: {
+  gridBadgeWrap: {
     position: 'absolute',
     top: Space[2],
     left: Space[2],
-    backgroundColor: Colors.danger,
-    borderRadius: Radius.xs,
-    paddingVertical: 2,
-    paddingHorizontal: Space[1],
-  },
-  gridBadgeText: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
   },
   gridInfo: {
     paddingTop: Space[2],
-    paddingHorizontal: 2,
-    gap: 2,
+    paddingHorizontal: 1,
+    gap: 3,
   },
   gridBrand: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: Colors.ink3,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    ...Type.label,
+    color: Colors.ink4,
   },
   gridName: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.ink1,
+    fontFamily: FontFamily.serif,
+    fontSize:   14,
+    fontWeight: '400',
+    color:      Colors.ink1,
     letterSpacing: -0.1,
-    lineHeight: FontSize.sm * 1.35,
+    lineHeight: 14 * 1.35,
   },
-  // ── Span card (full-width featured) ─────────────────────────────────────
+
+  // ── Span card ─────────────────────────────────────────────────────────────────
   spanCard: {
     width: SPAN_W,
-    height: 210,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: '#1A1A1A',
-    marginBottom: Space[5],
-    ...Shadow.md,
+    backgroundColor: Colors.surfaceDeep,
+    marginBottom: Space[6],
   },
-  spanImg: {
+  spanImgWrap: {
     width: '100%',
-    height: '100%',
+    height: SPAN_IMG_H,
+    backgroundColor: Colors.surfaceDeep,
+  },
+  spanBadgeWrap: {
+    position: 'absolute',
+    top: Space[3],
+    left: Space[4],
   },
   spanFooter: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: Space[4],
-    gap: 2,
+    paddingHorizontal: Space[5],
+    paddingBottom: Space[5],
+    gap: 3,
   },
   spanBrand: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    ...Type.label,
+    color: 'rgba(255,255,255,0.44)',
   },
   spanName: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
+    fontFamily: FontFamily.serif,
+    fontSize:   18,
+    fontWeight: '400',
+    color:      '#FFFFFF',
     letterSpacing: -0.3,
+    lineHeight: 18 * 1.2,
   },
+  // White-on-dark — inline price required (no Price component)
   spanPrice: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.78)',
+    fontFamily: FontFamily.serif,
+    fontSize:   15,
+    fontWeight: '400',
+    color:      'rgba(255,255,255,0.75)',
+    letterSpacing: -0.2,
+    marginTop: 2,
   },
 
-  // ── Skeleton state ────────────────────────────────────────────────────────
+  // ── Skeleton ──────────────────────────────────────────────────────────────────
   skeletonWrap: {
-    paddingTop: Space[3],
+    paddingTop: Space[2],
   },
 
-  // ── Empty state ───────────────────────────────────────────────────────────
-  emptyWrap: {
+  // ── State wrappers ────────────────────────────────────────────────────────────
+  stateWrap: {
     flex: 1,
-    alignItems: 'center',
-    paddingTop: Space[12] + Space[8],
-    gap: Space[3],
-  },
-  emptyTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    color: Colors.ink2,
-    letterSpacing: -0.3,
-  },
-  emptyBody: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.regular,
-    color: Colors.ink4,
-    textAlign: 'center',
-    paddingHorizontal: Space[8],
-    lineHeight: FontSize.sm * 1.5,
+    paddingTop: Space[12] + Space[6],
   },
 });
 

@@ -166,6 +166,27 @@ Login screen also gets P1-06 cleanup: kill the 55KB inline WebView SVG entirely 
 
 ## PART B — SCREEN-BY-SCREEN
 
+### Phase 2 Implementation Status
+
+| Screen | Spec ref | Status | Frozen since |
+|---|---|---|---|
+| Login | B1 + A8 | **FROZEN** | May 13, 2026 |
+| Home | B2 | **FROZEN** | May 13, 2026 |
+| ProductScreen | B3 | **FROZEN** | May 13, 2026 |
+| OrderSuccessScreen | B8 | **FROZEN** | May 13, 2026 |
+| CartScreen | B6 | **FROZEN** | May 13, 2026 |
+| ResultScreen | B4 | Pending Phase 3 | — |
+| WishlistScreen | B5 | Pending Phase 3 | — |
+| OrderHistoryScreen | B9 | Pending Phase 3 | — |
+| ProfileScreen | B11 | Pending Phase 3 | — |
+| AddressScreen | B7 | Pending Phase 3 | — |
+| OrderDetailScreen | B10 | Pending Phase 3 | — |
+
+Frozen screens define the visual standard. All Phase 3 work must match their register.
+See `docs/project-modernization-audit.md §16` for full implementation detail and binding patterns.
+
+---
+
 Format per screen: **highest-impact change**, **hierarchy fixes**, **interaction**, **components touched**.
 
 ### B1. Login (`src/screens/Login.tsx`)

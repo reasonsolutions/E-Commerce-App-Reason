@@ -9,12 +9,16 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/storageKeys';
 import { BottomNavBar } from '../components/ui';
-import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { Colors, Space } from '../theme';
+import { Type } from '../theme/typography';
+import { FontFamily } from '../theme/fonts';
 import { useEntrance } from '../hooks/useEntrance';
+import { useHaptic } from '../hooks/useHaptic';
+import { useTactile } from '../hooks/useTactile';
 
 type Profile = {
   CustomerProfileCode: number;
@@ -36,75 +40,105 @@ type ProfileScreenProps = {
   };
 };
 
-// ── Section group ────────────────────────────────────────────────────────────
-const Section: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <View style={sectionStyles.card}>{children}</View>
+// ── Section label ─────────────────────────────────────────────────────────────
+const SectionLabel: React.FC<{ children: string }> = ({ children }) => (
+  <Text style={sectionStyles.sectionLabel}>{children}</Text>
 );
 
-const SectionRow: React.FC<{
+// ── Single profile row ────────────────────────────────────────────────────────
+const ProfileRow: React.FC<{
   label: string;
   value?: string;
   icon?: string;
   onPress?: () => void;
-  last?: boolean;
+  isLast?: boolean;
   destructive?: boolean;
-}> = ({ label, value, icon, onPress, last, destructive }) => (
-  <TouchableOpacity
-    style={[sectionStyles.row, !last && sectionStyles.rowBorder]}
-    onPress={onPress}
-    activeOpacity={onPress ? 0.72 : 1}
-    disabled={!onPress}
-  >
-    <Text style={[sectionStyles.label, destructive && sectionStyles.labelDestructive]}>
-      {label}
-    </Text>
-    <View style={sectionStyles.rowRight}>
-      {value ? <Text style={sectionStyles.value} numberOfLines={1}>{value}</Text> : null}
-      {icon ? <Icon name={icon} size={16} color={destructive ? Colors.danger : Colors.ink4} /> : null}
+}> = ({ label, value, icon, onPress, isLast, destructive }) => {
+  const haptic = useHaptic();
+  const { animatedStyle, handlers } = useTactile();
+
+  const handlePress = () => {
+    if (!onPress) return;
+    if (destructive) {
+      haptic.warning();
+    } else {
+      haptic.light();
+    }
+    onPress();
+  };
+
+  const rowContent = (
+    <View style={[sectionStyles.row, !isLast && sectionStyles.rowDivider]}>
+      <Text style={[sectionStyles.rowLabel, destructive && sectionStyles.rowLabelDestructive]}>
+        {label}
+      </Text>
+      <View style={sectionStyles.rowRight}>
+        {value ? (
+          <Text style={sectionStyles.rowValue} numberOfLines={1}>{value}</Text>
+        ) : null}
+        {icon ? (
+          <Icon
+            name={icon}
+            size={15}
+            color={destructive ? Colors.danger : Colors.ink4}
+          />
+        ) : null}
+      </View>
     </View>
-  </TouchableOpacity>
-);
+  );
+
+  if (!onPress) return rowContent;
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <TouchableOpacity
+        {...handlers}
+        onPress={handlePress}
+        activeOpacity={1}
+      >
+        {rowContent}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 const sectionStyles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space[4],
-    ...Shadow.sm,
+  sectionLabel: {
+    ...Type.label,
+    color:             Colors.ink4,
+    marginBottom:      Space[2],
+    paddingHorizontal: 1,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection:  'row',
+    alignItems:     'center',
     justifyContent: 'space-between',
     paddingVertical: Space[4],
-    minHeight: 52,
+    minHeight: 50,
   },
-  rowBorder: {
+  rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.line,
+    borderBottomColor: Colors.rule,
   },
   rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space[2],
-    flex: 1,
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            Space[2],
+    flex:           1,
     justifyContent: 'flex-end',
   },
-  label: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.medium,
-    color: Colors.ink1,
+  rowLabel: {
+    ...Type.body,
     flexShrink: 0,
   },
-  labelDestructive: {
+  rowLabelDestructive: {
     color: Colors.danger,
   },
-  value: {
-    fontSize: FontSize.base,
-    color: Colors.ink3,
-    textAlign: 'right',
-    flexShrink: 1,
-    marginLeft: Space[4],
+  rowValue: {
+    ...Type.caption,
+    textAlign:   'right',
+    flexShrink:  1,
+    marginLeft:  Space[4],
   },
 });
 
@@ -113,13 +147,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
 
+  const headerAnim  = useEntrance(0);
   const infoAnim    = useEntrance(80);
-  const detailAnim  = useEntrance(160);
-  const actionsAnim = useEntrance(240);
+  const addressAnim = useEntrance(160);
+  const activityAnim = useEntrance(240);
+  const logoutAnim  = useEntrance(300);
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const userData = await AsyncStorage.getItem('userData');
+      const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
       if (userData) {
         const parsed = JSON.parse(userData);
         setProfile({
@@ -140,29 +176,26 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   }, []);
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('userData');
+    await AsyncStorage.removeItem(STORAGE_KEYS.userData);
     navigation.navigate('Login');
   };
 
-  const displayName = profile?.CustomerName || '—';
+  const displayName  = profile?.CustomerName || '—';
   const displayEmail = profile?.EmailID || '—';
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
 
-      {/* Dark editorial header */}
-      <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
+      {/* Dark editorial header — identity, not decoration */}
+      <Animated.View
+        style={[styles.header, { paddingTop: insets.top + Space[2] }, headerAnim]}
+      >
         <Text style={styles.eyebrow}>MY ACCOUNT</Text>
         <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
-        <Text style={styles.email} numberOfLines={1}>{displayEmail}</Text>
-      </View>
-
-      {/* Tonal bridge */}
-      <LinearGradient
-        colors={['#0A0A0A', Colors.surfaceAlt]}
-        style={styles.bridge}
-      />
+        <Text style={styles.displayEmail} numberOfLines={1}>{displayEmail}</Text>
+        <View style={styles.headerSeam} />
+      </Animated.View>
 
       <ScrollView
         style={styles.scroll}
@@ -172,75 +205,57 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           { paddingBottom: insets.bottom + Space[8] + 60 },
         ]}
       >
-        {/* Account info */}
-        <Animated.View style={[styles.sectionWrap, infoAnim]}>
-          <Text style={styles.sectionLabel}>Account</Text>
-          <Section>
-            <SectionRow
-              label="Name"
-              value={displayName}
-            />
-            <SectionRow
-              label="Mobile"
-              value={profile?.MobileNumber ? String(profile.MobileNumber) : '—'}
-            />
-            <SectionRow
-              label="Email"
-              value={displayEmail}
-              last
-            />
-          </Section>
+        {/* Account */}
+        <Animated.View style={infoAnim}>
+          <SectionLabel>ACCOUNT</SectionLabel>
+          <ProfileRow label="Name"   value={displayName} />
+          <ProfileRow
+            label="Mobile"
+            value={profile?.MobileNumber ? String(profile.MobileNumber) : '—'}
+          />
+          <ProfileRow label="Email"  value={displayEmail} isLast />
         </Animated.View>
 
         {/* Address */}
-        <Animated.View style={[styles.sectionWrap, detailAnim]}>
-          <Text style={styles.sectionLabel}>Address</Text>
-          <Section>
-            <SectionRow
-              label="Street"
-              value={profile?.Address || profile?.StreetName || '—'}
-            />
-            <SectionRow
-              label="City"
-              value={profile?.CityName || '—'}
-            />
-            <SectionRow
-              label="Postcode"
-              value={profile?.Zipcode ? String(profile.Zipcode) : '—'}
-              last
-            />
-          </Section>
+        <Animated.View style={[styles.sectionBlock, addressAnim]}>
+          <SectionLabel>ADDRESS</SectionLabel>
+          <ProfileRow
+            label="Street"
+            value={profile?.Address || profile?.StreetName || '—'}
+          />
+          <ProfileRow label="City"     value={profile?.CityName || '—'} />
+          <ProfileRow
+            label="Postcode"
+            value={profile?.Zipcode ? String(profile.Zipcode) : '—'}
+            isLast
+          />
         </Animated.View>
 
-        {/* Navigation shortcuts */}
-        <Animated.View style={[styles.sectionWrap, actionsAnim]}>
-          <Text style={styles.sectionLabel}>Activity</Text>
-          <Section>
-            <SectionRow
-              label="Order History"
-              icon="chevron-forward"
-              onPress={() => navigation.navigate('Orders')}
-            />
-            <SectionRow
-              label="Saved Items"
-              icon="chevron-forward"
-              onPress={() => navigation.navigate('Wishlist')}
-              last
-            />
-          </Section>
+        {/* Activity */}
+        <Animated.View style={[styles.sectionBlock, activityAnim]}>
+          <SectionLabel>ACTIVITY</SectionLabel>
+          <ProfileRow
+            label="Order History"
+            icon="chevron-forward"
+            onPress={() => navigation.navigate('Orders')}
+          />
+          <ProfileRow
+            label="Saved Items"
+            icon="chevron-forward"
+            onPress={() => navigation.navigate('Wishlist')}
+            isLast
+          />
         </Animated.View>
 
-        {/* Logout */}
-        <Animated.View style={[styles.sectionWrap, actionsAnim]}>
-          <Section>
-            <SectionRow
-              label="Log out"
-              icon="log-out-outline"
-              onPress={handleLogout}
-              destructive
-              last
-            />
-          </Section>
+        {/* Log out — separated by extra vertical space to signal destructive zone */}
+        <Animated.View style={[styles.logoutBlock, logoutAnim]}>
+          <ProfileRow
+            label="Log out"
+            icon="log-out-outline"
+            onPress={handleLogout}
+            destructive
+            isLast
+          />
         </Animated.View>
       </ScrollView>
 
@@ -255,64 +270,61 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
   },
 
-  // ── Header ──
+  // ── Header ───────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor:   Colors.ink1,
     paddingHorizontal: Space.screenH,
-    paddingBottom: Space[6],
-    gap: 3,
+    paddingBottom:     Space[5],
+    gap:               4,
   },
   eyebrow: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.38)',
-    letterSpacing: 1.4,
+    ...Type.label,
+    color:        'rgba(255,255,255,0.30)',
     marginBottom: Space[1],
   },
   displayName: {
-    fontSize: FontSize['2xl'],
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
+    fontFamily:    FontFamily.serif,
+    fontSize:      26,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
     letterSpacing: -0.5,
-    lineHeight: FontSize['2xl'] * 1.15,
+    lineHeight:    26 * 1.1,
   },
-  email: {
-    fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.45)',
-    letterSpacing: 0.1,
+  displayEmail: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      11,
+    color:         'rgba(255,255,255,0.38)',
+    letterSpacing: 0.2,
+    marginTop:     2,
+  },
+  headerSeam: {
+    height:           StyleSheet.hairlineWidth,
+    backgroundColor:  'rgba(255,255,255,0.06)',
+    marginTop:        Space[4],
+    marginHorizontal: -Space.screenH,
   },
 
-  // ── Bridge ──
-  bridge: {
-    height: 48,
-    marginTop: -1,
-  },
-
-  // ── Scroll ──
+  // ── Scroll ───────────────────────────────────────────────────────────────────
   scroll: {
     flex: 1,
-    marginTop: -Space[3],
   },
   scrollContent: {
     paddingHorizontal: Space.screenH,
-    gap: Space[4],
-    paddingTop: Space[2],
+    paddingTop:        Space[5],
   },
 
-  // ── Section group ──
-  sectionWrap: {
-    gap: Space[2],
+  // ── Section spacing ───────────────────────────────────────────────────────────
+  sectionBlock: {
+    marginTop: Space[6],
   },
-  sectionLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    color: Colors.ink4,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    paddingHorizontal: Space[1],
+  logoutBlock: {
+    marginTop:    Space[8],
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
+    paddingTop:   Space[2],
   },
 });
 

@@ -11,18 +11,22 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { postOrderHistory } from '../api/services';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useFocusEffect } from '@react-navigation/native';
-import { EmptyState, Button, StatusBadge, BottomNavBar } from '../components/ui';
+import { EmptyState, StatusBadge, BottomNavBar } from '../components/ui';
 import { ErrorState } from '../components/system';
 import type { OrderStatus } from '../components/ui';
-import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { Colors, Space, Radius } from '../theme';
+import { Type } from '../theme/typography';
+import { FontFamily } from '../theme/fonts';
+import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
+import { useHaptic } from '../hooks/useHaptic';
+import { useTactile } from '../hooks/useTactile';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -55,74 +59,96 @@ const STATUS_MAP: Record<number, OrderStatus> = {
   4: 'Cancelled',
 };
 
+// 4:5 portrait — canonical card ratio
+const IMG_W = 64;
+const IMG_H = 80;
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 // ── Single order row ──────────────────────────────────────────────────────────
 const OrderRow: React.FC<{
   item: OrderItem;
   onPress: (item: OrderItem) => void;
   delay: number;
-}> = ({ item, onPress, delay }) => {
-  const anim       = useEntrance(delay);
+  isLast: boolean;
+}> = ({ item, onPress, delay, isLast }) => {
+  const haptic    = useHaptic();
+  const entrance  = useEntrance(delay);
+  const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
-  const onLoad     = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+
+  const onLoad = useCallback(() => {
+    Animated.timing(imgOpacity, {
+      toValue:         1,
+      duration:        Motion.duration.settle,
+      easing:          Motion.easing.out,
+      useNativeDriver: true,
+    }).start();
   }, [imgOpacity]);
 
-  const status = STATUS_MAP[item.OrderStatus];
+  const status     = STATUS_MAP[item.OrderStatus];
   const firstImage = item.Images.split(';')[0] || '';
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  };
-
   return (
-    <Animated.View style={[styles.row, anim]}>
-      <TouchableOpacity
-        style={styles.rowInner}
-        onPress={() => onPress(item)}
-        activeOpacity={0.82}
-      >
-        {/* Image */}
-        <View style={styles.imgWrap}>
-          <Animated.Image
-            source={{ uri: firstImage }}
-            style={[styles.img, { opacity: imgOpacity }]}
-            resizeMode="cover"
-            onLoad={onLoad}
-          />
-        </View>
-
-        {/* Content */}
-        <View style={styles.content}>
-          <View style={styles.contentTop}>
-            <View style={styles.meta}>
-              {item.Brand_Name ? (
-                <Text style={styles.brand}>{item.Brand_Name.toUpperCase()}</Text>
-              ) : null}
-              <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
-              {item.Variant ? (
-                <Text style={styles.variant}>{item.Variant}</Text>
-              ) : null}
-            </View>
-            <View style={styles.amountBlock}>
-              <Text style={styles.amount}>${item.Amount.toFixed(2)}</Text>
-              <Icon name="chevron-forward" size={14} color={Colors.ink5} />
-            </View>
+    <Animated.View style={entrance}>
+      <Animated.View style={pressStyle}>
+        <TouchableOpacity
+          {...handlers}
+          style={styles.row}
+          activeOpacity={1}
+          onPress={() => { haptic.light(); onPress(item); }}
+        >
+          {/* Portrait image */}
+          <View style={styles.imgWrap}>
+            <Animated.Image
+              source={{ uri: firstImage }}
+              style={[styles.img, { opacity: imgOpacity }]}
+              resizeMode="cover"
+              onLoad={onLoad}
+            />
           </View>
 
-          <View style={styles.contentBottom}>
-            <View style={styles.orderMeta}>
-              {item.OrderNumber ? (
-                <Text style={styles.orderNumber}>#{item.OrderNumber}</Text>
-              ) : null}
-              {item.OrderedDate ? (
-                <Text style={styles.orderDate}>{formatDate(item.OrderedDate)}</Text>
-              ) : null}
+          {/* Content */}
+          <View style={styles.content}>
+            {/* Top — brand + name + amount */}
+            <View style={styles.contentTop}>
+              <View style={styles.metaLeft}>
+                {item.Brand_Name ? (
+                  <Text style={styles.brand}>{item.Brand_Name.toUpperCase()}</Text>
+                ) : null}
+                <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
+                {item.Variant ? (
+                  <Text style={styles.variant}>{item.Variant}</Text>
+                ) : null}
+              </View>
+              {/* Amount — right-aligned serif */}
+              <View style={styles.amountBlock}>
+                <Text style={styles.amount}>${item.Amount.toFixed(2)}</Text>
+                <Icon name="chevron-forward" size={13} color={Colors.ink5} />
+              </View>
             </View>
-            {status ? <StatusBadge status={status} /> : null}
+
+            {/* Bottom — order meta + status */}
+            <View style={styles.contentBottom}>
+              <View style={styles.orderMeta}>
+                {item.OrderNumber ? (
+                  <Text style={styles.orderNumber}>#{item.OrderNumber}</Text>
+                ) : null}
+                {item.OrderedDate ? (
+                  <Text style={styles.orderDate}>{formatDate(item.OrderedDate)}</Text>
+                ) : null}
+              </View>
+              {status ? <StatusBadge status={status} /> : null}
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* Hairline divider — suppressed after last item */}
+      {!isLast && <View style={styles.divider} />}
     </Animated.View>
   );
 };
@@ -159,39 +185,43 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     setRefreshing(false);
   };
 
+  const orderList  = orders ?? [];
+  const orderCount = orderList.length;
+
   const renderItem = ({ item, index }: ListRenderItemInfo<OrderItem>) => (
     <OrderRow
       item={item}
       onPress={(order) => navigation.navigate('OrderDetails', { orderItem: order })}
-      delay={index * 60}
+      delay={Math.min(index * 55, 320)}
+      isLast={index === orderList.length - 1}
     />
   );
 
   const renderEmpty = () => (
     <EmptyState
-      icon={<Icon name="receipt-outline" size={32} color={Colors.ink3} />}
-      title="No orders yet"
-      body="Your order history will appear here"
+      icon={<Icon name="receipt-outline" size={26} color={Colors.ink4} />}
+      title="No orders yet."
+      body="Once you place an order, it will live here."
       action={
-        <Button variant="primary" size="md" onPress={() => navigation.navigate('Home')}>
-          Start Shopping
-        </Button>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Home')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.emptyLink}>Browse the collection</Text>
+          <View style={styles.emptyLinkUnderline} />
+        </TouchableOpacity>
       }
     />
   );
-
-  const orderList = orders ?? [];
-  const orderCount = orderList.length;
 
   const renderBody = () => {
     if (isError) {
       return (
         <ErrorState
           title="Couldn't load orders"
-          message={error ?? 'An unexpected error occurred.'}
+          message={error ?? 'Something went wrong.'}
           onRetry={() => fetchOrders()}
           retryLoading={loading}
-          icon={<Icon name="receipt-outline" size={32} color={Colors.ink3} />}
         />
       );
     }
@@ -220,31 +250,32 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
 
-      {/* Dark editorial header */}
-      <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
-        <View style={styles.headerContent}>
+      {/* Dark editorial header — matches WishlistScreen/ResultScreen pattern */}
+      <View style={[styles.header, { paddingTop: insets.top + Space[2] }]}>
+        <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Icon name="arrow-back" size={18} color="rgba(255,255,255,0.85)" />
+            <Icon name="chevron-back" size={20} color="#FFFFFF" />
           </TouchableOpacity>
-          <View style={styles.headerLeft}>
-            <Text style={styles.eyebrow}>YOUR ORDERS</Text>
-            <Text style={styles.displayTitle}>
-              {orderCount === 0 ? 'History' : `${orderCount} ${orderCount === 1 ? 'order' : 'orders'}`}
+
+          <View style={styles.headerTitleBlock}>
+            <Text style={styles.headerEyebrow}>YOUR ORDERS</Text>
+            <Text style={styles.headerTitle}>
+              {orderCount === 0
+                ? 'History'
+                : `${orderCount} ${orderCount === 1 ? 'order' : 'orders'}`}
             </Text>
           </View>
-        </View>
-      </View>
 
-      {/* Tonal bridge */}
-      <LinearGradient
-        colors={['#0A0A0A', Colors.surfaceAlt]}
-        style={styles.bridge}
-      />
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.headerSeam} />
+      </View>
 
       {renderBody()}
 
@@ -259,148 +290,166 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.surfaceAlt,
+    backgroundColor: Colors.surface,
   },
 
-  // ── Header ──
+  // ── Header ───────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor: Colors.ink1,
     paddingHorizontal: Space.screenH,
-    paddingBottom: Space[5],
+    paddingBottom: Space[4],
   },
-  headerContent: {
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space[3],
-  },
-  headerLeft: {
-    flex: 1,
-    gap: 2,
-  },
-  eyebrow: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.38)',
-    letterSpacing: 1.4,
-  },
-  displayTitle: {
-    fontSize: FontSize['2xl'],
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-    lineHeight: FontSize['2xl'] * 1.15,
+    alignItems:    'center',
   },
   backBtn: {
-    width: 36,
+    width:  36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    alignItems:     'center',
+  },
+  headerTitleBlock: {
+    flex: 1,
+    paddingHorizontal: Space[3],
+    gap: 3,
+  },
+  headerEyebrow: {
+    ...Type.label,
+    color: 'rgba(255,255,255,0.30)',
+  },
+  headerTitle: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      26,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
+    letterSpacing: -0.5,
+    lineHeight:    26 * 1.1,
+  },
+  headerRight: {
+    width: 36,
+  },
+  headerSeam: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop:       Space[4],
+    marginHorizontal: -Space.screenH,
   },
 
-  // ── Bridge ──
-  bridge: {
-    height: 48,
-    marginTop: -1,
-  },
-
-  // ── List ──
+  // ── List ──────────────────────────────────────────────────────────────────────
   list: {
     flex: 1,
-    marginTop: -Space[3],
   },
   listContent: {
     paddingHorizontal: Space.screenH,
-    paddingBottom: Space[8],
-    gap: Space[3],
+    paddingTop:        Space[5],
+    paddingBottom:     Space[8],
   },
 
-  // ── Row ──
+  // ── Row — no card boxing, hairline dividers ───────────────────────────────────
   row: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    ...Shadow.md,
-    overflow: 'hidden',
+    flexDirection:  'row',
+    alignItems:     'flex-start',
+    paddingVertical: Space[4],
+    gap:             Space[4],
   },
-  rowInner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: Space[4],
-    gap: Space[3],
+  divider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
   },
+
+  // ── Image — 4:5 portrait ──────────────────────────────────────────────────────
   imgWrap: {
-    width: 76,
-    height: 76,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceAlt,
-    overflow: 'hidden',
-    flexShrink: 0,
+    width:           IMG_W,
+    height:          IMG_H,
+    borderRadius:    Radius.sm,
+    backgroundColor: Colors.surfaceDeep,
+    overflow:        'hidden',
+    flexShrink:      0,
   },
   img: {
-    width: '100%',
+    width:  '100%',
     height: '100%',
   },
+
+  // ── Content ───────────────────────────────────────────────────────────────────
   content: {
     flex: 1,
-    gap: Space[3],
+    gap:  Space[3],
   },
   contentTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space[2],
+    alignItems:    'flex-start',
+    gap:           Space[2],
   },
-  meta: {
+  metaLeft: {
     flex: 1,
-    gap: 3,
+    gap:  3,
   },
   brand: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
+    ...Type.label,
     color: Colors.ink4,
-    letterSpacing: 0.9,
   },
   name: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold,
-    color: Colors.ink1,
+    fontFamily:    FontFamily.serif,
+    fontSize:      15,
+    fontWeight:    '400',
+    color:         Colors.ink1,
     letterSpacing: -0.1,
-    lineHeight: FontSize.base * 1.3,
+    lineHeight:    15 * 1.35,
   },
   variant: {
-    fontSize: FontSize.xs,
+    ...Type.caption,
     color: Colors.ink4,
   },
+  // Serif amount — right-aligned, restrained weight
   amountBlock: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    flexShrink: 0,
+    alignItems:    'center',
+    gap:           2,
+    flexShrink:    0,
+    paddingTop:    1,
   },
   amount: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.bold,
-    color: Colors.ink1,
+    fontFamily:    FontFamily.serif,
+    fontSize:      16,
+    fontWeight:    '400',
+    color:         Colors.ink1,
     letterSpacing: -0.2,
   },
   contentBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection:  'row',
+    alignItems:     'center',
     justifyContent: 'space-between',
   },
+  // Mono order metadata
   orderMeta: {
-    gap: 1,
+    gap: 2,
   },
   orderNumber: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.medium,
-    color: Colors.ink3,
-    letterSpacing: 0.2,
+    fontFamily:    FontFamily.mono,
+    fontSize:      11,
+    color:         Colors.ink3,
+    letterSpacing: 0.3,
   },
   orderDate: {
-    fontSize: FontSize.xs,
-    color: Colors.ink4,
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    color:         Colors.ink4,
+    letterSpacing: 0.2,
+  },
+
+  // ── Empty state CTA — text link ───────────────────────────────────────────────
+  emptyLink: {
+    ...Type.caption,
+    color:     Colors.ink3,
+    textAlign: 'center',
+  },
+  emptyLinkUnderline: {
+    height:          1,
+    backgroundColor: Colors.ink4,
+    marginTop:       3,
+    width:           '100%',
   },
 });
 

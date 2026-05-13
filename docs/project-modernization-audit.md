@@ -416,16 +416,16 @@ src/
 │       ├── mockData.ts      ← Complete in-memory dataset
 │       └── mockIntegrations.ts  ← Stateful mock API functions
 ├── components/
-│   ├── CartItem.js          ← Legacy JS, uses ui/ components internally
-│   ├── CategoryItem.tsx     ← Themed, uses design tokens
-│   ├── ProductCard.tsx      ← Themed, animated image fade-in, discount badge
+│   ├── CategoryItem.tsx     ← Premium pill redesign (Phase 2)
+│   ├── ProductCard.tsx      ← Premium editorial card (Phase 2)
 │   ├── system/
 │   │   ├── ErrorState.tsx   ← Full-screen error + retry
-│   │   ├── InlineError.tsx  ← Inline error message
+│   │   ├── InlineError.tsx  ← @deprecated — use ErrorBanner
 │   │   ├── RetryButton.tsx  ← Retry action
 │   │   └── index.ts
 │   └── ui/
 │       ├── BottomNavBar.tsx, Button.tsx, EmptyState.tsx, ErrorBanner.tsx
+│       ├── FloatingLabelInput.tsx  ← NEW (Phase 2) — static-label underline input
 │       ├── Price.tsx, QuantityStepper.tsx, Rating.tsx, ScreenHeader.tsx
 │       ├── SearchBar.tsx, SectionLabel.tsx, Skeleton.tsx, StatusBadge.tsx
 │       └── index.ts
@@ -439,42 +439,47 @@ src/
 ├── data/
 │   └── mockData.js          ← Legacy mock (heroBanner still used by HomeScreen)
 ├── hooks/
-│   └── useAsyncState.ts     ← Cancellation-safe async state hook
+│   ├── useAsyncState.ts     ← Cancellation-safe async state hook
+│   ├── useEntrance.ts       ← Shared entrance animation (extracted Phase 1)
+│   ├── useHaptic.ts         ← NEW (Phase 2) — haptic feedback wrapper
+│   └── useTactile.ts        ← NEW (Phase 2) — press-scale animator
 ├── navigation/
 │   └── AppNavigator.js      ← Stack navigator, 11 routes
 ├── screens/
 │   ├── AddressScreen.tsx
-│   ├── CartScreen.tsx       ← Server-wired mutations, useAsyncState
-│   ├── HomeScreen.tsx       ← Design tokens, useCart badge
-│   ├── Login.tsx
+│   ├── CartScreen.tsx       ← FROZEN Phase 2 premium redesign
+│   ├── HomeScreen.tsx       ← FROZEN Phase 2 premium redesign
+│   ├── Login.tsx            ← FROZEN Phase 2 premium redesign
 │   ├── OrderDetailScreen.tsx
 │   ├── OrderHistoryScreen.tsx
-│   ├── OrderSuccessScreen.tsx
-│   ├── ProductScreen.tsx    ← Server-confirmed add to cart, no phantom writes
+│   ├── OrderSuccessScreen.tsx  ← FROZEN Phase 2 premium redesign
+│   ├── ProductScreen.tsx    ← FROZEN Phase 2 premium redesign
 │   ├── ProfileScreen.tsx
 │   ├── ResultScreen.tsx
 │   └── WishlistScreen.tsx
 └── theme/
+    ├── fonts.ts             ← NEW (Phase 2) — FontFamily constants (serif/mono/sans)
     ├── index.ts             ← Re-export barrel
+    ├── motion.ts            ← NEW (Phase 2) — Motion vocabulary (Tap/Settle/Carry)
     ├── tokens.ts            ← All design primitives
-    └── typography.ts        ← Semantic TextStyle presets
+    └── typography.ts        ← Semantic TextStyle presets (Type.*)
 ```
 
 ### 8.2 Screen status
 
-| Screen | Uses design tokens | Uses useAsyncState | Server mutations wired | Error states | Skeleton loading |
-|---|---|---|---|---|---|
-| Login | ✅ | — | ✅ (login) | Partial | — |
-| HomeScreen | ✅ | ❌ (useState) | — | ❌ | Partial |
-| ProductScreen | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CartScreen | ✅ | ✅ | ✅ | ✅ | — |
-| ResultScreen | ✅ | Partial | — | ✅ | ✅ |
-| AddressScreen | ✅ | Partial | ✅ | Partial | — |
-| OrderHistoryScreen | ✅ | Partial | — | Partial | — |
-| OrderDetailScreen | ✅ | ✅ | — | ✅ | ✅ |
-| OrderSuccessScreen | ✅ | — | — | — | — |
-| ProfileScreen | ✅ | — | — | — | — |
-| WishlistScreen | ✅ | Partial | ❌ (stubs) | Partial | — |
+| Screen | Uses design tokens | Uses useAsyncState | Server mutations wired | Error states | Skeleton loading | Premium Phase 2 |
+|---|---|---|---|---|---|---|
+| Login | ✅ | — | ✅ (login) | ✅ inline | — | **FROZEN** |
+| HomeScreen | ✅ | ✅ | — | ✅ | ✅ | **FROZEN** |
+| ProductScreen | ✅ | ✅ | ✅ | ✅ | ✅ | **FROZEN** |
+| CartScreen | ✅ | ✅ | ✅ | ✅ | — | **FROZEN** |
+| OrderSuccessScreen | ✅ | — | — | — | — | **FROZEN** |
+| ResultScreen | ✅ | Partial | — | ✅ | ✅ | Pending Phase 3 |
+| AddressScreen | ✅ | Partial | ✅ | Partial | — | Pending Phase 3 |
+| OrderHistoryScreen | ✅ | Partial | — | Partial | — | Pending Phase 3 |
+| OrderDetailScreen | ✅ | ✅ | — | ✅ | ✅ | Pending Phase 3 |
+| ProfileScreen | ✅ | — | — | — | — | Pending Phase 3 |
+| WishlistScreen | ✅ | Partial | ❌ (stubs) | Partial | — | Pending Phase 3 |
 
 ---
 
@@ -626,8 +631,8 @@ HomeScreen fetches categories and products with raw `useState` + `useEffect`. It
 `setCartCount` is typed as `any` at the context boundary. `(prev: number) => prev + delta` annotations in callers are correct but unenforced. A TypeScript migration of CartContext.js would close this gap.
 *File:* `src/context/CartContext.js`
 
-**P1-06: Login screen 55 KB inline SVG**
-SVG is rendered inside a WebView on every Login mount. This inflates the JS bundle and incurs WebView initialization cost. Migrate to a static image asset or an `<Image>` component.
+**P1-06: Login screen 55 KB inline SVG** ✅ **RESOLVED (Phase 2)**
+WebView SVG eliminated entirely during the Phase 2 Login premium redesign. The hero area is now a pure React Native composition of `LinearGradient` layers and `Animated.View` — no SVG, no WebView, no asset. JS bundle impact removed.
 *File:* `src/screens/Login.tsx`
 
 ### P2 — Address before scaling feature work
@@ -813,6 +818,7 @@ This makes all `navigation.navigate()` calls type-checked at compile time, catch
 | Cart P0 (May 12) | Removed `addToCart({})` phantom write, made add-to-cart async/awaited, wired `quantityIncrement`/`quantityDecrement`/`postDeleteCartItem` to CartScreen mutations | Source of NaN badge eliminated |
 | Badge sync (May 12) | CartContext rewritten from item-array reducer to single `cartCount` integer. Badge now server-authoritative via CartScreen fetch and confirmed mutations | Previous: NaN always. Now: correct after first CartScreen visit |
 | This document | `docs/project-modernization-audit.md` written as canonical engineering blueprint | Supersedes `docs/ui-audit.md` |
+| Phase 2 — Premium UX (May 13, 2026) | Login, Home, ProductScreen, OrderSuccessScreen, CartScreen fully redesigned to premium editorial register. Motion vocabulary (`motion.ts`), font system (`fonts.ts`), haptic infrastructure (`useHaptic`, `useTactile`) established. All 5 screens frozen as visual standard. | See §16 for full detail. |
 
 ---
 
@@ -1253,3 +1259,225 @@ The following are clean, consistently implemented, and unambiguous for Claude De
 - `Rating`, `SectionLabel`, `InlineError` — all carry `@deprecated` JSDoc; no ambiguity about adoption path
 
 Premium visual refinement can now begin against a clean, unambiguous foundation.
+
+---
+
+## 16. Premium UX Refinement — Phase 2 Progress
+
+**Started:** May 13, 2026
+**Status:** 5 of 11 screens frozen. Phase 3 (remaining 6 screens) pending.
+**TypeScript status:** 0 errors throughout all Phase 2 work.
+
+---
+
+### 16.1 New infrastructure added (Phase 2)
+
+These files were added to support the premium visual register. They are stable and must be used for all Phase 2/3 work — do not add ad-hoc animation durations, font names, or haptic calls without binding to these.
+
+#### `src/theme/fonts.ts` — FontFamily constants
+
+```typescript
+FontFamily.serif       // 'InstrumentSerif-Regular' — editorial roles
+FontFamily.serifItalic // 'InstrumentSerif-Italic' — wordmarks, taglines
+FontFamily.mono        // 'JetBrainsMono-Regular' — labels, order numbers, meta
+FontFamily.monoMedium  // 'JetBrainsMono-Medium'
+FontFamily.sans        // undefined — system sans, body copy and UI text
+```
+
+Font files are installed in `assets/fonts/`, registered in `ios/EcommerceApp/Info.plist` and `android/app/src/main/assets/fonts/`. React Native falls back silently to system sans if files are absent (no crash).
+
+#### `src/theme/motion.ts` — Motion vocabulary
+
+Three curves, three durations. **Every animation in the codebase must bind to one of these.** Ad-hoc durations are a review failure.
+
+```
+Tap     120ms   easeOut          press states, icon fills, badge increments
+Settle  320ms   spring(18, 80)   list entrances, screen-in, sheet rise
+Carry   560ms   easeInOut        hero parallax, OrderSuccess draw, image scrub
+```
+
+Spring configs: `Motion.spring.settle` (damping 18, stiffness 80) and `Motion.spring.snap` (damping 14, stiffness 180) for badge pops with subtle overshoot.
+
+Press scale target: `Motion.pressScale = 0.98`.
+
+#### `src/hooks/useHaptic.ts` — Haptic feedback wrapper
+
+```typescript
+const haptic = useHaptic();
+haptic.light()    // variant select, row tap, wishlist toggle, thumb tap
+haptic.success()  // add-to-cart confirmed, order placed, checkmark draw
+haptic.warning()  // login failure shake, destructive confirm
+haptic.medium()   // reserved
+```
+
+Wraps `react-native-haptic-feedback` with a graceful no-op guard — safe to call unconditionally even if the native module is not linked.
+
+#### `src/hooks/useTactile.ts` — Press-scale animator
+
+```typescript
+const { animatedStyle, handlers, scale } = useTactile();
+// Wrap tappable in Animated.View with animatedStyle, spread handlers onto TouchableOpacity
+// Set activeOpacity={1} on the inner TouchableOpacity — scale provides the feedback
+```
+
+Compresses to `Motion.pressScale` on press-in (Tap curve), springs back on press-out (Settle). Used on all primary CTAs across frozen screens.
+
+#### `src/components/ui/FloatingLabelInput.tsx` — Static-label input
+
+Static-label pattern (Apple ID / COS style): label always visible at `Type.label` scale above the field — no position animation. Only the underline responds to focus (height 1px → 2px, Tap curve, 120ms). Error caption positioned absolutely below the underline.
+
+Used exclusively in Login. Safe to adopt in AddressScreen form fields (Phase 3, per B7).
+
+---
+
+### 16.2 Frozen screens — design decisions recorded
+
+#### Login (`src/screens/Login.tsx`) — FROZEN
+
+**Composition:** Dark hero (39% viewport, `Colors.ink1`) / light form panel (`Colors.surfaceDeep`) split. No scroll.
+
+**Hero:** 5-layer `LinearGradient` atmospheric composition (warm bias top-right, cool shadow bottom-left, top seal, bottom veil, left frame edge) + elliptical focal bloom (`rgba(255,255,255,0.028)`). No images, no SVG, no geometry.
+
+**Typography:** Wordmark `FontFamily.serifItalic` 52px; tagline `serifItalic` 20px at `rgba(255,255,255,0.58)`. Form labels `Type.label`. CTA `Type.bodyStrong`.
+
+**Entrance:** Staggered spring settle — wordmark (0ms) → tagline (140ms) → fields (280ms) → CTA (400ms).
+
+**Failure:** Inline caption under password field + button shake (220ms ±6px oscillation) + `haptic.warning()`. No `Alert.alert`.
+
+**P1-06 resolved here:** WebView SVG eliminated entirely.
+
+---
+
+#### HomeScreen (`src/screens/HomeScreen.tsx`) — FROZEN
+
+**Architecture exception preserved:** HomeScreen retains its own local `useEntrance` (500ms/440ms, `initialY=14`) — intentionally different from the shared hook. Do not replace.
+
+**Key visual decisions:**
+- Hero: `serifItalic` brand wordmark, no purple orbs, underlined text CTA (not ghost pill)
+- Categories: horizontal pill rail (`CategoryItem` — 28px square thumb + `Type.label` name, `Radius.pill`)
+- Product cards: `ProductCard` with ember badge (`Colors.accentTint`/`Colors.accent`), serif name, `FontFamily.serif` price
+- Cart badge: `Colors.accent` (ember), not `Colors.danger`
+- Section titles: `Type.title` (serif 28px)
+- Shelf rail: `alignItems: 'flex-start'` (was `'center'` — caused top-misalignment on mixed card heights)
+- `snapToInterval: 180 + Space[4]` — matches `CARD_W + gap`
+- Editorial promo card: `Colors.ink1` bg, serifItalic headline, underlined CTA
+
+---
+
+#### ProductScreen (`src/screens/ProductScreen.tsx`) — FROZEN
+
+**Composition shift:** Product identity (brand, name, price) moved from hero overlay to a dedicated `identityPlate` below the image. Hero is clean full-bleed — no text overlay, only a minimal top scrim (38%→0 over 28%) for nav legibility.
+
+**Hero:** 58% viewport. `Colors.surfaceDeep` skeleton bg. Floating nav buttons `rgba(0,0,0,0.22)` — lighter than before.
+
+**Discount marker:** `Colors.accentTint` fill + `Colors.accent` border chip at `Type.label` scale — replaces `Colors.danger` red chip.
+
+**Identity plate:** brand (`Type.label` mono) → name (`Type.heading` serif, 24px) → price (`Type.priceLarge` 32px serif) → was-price (`Type.caption` + `FontFamily.mono` + strikethrough).
+
+**Variant chips:** Hairline `Colors.rule` border at rest; `1.5px Colors.ink1` stroke on selected — no fill. Haptic `light` on select.
+
+**Purchase bar:** `Colors.surfaceDeep` bg, `Shadow.sm`. Primary CTA "Add to Bag" (`useTactile` press-scale). Secondary "Buy Now" as underlined `Type.caption` text link below — not an equal-weight ghost button.
+
+**Badge pop on add-to-cart:** 1 → 1.15 → 1 on `Motion.spring.snap`. `haptic.success()` fires after server confirm.
+
+---
+
+#### OrderSuccessScreen (`src/screens/OrderSuccessScreen.tsx`) — FROZEN
+
+**Success mark:** 72px ring (`Colors.accentTint` fill, 1.5px `Colors.accent` border) scales from 0.52 → 1.0 on Carry curve (560ms, `easeInOut`). `serifItalic` `✓` glyph fades in after ring settles. `haptic.success()` fires at mark completion (~560ms).
+
+**Staggered content settle:** mark (0ms) → headline (400ms) → order row (600ms) → body (780ms) → CTAs (960ms). All on Settle curve.
+
+**Copy:** "Order placed." (not "Order Placed Successfully!"). Subline: "We'll send you updates as it makes its way to you."
+
+**Order number:** Flat hairline-separated row — `Type.label` left, `FontFamily.mono` number right. No rounded card box.
+
+**CTAs:** Ink pill "View My Orders" + underlined `Type.caption` "Continue Shopping" text link. No `Button` component — direct `TouchableOpacity` with `useTactile`.
+
+**Anti-patterns removed:** Green circle (`Colors.success`) replaced with ember ring. `FontWeight.bold` checkmark removed. `Shadow.md` on icon removed. Equal-weight dual `Button` pair replaced with primary + text-link hierarchy.
+
+---
+
+#### CartScreen (`src/screens/CartScreen.tsx`) — FROZEN
+
+**Item rows:** No card boxing. Hairline `Colors.rule` dividers between items only. Image 80×100 (4:5 portrait ratio, `Colors.surfaceDeep` bg). Brand `Type.label` mono. Name `FontFamily.serif` 14px. Variant `Type.caption`.
+
+**Remove:** Plain `×` glyph (`fontSize: 18, fontWeight: '300', color: Colors.ink4`) — no circle background, no icon component.
+
+**Inline qty control:** `−  N  +` in `FontFamily.mono` — no pill border, no `QuantityStepper` component. Each tap fires `haptic.light()`.
+
+**Summary panel:** `Colors.surfaceDeep` flush surface (no rounded dark card). Label rows use `Type.caption`. Total label `Type.label` mono; total value `Type.priceLarge` serif. `Shadow.sm` only.
+
+**Checkout CTA:** Ink pill, full-width, `useTactile` press-scale. No `Button` component.
+
+**Empty state:** "Nothing saved yet." — editorial copy. Text-link "Continue Shopping" (`Type.caption`, underlined) instead of filled `Button`.
+
+**Anti-patterns removed:** `#0E0E0E` dark summary card + `Shadow.lg` replaced with `surfaceDeep` surface + `Shadow.sm`. `FontWeight.bold/semibold` throughout replaced with type presets. `LinearGradient` tonal bridge removed. `QuantityStepper` component replaced with inline minimal control.
+
+---
+
+### 16.3 Established premium UI patterns (binding for Phase 3)
+
+These patterns are now law across frozen screens. Phase 3 work must follow them.
+
+**Type hierarchy per surface:**
+- White-on-dark (hero, header): `FontFamily.serifItalic` for wordmarks/headlines; `Type.label` mono for eyebrows; raw `'#FFFFFF'` text color (tokens don't cover white-on-dark)
+- Light surface (canvas, plates, panels): `Type.heading`/`Type.title` serif for product/section names; `Type.priceLarge`/`Type.price` serif for prices; `Type.label` mono for brand labels and section eyebrows; `Type.body`/`Type.caption` sans for copy; `Type.bodyStrong` for CTA labels
+
+**CTA hierarchy (established pattern):**
+- Primary action: full-width ink pill, 52px height, `Type.bodyStrong` white, `useTactile` press-scale
+- Secondary action: `Type.caption` underlined text link, no pill, no border, `Colors.ink3`
+- Never two equal-weight CTAs side by side
+
+**Price display (binding):**
+- Current price: `Type.priceLarge` or `Type.price` (serif) — never sans bold
+- Was-price: `Type.caption` + `FontFamily.mono` + `textDecorationLine: 'line-through'` + `Colors.ink4`
+- Discount badge: `Colors.accentTint` fill + `Colors.accent` border + `Type.label` text — never `Colors.danger`
+
+**Elevation (binding):**
+- No `Shadow.md` or `Shadow.lg` on inline cards or list containers
+- `Shadow.sm` only on sticky/overlapping surfaces (purchase bar, summary panel)
+- Depth through surface tone (`surface` → `surfaceSoft` → `surfaceDeep`), not shadow
+
+**Dividers:** `Colors.rule` hairline only. No rounded-corner card boxing for list items. No `Colors.line`/`Colors.lineStrong` in new work.
+
+**Haptic bindings:**
+- `haptic.light()` — variant select, row tap, thumb tap, wishlist toggle, qty change
+- `haptic.success()` — add-to-cart confirmed, order placed, checkmark draw
+- `haptic.warning()` — login failure shake, destructive confirm
+
+---
+
+### 16.4 Anti-patterns confirmed and removed during Phase 2
+
+These were present in screens before Phase 2. Do not reintroduce them.
+
+| Anti-pattern | Was used in | Replacement |
+|---|---|---|
+| `Colors.danger` for discount badges | ProductCard, ProductScreen, ResultScreen | `Colors.accentTint`/`Colors.accent` ember marker |
+| `FontWeight.bold`/`semibold` on product names/prices | All screens | `FontFamily.serif` regular weight |
+| `Shadow.md`/`Shadow.lg` on inline cards | CartScreen, ProductScreen, OrderSuccessScreen | Removed or `Shadow.sm` on sticky only |
+| `#0A0A0A`, `#0E0E0E`, `#1A1A1A` hardcoded | CartScreen, ProductScreen | `Colors.ink1`, `Colors.surfaceDeep` |
+| `Colors.success` (green) for success moment | OrderSuccessScreen | `Colors.accent` (ember) ring |
+| Equal-weight dual CTA buttons | OrderSuccessScreen, old ProductScreen | Primary pill + subordinate text link |
+| Filled solid `backgroundColor` on selected variant chips | ProductScreen | Hairline ink stroke only, no fill |
+| `Shadow.lg` on sticky purchase/checkout bars | CartScreen, ProductScreen | `Shadow.sm` |
+| `LinearGradient` tonal bridge patch (`#0A0A0A` → surface) | CartScreen | Eliminated — clean background transitions |
+| Brand name as `FontWeight.bold` uppercase sans | All cart/product rows | `Type.label` mono |
+| `Alert.alert()` for form/login errors | Login | Inline `FloatingLabelInput` error caption + shake |
+| Circle-bg dismiss button on cart rows | CartScreen | Plain `×` glyph, no background |
+
+---
+
+### 16.5 Recommended Phase 3 continuation order
+
+Priority is emotional impact × shared-component leverage:
+
+1. **ResultScreen** (B4) — `ProductCard` already frozen; grid layout, span card, header need premium treatment. High visibility (search/category results feed).
+2. **WishlistScreen** (B5) — single-column editorial list. `WishlistCard` new component. Wishlist is an emotional screen; its current 2-up grid reads as a marketplace, not a curated edit.
+3. **OrderHistoryScreen** (B9) — hairline list rows, `StatusBadge` retone, `OrderRow` new component.
+4. **ProfileScreen** (B11) — flat hairline `ProfileRow` layout, serif header. Quick win.
+5. **AddressScreen** (B7) — `FloatingLabelInput` already exists; reuse for address form. Hairline row selectors.
+6. **OrderDetailScreen** (B10) — `DetailRow` flat layout. SafeAreaView fix bundled.
+
+Phase 3 should not begin until Phase 2 QA pass is confirmed complete on all 5 frozen screens.
