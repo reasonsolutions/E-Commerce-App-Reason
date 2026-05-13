@@ -1,50 +1,56 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { CategoryInterface } from '../api/interfaces';
-import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { Colors, Space, Radius } from '../theme';
+import { Type } from '../theme/typography';
 
 interface CategoryItemProps {
   category: CategoryInterface;
   onPress: () => void;
 }
 
+// Typographic pill: small square thumbnail + category name.
+// No circle bubble, no shadow — reads as an editorial nav label, not a cartoon icon.
 const CategoryItem: React.FC<CategoryItemProps> = ({ category, onPress }) => {
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.78}>
-      <View style={styles.circle}>
-        <Image source={{ uri: category.CategoryImage }} style={styles.image} resizeMode="contain" />
+    <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.72}>
+      <View style={styles.imgWrap}>
+        <Image
+          source={{ uri: category.CategoryImage }}
+          style={styles.image}
+          resizeMode="cover"
+        />
       </View>
-      <Text style={styles.name} numberOfLines={2}>{category.CategoryName}</Text>
+      <Text style={styles.name} numberOfLines={1}>{category.CategoryName}</Text>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-    width: 64,
-    gap: Space[2],
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Space[2],
+    paddingVertical:   Space[1] + 2,
+    paddingHorizontal: Space[3],
+    backgroundColor:   Colors.surfaceSoft,
+    borderRadius:      Radius.pill,
   },
-  circle: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    ...Shadow.md,
+  imgWrap: {
+    width:           28,
+    height:          28,
+    borderRadius:    Radius.sm,
+    overflow:        'hidden',
+    backgroundColor: Colors.surfaceDeep,
   },
   image: {
-    width: 38,
-    height: 38,
+    width:  '100%',
+    height: '100%',
   },
   name: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.medium,
-    color: Colors.ink2,
-    textAlign: 'center',
-    lineHeight: 14,
+    ...Type.label,
+    color:         Colors.ink2,
+    letterSpacing: 0.8,
   },
 });
 

@@ -6,10 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Image,
+  Animated,
   FlatList,
   Dimensions,
-  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
@@ -19,13 +18,18 @@ import { STORAGE_KEYS } from '../config/storageKeys';
 import { ProductDetailInterface, VariantInterface, PostCartSaveInterface } from '../api/interfaces';
 import { postSaveCartItems, selectProduct, addToWishlist, removeFromWishlist, getWishlist } from '../api/services';
 import { QuantityStepper, Skeleton, SkeletonRow, ErrorBanner } from '../components/ui';
-import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { Colors, Space, Radius, Shadow } from '../theme';
+import { Type } from '../theme/typography';
+import { FontFamily } from '../theme/fonts';
+import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useCart } from '../context/CartContext';
+import { useHaptic } from '../hooks/useHaptic';
+import { useTactile } from '../hooks/useTactile';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-// Hero occupies 55% of screen height — image-first, cinematic
-const HERO_H = Math.round(SCREEN_H * 0.55);
+// Hero: 58% viewport — image-first, cinematic but leaves room for identity plate
+const HERO_H = Math.round(SCREEN_H * 0.58);
 
 type ProductFetch = {
   product: ProductDetailInterface;
@@ -47,6 +51,9 @@ type ProductScreenProps = {
 const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { setCartCount } = useCart();
+  const haptic = useHaptic();
+  const ctaTactile = useTactile();
+
   const [selectedVariant, setSelectedVariant] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
@@ -54,11 +61,12 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const [wishlisted, setWishlisted] = useState<boolean>(false);
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
 
-  // Entrance animation for content below hero
-  const contentOpacity   = useRef(new Animated.Value(0)).current;
-  const contentTranslateY = useRef(new Animated.Value(20)).current;
-  // Hero image fade-in
+  // Content plate slides up once data arrives
+  const plateAnim = useRef(new Animated.Value(0)).current;
+  // Hero image fades in
   const heroImgOpacity = useRef(new Animated.Value(0)).current;
+  // Cart badge pop on add-to-cart
+  const badgeScale = useRef(new Animated.Value(1)).current;
 
   const { data, isError, error, run } = useAsyncState<ProductFetch>(null);
 
@@ -77,14 +85,17 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     return () => { cancelled.current = true; };
   }, [fetchProduct]);
 
-  // Staggered content reveal fires once fetch succeeds
+  // Identity plate and description settle up once fetch resolves
   useEffect(() => {
     if (!data) return;
-    Animated.parallel([
-      Animated.timing(contentOpacity,    { toValue: 1, duration: 480, delay: 80, useNativeDriver: true }),
-      Animated.timing(contentTranslateY, { toValue: 0, duration: 420, delay: 80, useNativeDriver: true }),
-    ]).start();
-  }, [data, contentOpacity, contentTranslateY]);
+    Animated.timing(plateAnim, {
+      toValue:  1,
+      duration: Motion.duration.settle,
+      delay:    60,
+      easing:   Motion.easing.out,
+      useNativeDriver: true,
+    }).start();
+  }, [data, plateAnim]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +103,6 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       if (cancelled || !userData) return;
       const user = JSON.parse(userData);
       setProfileCode(user.CustomerProfileCode);
-      // Check if this product is already wishlisted
       getWishlist(user.CustomerProfileCode).then(res => {
         if (cancelled) return;
         if (res.statusCode === 1) {
@@ -109,36 +119,48 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   }, []);
 
   const handleHeroImageLoad = useCallback(() => {
-    Animated.timing(heroImgOpacity, { toValue: 1, duration: 800, useNativeDriver: true }).start();
+    Animated.timing(heroImgOpacity, {
+      toValue:  1,
+      duration: Motion.duration.carry,
+      easing:   Motion.easing.inOut,
+      useNativeDriver: true,
+    }).start();
   }, [heroImgOpacity]);
 
-  const handleAddToCart = async () => {
+  const handleAddToCart = useCallback(async () => {
     const requestbody: PostCartSaveInterface = {
-      CustomerLoginCode: null,
-      CustomerProfileCode: profileCode!,
+      CustomerLoginCode:    null,
+      CustomerProfileCode:  profileCode!,
       Inventory_Id: selectedVariant
         ? parseInt(selectedVariant)
         : (data?.product?.Inventory_Id ?? 0),
-      BranchCode: null,
-      CountryCode: null,
-      Quantity: quantity,
+      BranchCode:     null,
+      CountryCode:    null,
+      Quantity:       quantity,
       SpecialRemarks: '',
     };
     try {
       await postSaveCartItems(requestbody);
       setCartCount((prev: number) => prev + quantity);
+      haptic.success();
+      // Badge pop: 1 → 1.15 → 1 on snap spring
+      Animated.sequence([
+        Animated.spring(badgeScale, { toValue: Motion.badgePopScale, ...Motion.spring.snap }),
+        Animated.spring(badgeScale, { toValue: 1, ...Motion.spring.settle }),
+      ]).start();
       navigation.navigate('Cart');
     } catch (err) {
       console.error('Error adding to cart: ', err);
     }
-  };
+  }, [profileCode, selectedVariant, data, quantity, haptic, badgeScale, setCartCount, navigation]);
 
-  const handleBuyNow = () => {
+  const handleBuyNow = useCallback(() => {
     handleAddToCart();
-  };
+  }, [handleAddToCart]);
 
-  const handleWishlistToggle = async () => {
+  const handleWishlistToggle = useCallback(async () => {
     if (!profileCode) return;
+    haptic.light();
     const inventoryId = Number(route?.params?.product ?? 0);
     if (wishlisted && wishlistItemCode !== null) {
       await removeFromWishlist(profileCode, wishlistItemCode).catch(() => {});
@@ -147,7 +169,6 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     } else {
       const res = await addToWishlist(profileCode, inventoryId).catch(() => null);
       if (res?.statusCode === 1) {
-        // Re-fetch to get the assigned WishlistItemCode
         getWishlist(profileCode).then(wRes => {
           if (wRes.statusCode === 1) {
             const match = (wRes.result || []).find((w: any) => w.Inventory_Id === inventoryId);
@@ -157,7 +178,12 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         setWishlisted(true);
       }
     }
-  };
+  }, [profileCode, wishlisted, wishlistItemCode, haptic, route?.params?.product]);
+
+  const handleVariantSelect = useCallback((variantId: string) => {
+    haptic.light();
+    setSelectedVariant(variantId);
+  }, [haptic]);
 
   const productDetails = data?.product ?? null;
   const variantDetails = data?.variants ?? [];
@@ -177,16 +203,26 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     ? Math.round(((productDetails.ComparePrice - productDetails.Price) / productDetails.ComparePrice) * 100)
     : 0;
 
+  const plateStyle = {
+    opacity: plateAnim,
+    transform: [{
+      translateY: plateAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }),
+    }],
+  };
+
   const renderThumb = useCallback(({ item, index }: { item: string; index: number }) => (
     <TouchableOpacity
       style={[styles.thumb, selectedImageIndex === index && styles.thumbActive]}
-      onPress={() => setSelectedImageIndex(index)}
+      onPress={() => {
+        haptic.light();
+        setSelectedImageIndex(index);
+      }}
       activeOpacity={0.75}
     >
-      <Image source={{ uri: item }} style={styles.thumbImg} resizeMode="cover" />
+      <Animated.Image source={{ uri: item }} style={styles.thumbImg} resizeMode="cover" />
       {selectedImageIndex === index && <View style={styles.thumbActiveLine} />}
     </TouchableOpacity>
-  ), [selectedImageIndex]);
+  ), [selectedImageIndex, haptic]);
 
   return (
     <View style={styles.root}>
@@ -194,7 +230,6 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
       {isError ? (
         <View style={[styles.errorWrap, { paddingTop: insets.top + Space[12] }]}>
-          {/* Back button in error state */}
           <TouchableOpacity
             style={[styles.floatingBack, { top: insets.top + Space[2] }]}
             onPress={() => navigation.goBack()}
@@ -215,7 +250,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* ── HERO — full-bleed cinematic image ─────────────────────── */}
+            {/* ── Hero — full-bleed cinematic, no text overlay ──────────── */}
             <View style={[styles.hero, { height: HERO_H }]}>
               {productDetails ? (
                 <Animated.Image
@@ -228,15 +263,15 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                 <View style={styles.heroSkeleton} />
               )}
 
-              {/* Dark scrim — bottom 60% — matches HomeScreen dark-to-light pattern */}
+              {/* Minimal top seal — keeps nav legible over any image */}
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.70)']}
-                locations={[0.35, 0.6, 1]}
+                colors={['rgba(0,0,0,0.38)', 'rgba(0,0,0,0.0)']}
+                locations={[0, 0.28]}
                 style={StyleSheet.absoluteFillObject}
                 pointerEvents="none"
               />
 
-              {/* Floating nav — back (left) · wishlist + cart (right) */}
+              {/* Floating nav */}
               <View style={[styles.heroNav, { paddingTop: insets.top + Space[2] }]}>
                 <TouchableOpacity
                   style={styles.floatingBtn}
@@ -254,7 +289,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                     <Icon
                       name={wishlisted ? 'heart' : 'heart-outline'}
                       size={20}
-                      color={wishlisted ? '#FF6B6B' : '#FFFFFF'}
+                      color={wishlisted ? Colors.accent : '#FFFFFF'}
                     />
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -262,40 +297,22 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                     onPress={() => navigation.navigate('Cart')}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Icon name="bag-outline" size={20} color="#FFFFFF" />
+                    <Animated.View style={{ transform: [{ scale: badgeScale }] }}>
+                      <Icon name="bag-outline" size={20} color="#FFFFFF" />
+                    </Animated.View>
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Discount badge — top-right, always visible on hero */}
+              {/* Ember discount marker — top-left inset, mono, restrained */}
               {hasDiscount && (
-                <View style={[styles.discountBadge, { top: insets.top + Space[2] + 40 }]}>
-                  <Text style={styles.discountBadgeText}>-{discountPct}%</Text>
-                </View>
-              )}
-
-              {/* Hero footer — brand + price anchored to image bottom */}
-              {productDetails && (
-                <View style={styles.heroFooter}>
-                  <View style={styles.heroFooterLeft}>
-                    {productDetails.Brand_Name ? (
-                      <Text style={styles.heroBrand}>{productDetails.Brand_Name}</Text>
-                    ) : null}
-                    <Text style={styles.heroProductName} numberOfLines={2}>
-                      {productDetails.Name}
-                    </Text>
-                  </View>
-                  <View style={styles.heroFooterRight}>
-                    <Text style={styles.heroPrice}>${productDetails.Price.toFixed(2)}</Text>
-                    {hasDiscount && (
-                      <Text style={styles.heroWas}>${productDetails.ComparePrice.toFixed(2)}</Text>
-                    )}
-                  </View>
+                <View style={[styles.discountMarker, { top: insets.top + Space[2] + 44 }]}>
+                  <Text style={styles.discountMarkerText}>-{discountPct}%</Text>
                 </View>
               )}
             </View>
 
-            {/* ── Thumbnail strip — image selector ──────────────────────── */}
+            {/* ── Thumbnail strip — only when multiple images ───────────── */}
             {imageThumbs.length > 1 && (
               <View style={styles.thumbStrip}>
                 <FlatList
@@ -309,22 +326,46 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               </View>
             )}
 
-            {/* ── Light canvas — product details ────────────────────────── */}
-            <Animated.View
-              style={[
-                styles.canvas,
-                { opacity: contentOpacity, transform: [{ translateY: contentTranslateY }] },
-              ]}
-            >
-              {/* Tonal seam — surfaceAlt strip bridges thumbstrip → canvas */}
-              <View style={styles.canvasSeam} />
-
+            {/* ── Identity plate — brand / name / price ─────────────────── */}
+            <Animated.View style={[styles.identityPlate, plateStyle]}>
               {productDetails ? (
                 <>
-                  {/* ── Variant selectors ──────────────────────────────── */}
+                  {productDetails.Brand_Name ? (
+                    <Text style={styles.brandLabel}>{productDetails.Brand_Name}</Text>
+                  ) : null}
+
+                  <Text style={styles.productName} numberOfLines={3}>
+                    {productDetails.Name}
+                  </Text>
+
+                  <View style={styles.priceRow}>
+                    <Text style={styles.price}>${productDetails.Price.toFixed(2)}</Text>
+                    {hasDiscount && (
+                      <Text style={styles.priceWas}>${productDetails.ComparePrice.toFixed(2)}</Text>
+                    )}
+                  </View>
+                </>
+              ) : (
+                <View style={styles.skeletonIdentity}>
+                  <Skeleton height={11} width="22%" style={{ marginBottom: Space[3] }} />
+                  <Skeleton height={26} width="78%" style={{ marginBottom: Space[1] + 2 }} />
+                  <Skeleton height={26} width="55%" style={{ marginBottom: Space[4] }} />
+                  <Skeleton height={32} width="36%" />
+                </View>
+              )}
+            </Animated.View>
+
+            {/* ── Rule ──────────────────────────────────────────────────── */}
+            <View style={styles.rule} />
+
+            {/* ── Variant + description canvas ──────────────────────────── */}
+            <Animated.View style={[styles.canvas, plateStyle]}>
+              {productDetails ? (
+                <>
+                  {/* Variant selector */}
                   {variantDetails.length > 0 && (
                     <View style={styles.variantSection}>
-                      <Text style={styles.microLabel}>Select variant</Text>
+                      <Text style={styles.sectionLabel}>Variant</Text>
                       <View style={styles.variantRow}>
                         {variantDetails.map((v) => (
                           <TouchableOpacity
@@ -335,8 +376,8 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                               v.Count === 0 && styles.variantChipDisabled,
                               selectedVariant === String(v.Inventory_Id) && styles.variantChipSelected,
                             ]}
-                            onPress={() => setSelectedVariant(String(v.Inventory_Id))}
-                            activeOpacity={0.72}
+                            onPress={() => handleVariantSelect(String(v.Inventory_Id))}
+                            activeOpacity={0.75}
                           >
                             <Text
                               style={[
@@ -353,59 +394,68 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                     </View>
                   )}
 
-                  {/* ── Hairline divider ───────────────────────────────── */}
-                  <View style={styles.rule} />
-
-                  {/* ── Description — editorial pull-quote style ───────── */}
+                  {/* Description */}
                   {productDetails.Description ? (
-                    <View style={styles.descSection}>
-                      <Text style={styles.descText}>{productDetails.Description}</Text>
-                    </View>
+                    <>
+                      <View style={styles.descRule} />
+                      <View style={styles.descSection}>
+                        <Text style={styles.sectionLabel}>Details</Text>
+                        <Text style={styles.descText}>{productDetails.Description}</Text>
+                      </View>
+                    </>
                   ) : null}
                 </>
               ) : (
-                // Skeleton state for canvas
                 <View style={styles.skeletonCanvas}>
-                  <Skeleton height={16} width="35%" style={{ marginBottom: Space[4] }} />
+                  <Skeleton height={11} width="18%" style={{ marginBottom: Space[3] }} />
                   <SkeletonRow gap={Space[2]} style={{ marginBottom: Space[6] }}>
-                    <Skeleton height={38} width={72} radius={Radius.sm} />
-                    <Skeleton height={38} width={72} radius={Radius.sm} />
-                    <Skeleton height={38} width={72} radius={Radius.sm} />
+                    <Skeleton height={40} width={72} radius={Radius.sm} />
+                    <Skeleton height={40} width={72} radius={Radius.sm} />
+                    <Skeleton height={40} width={72} radius={Radius.sm} />
                   </SkeletonRow>
-                  <View style={styles.rule} />
                   <Skeleton height={14} style={{ marginBottom: Space[2] }} />
                   <Skeleton height={14} style={{ marginBottom: Space[2] }} />
-                  <Skeleton height={14} width="75%" />
+                  <Skeleton height={14} width="70%" />
                 </View>
               )}
             </Animated.View>
           </ScrollView>
 
           {/* ── Sticky purchase bar ────────────────────────────────────── */}
-          <View style={[styles.purchaseBar, { paddingBottom: Math.max(insets.bottom, Space[4]) }]}>
-            {/* Quantity inline in bar — not a separate section above */}
-            <View style={styles.purchaseQty}>
+          <View
+            style={[
+              styles.purchaseBar,
+              { paddingBottom: Math.max(insets.bottom, Space[4]) },
+            ]}
+          >
+            <View style={styles.purchaseTop}>
               <QuantityStepper value={quantity} onChange={setQuantity} min={1} size="sm" />
             </View>
-            <View style={styles.purchaseCTAs}>
-              {/* Secondary — ghost */}
+
+            {/* Primary CTA */}
+            <Animated.View style={ctaTactile.animatedStyle}>
               <TouchableOpacity
-                style={styles.ctaGhost}
-                onPress={handleBuyNow}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.ctaGhostText}>Buy Now</Text>
-              </TouchableOpacity>
-              {/* Primary — solid fill */}
-              <TouchableOpacity
-                style={styles.ctaSolid}
+                style={styles.ctaPrimary}
                 onPress={handleAddToCart}
-                activeOpacity={0.82}
+                {...ctaTactile.handlers}
+                activeOpacity={1}
+                accessibilityRole="button"
+                accessibilityLabel="Add to bag"
               >
-                <Icon name="bag-add-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.ctaSolidText}>Add to Cart</Text>
+                <Text style={styles.ctaPrimaryText}>Add to Bag</Text>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
+
+            {/* Secondary — text link, subordinate */}
+            <TouchableOpacity
+              style={styles.ctaSecondary}
+              onPress={handleBuyNow}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Buy now"
+            >
+              <Text style={styles.ctaSecondaryText}>Buy Now</Text>
+            </TouchableOpacity>
           </View>
         </>
       )}
@@ -415,24 +465,24 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
-    backgroundColor: Colors.surfaceAlt,
+    flex:            1,
+    backgroundColor: Colors.surface,
   },
   errorWrap: {
-    flex: 1,
-    backgroundColor: Colors.surface,
+    flex:              1,
+    backgroundColor:   Colors.surface,
     paddingHorizontal: Space.screenH,
   },
   floatingBack: {
-    position: 'absolute',
-    left: Space.screenH,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    position:        'absolute',
+    left:            Space.screenH,
+    width:           36,
+    height:          36,
+    borderRadius:    18,
     backgroundColor: Colors.surfaceAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadow.md,
+    justifyContent:  'center',
+    alignItems:      'center',
+    ...Shadow.sm,
   },
 
   scroll: {
@@ -442,285 +492,259 @@ const styles = StyleSheet.create({
     paddingBottom: Space[8],
   },
 
-  // ── Hero ──────────────────────────────────────────────────────────────
+  // ── Hero ──────────────────────────────────────────────────────────────────
   hero: {
-    width: SCREEN_W,
-    backgroundColor: '#0A0A0A',
-    position: 'relative',
-    overflow: 'hidden',
+    width:           SCREEN_W,
+    backgroundColor: Colors.surfaceDeep,
+    overflow:        'hidden',
   },
   heroSkeleton: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.surfaceDeep,
   },
   heroImg: {
-    width: '100%',
+    width:  '100%',
     height: '100%',
   },
   heroNav: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    position:          'absolute',
+    top:               0,
+    left:              0,
+    right:             0,
+    flexDirection:     'row',
+    justifyContent:    'space-between',
+    alignItems:        'center',
     paddingHorizontal: Space.screenH,
   },
   heroNavRight: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space[2],
+    alignItems:    'center',
+    gap:           Space[2],
   },
   floatingBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.32)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  discountBadge: {
-    position: 'absolute',
-    right: Space.screenH,
-    backgroundColor: Colors.danger,
-    borderRadius: Radius.xs,
-    paddingVertical: 4,
-    paddingHorizontal: Space[2],
-  },
-  discountBadgeText: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  heroFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Space.screenH,
-    paddingBottom: Space[5],
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  heroFooterLeft: {
-    flex: 1,
-    paddingRight: Space[4],
-    gap: Space[1],
-  },
-  heroFooterRight: {
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  heroBrand: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.55)',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
-  heroProductName: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: -0.6,
-    lineHeight: FontSize.xl * 1.2,
-  },
-  heroPrice: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: -0.4,
-  },
-  heroWas: {
-    fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.42)',
-    textDecorationLine: 'line-through',
-    textAlign: 'right',
+    width:           36,
+    height:          36,
+    borderRadius:    18,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    justifyContent:  'center',
+    alignItems:      'center',
   },
 
-  // ── Thumbnail strip ───────────────────────────────────────────────────
+  // Ember discount marker — replaces red danger chip per spec A7
+  discountMarker: {
+    position:          'absolute',
+    left:              Space.screenH,
+    backgroundColor:   Colors.accentTint,
+    borderRadius:      Radius.xs,
+    paddingVertical:   3,
+    paddingHorizontal: Space[2],
+    borderWidth:       0.5,
+    borderColor:       Colors.accent,
+  },
+  discountMarkerText: {
+    ...Type.label,
+    color:         Colors.accent,
+    letterSpacing: 0.6,
+    textTransform: 'none',
+  },
+
+  // ── Thumbnail strip ────────────────────────────────────────────────────────
   thumbStrip: {
-    backgroundColor: Colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.line,
+    backgroundColor: Colors.surfaceSoft,
   },
   thumbRail: {
     paddingHorizontal: Space.screenH,
-    paddingVertical: Space[3],
-    gap: Space[2],
+    paddingVertical:   Space[3],
+    gap:               Space[2],
   },
   thumb: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceAlt,
-    position: 'relative',
+    width:            56,
+    height:           56,
+    borderRadius:     Radius.sm,
+    overflow:         'hidden',
+    backgroundColor:  Colors.surfaceDeep,
   },
   thumbActive: {
-    // Active state: bottom line, not border (less visual noise)
+    // Active state: bottom line indicator, no border
   },
   thumbImg: {
-    width: '100%',
+    width:  '100%',
     height: '100%',
   },
   thumbActiveLine: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 2,
+    position:        'absolute',
+    bottom:          0,
+    left:            0,
+    right:           0,
+    height:          2,
     backgroundColor: Colors.ink1,
   },
 
-  // ── Light canvas ──────────────────────────────────────────────────────
-  canvas: {
-    backgroundColor: Colors.surface,
+  // ── Identity plate — brand / name / price ─────────────────────────────────
+  identityPlate: {
+    backgroundColor:   Colors.surface,
     paddingHorizontal: Space.screenH,
-    paddingTop: 0,
+    paddingTop:        Space[5],
+    paddingBottom:     Space[4],
   },
-  // Tonal seam — surfaceAlt strip at top of canvas creates a visual breath
-  // between the white thumbstrip and the variant/description content below
-  canvasSeam: {
-    height: Space[6],
-    backgroundColor: Colors.surfaceAlt,
-    marginHorizontal: -Space.screenH,
-    marginBottom: Space[5],
+  brandLabel: {
+    ...Type.label,
+    color:         Colors.ink3,
+    marginBottom:  Space[2],
+  },
+  productName: {
+    ...Type.heading,
+    fontSize:      24,
+    letterSpacing: -0.4,
+    lineHeight:    24 * 1.18,
+    color:         Colors.ink1,
+    marginBottom:  Space[3],
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems:    'baseline',
+    gap:           Space[2] + 2,
+  },
+  price: {
+    ...Type.priceLarge,
+    color: Colors.ink1,
+  },
+  priceWas: {
+    ...Type.caption,
+    fontFamily:         FontFamily.mono,
+    textDecorationLine: 'line-through',
+    color:              Colors.ink4,
+    letterSpacing:      0.2,
   },
 
-  skeletonCanvas: {
-    paddingBottom: Space[6],
+  rule: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+    marginHorizontal: Space.screenH,
   },
 
-  // ── Variant section ───────────────────────────────────────────────────
+  // ── Canvas — variants + description ──────────────────────────────────────
+  canvas: {
+    backgroundColor:   Colors.surface,
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[5],
+  },
+
+  // ── Variant section ───────────────────────────────────────────────────────
+  sectionLabel: {
+    ...Type.label,
+    color:        Colors.ink3,
+    marginBottom: Space[3],
+  },
   variantSection: {
-    gap: Space[3],
     marginBottom: Space[5],
-  },
-  microLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: Colors.ink4,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
   },
   variantRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space[2],
+    flexWrap:      'wrap',
+    gap:           Space[2],
   },
   variantChip: {
     paddingHorizontal: Space[4],
-    paddingVertical: Space[2] + 2,
-    borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.lineStrong,
-    backgroundColor: Colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 52,
-    position: 'relative',
-    overflow: 'hidden',
+    paddingVertical:   Space[2] + 2,
+    borderRadius:      Radius.sm,
+    borderWidth:       1,
+    borderColor:       Colors.rule,
+    backgroundColor:   Colors.surfaceSoft,
+    alignItems:        'center',
+    justifyContent:    'center',
+    minWidth:          56,
+    position:          'relative',
+    overflow:          'hidden',
   },
   variantChipDisabled: {
-    opacity: 0.38,
+    opacity: 0.36,
   },
+  // Hairline ink stroke on selected — no fill, editorial restraint
   variantChipSelected: {
+    borderWidth: 1.5,
     borderColor: Colors.ink1,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.surface,
   },
   variantChipText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    color: Colors.ink2,
-    letterSpacing: 0.1,
+    fontFamily:    FontFamily.mono,
+    fontSize:      12,
+    fontWeight:    '400',
+    color:         Colors.ink2,
+    letterSpacing: 0.3,
   },
   variantChipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: FontWeight.semibold,
+    color: Colors.ink1,
   },
-  // Diagonal strike for out-of-stock chips
   variantStrike: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
-    height: StyleSheet.hairlineWidth,
+    position:        'absolute',
+    top:             '50%',
+    left:            0,
+    right:           0,
+    height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.ink4,
-    transform: [{ rotate: '-18deg' }],
+    transform:       [{ rotate: '-18deg' }],
   },
 
-  // ── Rule / breath ─────────────────────────────────────────────────────
-  rule: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.line,
-    marginBottom: Space[5],
+  // ── Description ───────────────────────────────────────────────────────────
+  descRule: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+    marginBottom:    Space[5],
   },
-
-  // ── Description ───────────────────────────────────────────────────────
   descSection: {
     marginBottom: Space[8],
   },
   descText: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.regular,
-    color: Colors.ink2,
-    lineHeight: FontSize.base * 1.65,
-    letterSpacing: 0.1,
+    ...Type.body,
+    color:      Colors.ink2,
+    lineHeight: 16 * 1.7,
   },
 
-  // ── Purchase bar ──────────────────────────────────────────────────────
+  // ── Skeleton states ───────────────────────────────────────────────────────
+  skeletonIdentity: {
+    paddingBottom: Space[2],
+  },
+  skeletonCanvas: {
+    paddingBottom: Space[6],
+  },
+
+  // ── Purchase bar ──────────────────────────────────────────────────────────
+  // surfaceDeep background + Shadow.sm when overlapping content (sticky)
   purchaseBar: {
-    backgroundColor: Colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.line,
-    paddingTop: Space[3],
+    backgroundColor:   Colors.surfaceDeep,
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
+    paddingTop:        Space[3],
     paddingHorizontal: Space.screenH,
-    gap: Space[3],
-    ...Shadow.lg,
+    gap:               Space[2],
+    ...Shadow.sm,
   },
-  purchaseQty: {
-    // Stepper sits above CTAs — quantity is a choice, not an afterthought
+  purchaseTop: {
+    // Quantity stepper row — choice before commitment
   },
-  purchaseCTAs: {
-    flexDirection: 'row',
-    gap: Space[3],
-  },
-  // Ghost CTA — editorial restraint, matches HomeScreen hero ghost button
-  ctaGhost: {
-    flex: 1,
-    height: 48,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Colors.ink5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  ctaGhostText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.ink1,
-    letterSpacing: 0.1,
-  },
-  // Solid CTA — primary action, dominant
-  ctaSolid: {
-    flex: 2,
-    height: 48,
-    borderRadius: Radius.pill,
+  ctaPrimary: {
+    width:           '100%',
+    height:          52,
+    borderRadius:    Radius.pill,
     backgroundColor: Colors.ink1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Space[2],
+    alignItems:      'center',
+    justifyContent:  'center',
   },
-  ctaSolidText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: 0.1,
+  ctaPrimaryText: {
+    ...Type.bodyStrong,
+    color:         '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  ctaSecondary: {
+    alignItems:    'center',
+    paddingVertical: Space[1],
+  },
+  ctaSecondaryText: {
+    ...Type.caption,
+    color:              Colors.ink3,
+    textDecorationLine: 'underline',
+    letterSpacing:      0.2,
   },
 });
 

@@ -1,14 +1,19 @@
-import React from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   StatusBar,
+  Animated,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button } from '../components/ui';
-import { Colors, Space, Radius, FontSize, FontWeight, Shadow } from '../theme';
+import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
+import { FontFamily } from '../theme/fonts';
+import { Motion } from '../theme/motion';
+import { useHaptic } from '../hooks/useHaptic';
+import { useTactile } from '../hooks/useTactile';
 
 type NavigationProp = {
   navigate: {
@@ -27,133 +32,303 @@ type OrderSuccessScreenProps = {
   };
 };
 
+// Staggered settle delays — each block arrives after the one before it
+const DELAY = {
+  mark:      0,
+  headline:  400,
+  order:     600,
+  body:      780,
+  ctas:      960,
+} as const;
+
 const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, route }) => {
-
   const orderNumber = route.params?.orderNumber;
+  const haptic = useHaptic();
+  const primaryTactile = useTactile();
 
-  const handleContinueShopping = () => {
-    navigation.navigate('Home');
-  };
+  // ── Animation values ───────────────────────────────────────────────────────
+  // Mark: ring scales up, then mark character fades in
+  const ringScale   = useRef(new Animated.Value(0.52)).current;
+  const ringOpacity = useRef(new Animated.Value(0)).current;
+  const markOpacity = useRef(new Animated.Value(0)).current;
 
-  const handleViewOrders = () => {
+  // Content blocks: each fades + translates up independently
+  const headlineAnim = useRef(new Animated.Value(0)).current;
+  const orderAnim    = useRef(new Animated.Value(0)).current;
+  const bodyAnim     = useRef(new Animated.Value(0)).current;
+  const ctasAnim     = useRef(new Animated.Value(0)).current;
+
+  const makeSettle = (val: Animated.Value, delay: number) =>
+    Animated.parallel([
+      Animated.timing(val, {
+        toValue:  1,
+        delay,
+        duration: Motion.duration.settle,
+        easing:   Motion.easing.out,
+        useNativeDriver: true,
+      }),
+    ]);
+
+  useEffect(() => {
+    // Mark ring expands on Carry curve
+    Animated.parallel([
+      Animated.timing(ringOpacity, {
+        toValue:  1,
+        duration: 160,
+        delay:    DELAY.mark,
+        easing:   Motion.easing.out,
+        useNativeDriver: true,
+      }),
+      Animated.timing(ringScale, {
+        toValue:  1,
+        duration: Motion.duration.carry,
+        delay:    DELAY.mark,
+        easing:   Motion.easing.inOut,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Mark character appears after ring settles, haptic fires here
+      Animated.timing(markOpacity, {
+        toValue:  1,
+        duration: Motion.duration.tap,
+        easing:   Motion.easing.out,
+        useNativeDriver: true,
+      }).start();
+      haptic.success();
+    });
+
+    // Content blocks settle in sequence
+    Animated.parallel([
+      makeSettle(headlineAnim, DELAY.headline),
+      makeSettle(orderAnim,    DELAY.order),
+      makeSettle(bodyAnim,     DELAY.body),
+      makeSettle(ctasAnim,     DELAY.ctas),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const blockStyle = (anim: Animated.Value, initialY = 10) => ({
+    opacity:   anim,
+    transform: [{
+      translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [initialY, 0] }),
+    }],
+  });
+
+  const handleViewOrders = useCallback(() => {
     navigation.navigate('Orders');
-  };
+  }, [navigation]);
+
+  const handleContinueShopping = useCallback(() => {
+    navigation.navigate('Home');
+  }, [navigation]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
       <View style={styles.content}>
-        {/* Success icon */}
-        <View style={styles.iconContainer}>
-          <View style={styles.checkIcon}>
-            <Text style={styles.checkMark}>✓</Text>
-          </View>
+
+        {/* ── Success mark ────────────────────────────────────────────── */}
+        <View style={styles.markWrap}>
+          <Animated.View
+            style={[
+              styles.ring,
+              {
+                opacity:   ringOpacity,
+                transform: [{ scale: ringScale }],
+              },
+            ]}
+          >
+            <Animated.Text style={[styles.markChar, { opacity: markOpacity }]}>
+              ✓
+            </Animated.Text>
+          </Animated.View>
         </View>
 
-        {/* Success message */}
-        <Text style={styles.title}>Order Placed Successfully!</Text>
-        <Text style={styles.subtitle}>
-          Thank you for your purchase. Your order has been confirmed.
-        </Text>
+        {/* ── Headline ─────────────────────────────────────────────────── */}
+        <Animated.View style={[styles.headlineBlock, blockStyle(headlineAnim, 14)]}>
+          <Text style={styles.headline}>Order placed.</Text>
+          <Text style={styles.subline}>
+            We'll send you updates as it{'\n'}makes its way to you.
+          </Text>
+        </Animated.View>
 
-        {/* Order number card */}
-        <View style={styles.orderContainer}>
-          <Text style={styles.orderLabel}>Order Number</Text>
-          <Text style={styles.orderNumber}>#{orderNumber}</Text>
-        </View>
+        {/* ── Order number row ─────────────────────────────────────────── */}
+        {orderNumber ? (
+          <Animated.View style={[styles.orderBlock, blockStyle(orderAnim, 10)]}>
+            <View style={styles.orderRule} />
+            <View style={styles.orderRow}>
+              <Text style={styles.orderLabel}>Order</Text>
+              <Text style={styles.orderNumber}>#{orderNumber}</Text>
+            </View>
+            <View style={styles.orderRule} />
+          </Animated.View>
+        ) : null}
 
-        {/* Additional info */}
-        <Text style={styles.infoText}>
-          You will receive a confirmation email shortly with your order details.
-        </Text>
+        {/* ── Body copy ────────────────────────────────────────────────── */}
+        <Animated.View style={[styles.bodyBlock, blockStyle(bodyAnim, 8)]}>
+          <Text style={styles.bodyText}>
+            You can track the status of your order{'\n'}
+            in the orders section.
+          </Text>
+        </Animated.View>
 
-        {/* Action buttons */}
-        <View style={styles.buttonContainer}>
-          <Button variant="primary" size="lg" fullWidth onPress={handleViewOrders}>
-            View My Orders
-          </Button>
-          <Button variant="secondary" size="lg" fullWidth onPress={handleContinueShopping}>
-            Continue Shopping
-          </Button>
-        </View>
+        {/* ── CTAs ─────────────────────────────────────────────────────── */}
+        <Animated.View style={[styles.ctasBlock, blockStyle(ctasAnim, 10)]}>
+          {/* Primary — ink pill */}
+          <Animated.View style={primaryTactile.animatedStyle}>
+            <TouchableOpacity
+              style={styles.primaryCta}
+              onPress={handleViewOrders}
+              {...primaryTactile.handlers}
+              activeOpacity={1}
+              accessibilityRole="button"
+              accessibilityLabel="View my orders"
+            >
+              <Text style={styles.primaryCtaText}>View My Orders</Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Secondary — text link, subordinate */}
+          <TouchableOpacity
+            style={styles.secondaryCta}
+            onPress={handleContinueShopping}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel="Continue shopping"
+          >
+            <Text style={styles.secondaryCtaText}>Continue Shopping</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
       </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  root: {
+    flex:            1,
     backgroundColor: Colors.surface,
   },
   content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space[6],
-    paddingVertical: Space[8],
+    flex:              1,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
   },
-  iconContainer: {
+
+  // ── Mark ────────────────────────────────────────────────────────────────
+  markWrap: {
+    marginBottom: Space[8] + Space[2],
+    alignItems:   'center',
+  },
+  // Thin ember ring — accentTint fill, 1.5px accent border
+  ring: {
+    width:           72,
+    height:          72,
+    borderRadius:    Radius.pill,
+    backgroundColor: Colors.accentTint,
+    borderWidth:     1.5,
+    borderColor:     Colors.accent,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  markChar: {
+    fontFamily:    FontFamily.serifItalic,
+    fontSize:      28,
+    color:         Colors.accent,
+    lineHeight:    32,
+    // Optical vertical centering for the serif checkmark glyph
+    marginTop:     2,
+  },
+
+  // ── Headline block ───────────────────────────────────────────────────────
+  headlineBlock: {
+    alignItems:   'center',
     marginBottom: Space[8],
   },
-  checkIcon: {
-    width: 80,
-    height: 80,
-    backgroundColor: Colors.success,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.md,
-  },
-  checkMark: {
-    fontSize: FontSize['3xl'],
-    color: Colors.accentInk,
-    fontWeight: FontWeight.bold,
-  },
-  title: {
+  headline: {
     ...Type.title,
-    textAlign: 'center',
-    marginBottom: Space[3],
+    fontSize:      30,
+    letterSpacing: -0.6,
+    color:         Colors.ink1,
+    textAlign:     'center',
+    marginBottom:  Space[2] + 2,
   },
-  subtitle: {
+  subline: {
     ...Type.body,
-    color: Colors.ink3,
+    color:     Colors.ink3,
     textAlign: 'center',
-    lineHeight: FontSize.base * 1.6,
+    lineHeight: 16 * 1.55,
+  },
+
+  // ── Order row ────────────────────────────────────────────────────────────
+  orderBlock: {
+    width:        '100%',
     marginBottom: Space[8],
   },
-  orderContainer: {
-    backgroundColor: Colors.surfaceAlt,
-    paddingVertical: Space[5],
-    paddingHorizontal: Space[6],
-    borderRadius: Radius.md,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: Space[6],
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.line,
+  orderRule: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+  },
+  orderRow: {
+    flexDirection:  'row',
+    justifyContent: 'space-between',
+    alignItems:     'baseline',
+    paddingVertical: Space[4],
   },
   orderLabel: {
     ...Type.label,
-    marginBottom: Space[2],
+    color: Colors.ink3,
   },
   orderNumber: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    color: Colors.ink1,
-    letterSpacing: 1.5,
+    fontFamily:    FontFamily.mono,
+    fontSize:      15,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: 0.8,
   },
-  infoText: {
-    ...Type.caption,
-    textAlign: 'center',
-    lineHeight: FontSize.sm * 1.5,
+
+  // ── Body copy ────────────────────────────────────────────────────────────
+  bodyBlock: {
     marginBottom: Space[10],
-    paddingHorizontal: Space[4],
   },
-  buttonContainer: {
-    width: '100%',
-    gap: Space[3],
+  bodyText: {
+    ...Type.caption,
+    textAlign:  'center',
+    lineHeight: 13 * 1.6,
+    color:      Colors.ink4,
+  },
+
+  // ── CTAs ─────────────────────────────────────────────────────────────────
+  ctasBlock: {
+    width:      '100%',
+    alignItems: 'center',
+    gap:        Space[2],
+  },
+  primaryCta: {
+    width:           '100%',
+    height:          52,
+    borderRadius:    Radius.pill,
+    backgroundColor: Colors.ink1,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  primaryCtaText: {
+    ...Type.bodyStrong,
+    color:         '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  secondaryCta: {
+    paddingVertical: Space[2],
+  },
+  secondaryCtaText: {
+    ...Type.caption,
+    color:              Colors.ink3,
+    textDecorationLine: 'underline',
+    letterSpacing:      0.2,
   },
 });
 

@@ -27,11 +27,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { SearchBar, Skeleton, SkeletonRow, BottomNavBar } from '../components/ui';
-import { Colors, Space, Radius, Shadow, FontSize, FontWeight } from '../theme';
+import { Colors, Space, Radius } from '../theme';
+import { Type } from '../theme/typography';
+import { FontFamily } from '../theme/fonts';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_H = 300;
-const BRIDGE_H = 100;
+const HERO_H   = 300;
+const BRIDGE_H = 80;
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -39,6 +41,7 @@ type NavigationProp = {
 };
 type HomeScreenProps = { navigation: NavigationProp };
 
+// ── Preserved verbatim — back-press / logout logic ───────────────────────────
 function useCustomBackHandler(navigation: NavigationProp) {
   useFocusEffect(
     React.useCallback(() => {
@@ -75,6 +78,9 @@ function useCustomBackHandler(navigation: NavigationProp) {
   );
 }
 
+// ── Preserved verbatim — local entrance hook (HomeScreen exception per CLAUDE.md) ──
+// Durations (500ms/440ms) and initialY=14 are intentionally different from the
+// shared useEntrance hook. Do not replace with the shared hook.
 function useEntrance(delay = 0, withScale = false) {
   const opacity    = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(14)).current;
@@ -109,7 +115,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     run: runProducts,
   } = useAsyncState<ProductInterface[]>(null);
 
-  const heroAnim  = useEntrance(60, true);  // scale materialisation on hero only
+  const heroAnim  = useEntrance(60, true);
   const catAnim   = useEntrance(200);
   const featAnim  = useEntrance(300);
   const shelfAnim = useEntrance(380);
@@ -129,11 +135,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     : null;
 
   const featuredProduct = deduplicatedProducts?.[0] ?? null;
-  // Flash Deals: discounted products, excluding the featured slot
   const flashDealProducts = deduplicatedProducts
     ? deduplicatedProducts.filter((p, i) => i > 0 && p.ComparePrice > p.Price)
     : null;
-  // Fallback: if no discounted products beyond featured, use all non-featured products
   const shelfProducts = flashDealProducts?.length
     ? flashDealProducts
     : (deduplicatedProducts?.slice(1) ?? null);
@@ -152,7 +156,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         tall={index === 0}
       />
     ),
-    [navigation]
+    [navigation],
   );
 
   const renderCategory = useCallback(
@@ -162,26 +166,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onPress={() => navigation.navigate('Result', { categoryId: item.Category_Id, categoryName: item.CategoryName })}
       />
     ),
-    [navigation]
+    [navigation],
   );
 
   return (
     <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" translucent />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + Space[1] }]}>
         <View style={styles.headerRow}>
+          {/* Wordmark — serifItalic to match Login brand identity */}
           <Text style={styles.brandName}>shop.</Text>
           <TouchableOpacity
-            style={styles.cartBtn}
             onPress={() => navigation.navigate('Cart')}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.cartBtn}
           >
-            <Icon name="bag-outline" size={21} color="#FFFFFF" />
+            <Icon name="bag-outline" size={22} color="#FFFFFF" />
             {cartItemsCount > 0 && (
               <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{cartItemsCount > 99 ? '99+' : cartItemsCount}</Text>
+                <Text style={styles.cartBadgeText}>
+                  {cartItemsCount > 99 ? '99+' : cartItemsCount}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -206,24 +213,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <Animated.View style={heroAnim}>
           <View style={styles.heroBg}>
-            <View style={styles.heroOrbLeft} />
-            <View style={styles.heroOrbSeam} />
-
             <View style={styles.heroInner}>
               {/* Text column */}
               <View style={styles.heroTextCol}>
-                <Text style={styles.heroEyebrow}>NEW SEASON · 26</Text>
+                <Text style={styles.heroEyebrow}>NEW SEASON</Text>
                 <Text style={styles.heroTitle} numberOfLines={3}>
                   {heroBanner.title}
                 </Text>
-                {/* Ghost CTA — editorial restraint */}
-                <TouchableOpacity style={styles.heroCTA} activeOpacity={0.7}>
+                {/* Underline-text CTA — editorial, not pill */}
+                <TouchableOpacity
+                  style={styles.heroCTA}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('Result', { flashDeals: true, categoryName: 'New In' })}
+                >
                   <Text style={styles.heroCTAText}>Shop the edit</Text>
-                  <Icon name="arrow-forward" size={11} color="rgba(255,255,255,0.8)" />
                 </TouchableOpacity>
               </View>
 
-              {/* Image column — wider, bleeds to right edge */}
+              {/* Image column — bleeds to right edge */}
               <View style={styles.heroImgCol}>
                 <Animated.Image
                   source={{ uri: heroBanner.images[0] }}
@@ -231,22 +238,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   resizeMode="cover"
                   onLoad={handleHeroImageLoad}
                 />
-                {/* Gradient veil on left edge — blends image into dark bg */}
+                {/* Left-edge veil blends image into dark bg */}
                 <LinearGradient
-                  colors={['#0A0A0A', 'transparent']}
+                  colors={[Colors.ink1, 'transparent']}
                   start={{ x: 0, y: 0 }}
-                  end={{ x: 0.28, y: 0 }}
+                  end={{ x: 0.32, y: 0 }}
                   style={StyleSheet.absoluteFillObject}
                   pointerEvents="none"
                 />
               </View>
             </View>
-
           </View>
 
-          {/* Tonal bridge: dark → surfaceAlt */}
+          {/* Tonal bridge: ink → surface */}
           <LinearGradient
-            colors={['#0A0A0A', Colors.surfaceAlt]}
+            colors={[Colors.ink1, Colors.surface]}
             style={styles.tonalBridge}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
@@ -254,7 +260,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         </Animated.View>
 
-        {/* ── Categories — floats in bridge zone ────────────────────────── */}
+        {/* ── Categories ─────────────────────────────────────────────────── */}
         <Animated.View style={[styles.catSection, catAnim]}>
           {categories ? (
             <FlatList
@@ -268,11 +274,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             />
           ) : (
             <View style={styles.categoryRail}>
-              {[0, 1, 2, 3, 4].map((i) => (
-                <View key={i} style={styles.catSkeletonCell}>
-                  <Skeleton width={64} height={64} radius={Radius.pill} />
-                  <Skeleton height={10} width={44} style={{ marginTop: Space[2] }} />
-                </View>
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} width={88} height={36} radius={Radius.pill} />
               ))}
             </View>
           )}
@@ -291,23 +294,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 style={styles.featImage}
                 resizeMode="cover"
               />
-              {/* Gradient starts at 15% transparent for more image presence */}
               <LinearGradient
-                colors={['transparent', 'transparent', 'rgba(0,0,0,0.38)', 'rgba(0,0,0,0.80)']}
-                locations={[0, 0.15, 0.6, 1]}
+                colors={['transparent', 'transparent', 'rgba(0,0,0,0.30)', 'rgba(0,0,0,0.74)']}
+                locations={[0, 0.2, 0.6, 1]}
                 style={StyleSheet.absoluteFillObject}
               />
+
+              {/* Ember badge — replaces red danger chip */}
               {featuredProduct.ComparePrice > featuredProduct.Price && (
                 <View style={styles.featBadge}>
                   <Text style={styles.featBadgeText}>
-                    {Math.round(((featuredProduct.ComparePrice - featuredProduct.Price) / featuredProduct.ComparePrice) * 100)}% OFF
+                    -{Math.round(((featuredProduct.ComparePrice - featuredProduct.Price) / featuredProduct.ComparePrice) * 100)}%
                   </Text>
                 </View>
               )}
+
               <View style={styles.featFooter}>
                 <View style={styles.featFooterLeft}>
-                  <Text style={styles.featBrand}>{featuredProduct.Brand_Name}</Text>
-                  <Text style={styles.featName} numberOfLines={1}>{featuredProduct.Name}</Text>
+                  {featuredProduct.Brand_Name ? (
+                    <Text style={styles.featBrand}>{featuredProduct.Brand_Name}</Text>
+                  ) : null}
+                  <Text style={styles.featName} numberOfLines={1}>
+                    {featuredProduct.Name}
+                  </Text>
                   <View style={styles.featPriceRow}>
                     <Text style={styles.featPrice}>${featuredProduct.Price.toFixed(2)}</Text>
                     {featuredProduct.ComparePrice > featuredProduct.Price && (
@@ -315,10 +324,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     )}
                   </View>
                 </View>
-                <View style={styles.featViewBtn}>
-                  <Text style={styles.featViewBtnText}>View</Text>
-                  <Icon name="arrow-forward" size={11} color="#0A0A0A" />
-                </View>
+                {/* Text-link CTA — no pill, more editorial */}
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Product', { product: featuredProduct.Inventory_Id })}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.featLink}>View →</Text>
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           </Animated.View>
@@ -329,7 +341,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         )}
 
-        {/* ── Compositional breath between featured and shelf ────────────── */}
+        {/* ── Hairline divider ───────────────────────────────────────────── */}
         <View style={styles.divider} />
 
         {/* ── Flash Deals shelf ──────────────────────────────────────────── */}
@@ -338,16 +350,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Text style={styles.shelfTitle}>Flash Deals</Text>
             <TouchableOpacity
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              onPress={() =>
-                navigation.navigate('Result', {
-                  flashDeals: true,
-                  categoryName: 'Flash Deals',
-                })
-              }
+              onPress={() => navigation.navigate('Result', { flashDeals: true, categoryName: 'Flash Deals' })}
             >
-              <Text style={styles.seeAll}>See all →</Text>
+              <Text style={styles.seeAll}>See all</Text>
             </TouchableOpacity>
           </View>
+
           {shelfProducts !== null ? (
             <FlatList
               data={shelfProducts}
@@ -356,46 +364,43 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.shelfRail}
-              snapToInterval={180 + Space[3]}
+              snapToInterval={180 + Space[4]}
               decelerationRate="fast"
             />
           ) : (
-            <SkeletonRow gap={Space[3]} style={styles.shelfRail}>
+            <SkeletonRow gap={Space[4]} style={styles.shelfRail}>
               {[0, 1, 2].map((i) => (
-                <View key={i} style={{ width: 160 }}>
-                  <Skeleton height={i === 0 ? 200 : 160} radius={Radius.md} style={{ marginBottom: Space[2] }} />
-                  <Skeleton height={10} width="55%" style={{ marginBottom: Space[1] }} />
-                  <Skeleton height={13} width="80%" style={{ marginBottom: Space[1] }} />
-                  <Skeleton height={13} width="45%" />
+                <View key={i} style={{ width: 180 }}>
+                  <Skeleton height={i === 0 ? 200 : 164} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+                  <Skeleton height={9}  width="50%" style={{ marginBottom: 4 }} />
+                  <Skeleton height={12} width="78%" style={{ marginBottom: 4 }} />
+                  <Skeleton height={12} width="42%" />
                 </View>
               ))}
             </SkeletonRow>
           )}
         </Animated.View>
 
-        {/* ── Editorial break ────────────────────────────────────────────── */}
+        {/* ── Editorial card ─────────────────────────────────────────────── */}
         <Animated.View style={[styles.section, { marginBottom: Space[8] }, editAnim]}>
-          <View style={styles.editCard}>
+          <TouchableOpacity
+            style={styles.editCard}
+            activeOpacity={0.88}
+            onPress={() =>
+              categories?.[0] &&
+              navigation.navigate('Result', { categoryId: categories[0].Category_Id })
+            }
+          >
             {/* Left text column */}
             <View style={styles.editLeft}>
-              <Text style={styles.editEyebrow}>THE TECH EDIT</Text>
+              <Text style={styles.editEyebrow}>THE EDIT</Text>
               <Text style={styles.editHeadline}>
                 Everything{'\n'}you need.{'\n'}Nothing{'\n'}you don't.
               </Text>
-              <TouchableOpacity
-                style={styles.editCTA}
-                activeOpacity={0.7}
-                onPress={() =>
-                  categories?.[0] &&
-                  navigation.navigate('Result', { categoryId: categories[0].Category_Id })
-                }
-              >
-                <Text style={styles.editCTAText}>Explore</Text>
-                <Icon name="arrow-forward" size={12} color="#FFFFFF" />
-              </TouchableOpacity>
+              <Text style={styles.editCTA}>Explore →</Text>
             </View>
 
-            {/* Right — single full-height image column */}
+            {/* Right image column */}
             <View style={styles.editImgCol}>
               <Image
                 source={{ uri: heroBanner.images[1] ?? heroBanner.images[0] }}
@@ -403,14 +408,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 resizeMode="cover"
               />
               <LinearGradient
-                colors={['rgba(10,10,10,0.4)', 'transparent']}
+                colors={['rgba(17,17,17,0.45)', 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={StyleSheet.absoluteFillObject}
                 pointerEvents="none"
               />
             </View>
-          </View>
+          </TouchableOpacity>
         </Animated.View>
       </ScrollView>
 
@@ -425,353 +430,313 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
-    backgroundColor: '#0A0A0A',
+    flex:            1,
+    backgroundColor: Colors.ink1,
   },
 
-  // ── Header ──────────────────────────────────────────────────────────────
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor:   Colors.ink1,
     paddingHorizontal: Space.screenH,
-    paddingBottom: Space[3],
+    paddingBottom:     Space[3],
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection:  'row',
+    alignItems:     'center',
     justifyContent: 'space-between',
   },
+  // Serif italic wordmark — matches Login brand identity
   brandName: {
-    fontSize: 26,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: -1.2,
+    fontFamily:    FontFamily.serifItalic,
+    fontSize:      28,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
+    letterSpacing: -0.8,
   },
   cartBtn: {
     position: 'relative',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding:  4,
   },
   cartBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: Colors.danger,
-    borderRadius: Radius.pill,
-    minWidth: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    position:          'absolute',
+    top:               0,
+    right:             0,
+    backgroundColor:   Colors.accent,
+    borderRadius:      Radius.pill,
+    minWidth:          16,
+    height:            16,
+    justifyContent:    'center',
+    alignItems:        'center',
     paddingHorizontal: 3,
-    borderWidth: 1.5,
-    borderColor: '#0A0A0A',
+    borderWidth:       1.5,
+    borderColor:       Colors.ink1,
   },
   cartBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    lineHeight: 11,
+    ...Type.label,
+    color:         '#FFFFFF',
+    letterSpacing: 0,
+    fontSize:      9,
   },
 
-  // ── Scroll ──────────────────────────────────────────────────────────────
+  // ── Scroll ──────────────────────────────────────────────────────────────────
   scroll: {
-    flex: 1,
-    backgroundColor: Colors.surfaceAlt,
+    flex:            1,
+    backgroundColor: Colors.surface,
   },
   scrollContent: {
     paddingBottom: Space[10],
   },
 
-  // ── Sticky search band ──────────────────────────────────────────────────
+  // ── Sticky search band ──────────────────────────────────────────────────────
   searchBand: {
-    backgroundColor: '#0A0A0A',
+    backgroundColor:   Colors.ink1,
     paddingHorizontal: Space.screenH,
-    paddingTop: Space[1],
-    paddingBottom: Space[3],
+    paddingTop:        Space[1],
+    paddingBottom:     Space[3],
   },
 
-  // ── Hero ────────────────────────────────────────────────────────────────
+  // ── Hero ────────────────────────────────────────────────────────────────────
   heroBg: {
-    backgroundColor: '#0A0A0A',
-    height: HERO_H,
-    overflow: 'hidden',
-  },
-  heroOrbLeft: {
-    position: 'absolute',
-    top: -50,
-    left: -50,
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: '#6366F1',
-    opacity: 0.12,
-  },
-  heroOrbSeam: {
-    position: 'absolute',
-    bottom: -20,
-    left: SCREEN_W * 0.52,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: '#8B5CF6',
-    opacity: 0.10,
+    backgroundColor: Colors.ink1,
+    height:          HERO_H,
+    overflow:        'hidden',
   },
   heroInner: {
-    flex: 1,
+    flex:      1,
     flexDirection: 'row',
   },
   heroTextCol: {
-    flex: 1,
-    paddingLeft: Space.screenH,
-    paddingTop: Space[5],
-    paddingRight: Space[2],
-    justifyContent: 'center',
-    gap: Space[4],
+    flex:            1,
+    paddingLeft:     Space.screenH,
+    paddingTop:      Space[6],
+    paddingRight:    Space[2],
+    justifyContent:  'center',
+    gap:             Space[4],
   },
   heroEyebrow: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.28)',
-    letterSpacing: 1.8,
+    ...Type.label,
+    color:         'rgba(255,255,255,0.32)',
+    letterSpacing: 2.0,
   },
+  // Serif italic display title — cinematic, not bold sans
   heroTitle: {
-    fontSize: 40,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: -1.6,
-    lineHeight: 44,
+    fontFamily:    FontFamily.serifItalic,
+    fontSize:      38,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
+    letterSpacing: -1.2,
+    lineHeight:    40,
   },
-  // Ghost CTA — outline only, no fill. More editorial than solid pill.
+  // Underline text CTA — editorial restraint, not an outlined pill
   heroCTA: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    borderRadius: Radius.pill,
-    paddingVertical: 9,
-    paddingHorizontal: Space[4],
   },
   heroCTAText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: 'rgba(255,255,255,0.88)',
-    letterSpacing: 0.1,
+    ...Type.bodyStrong,
+    color:             'rgba(255,255,255,0.80)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.35)',
+    paddingBottom:     2,
   },
   heroImgCol: {
-    width: SCREEN_W * 0.44,
-    height: HERO_H,
+    width:    SCREEN_W * 0.44,
+    height:   HERO_H,
     position: 'relative',
   },
   heroImg: {
-    width: '100%',
+    width:  '100%',
     height: '100%',
   },
-  // Tonal bridge
   tonalBridge: {
-    height: BRIDGE_H,
+    height:    BRIDGE_H,
     marginTop: -1,
   },
 
-  // ── Categories ──────────────────────────────────────────────────────────
+  // ── Categories ──────────────────────────────────────────────────────────────
   catSection: {
+    // Float into the bridge gradient zone for visual continuity
     marginTop: -(BRIDGE_H - Space[4]),
   },
   categoryRail: {
     paddingHorizontal: Space.screenH,
-    gap: Space[5],
-    flexDirection: 'row',
-    paddingBottom: Space[2],
-  },
-  catSkeletonCell: {
-    alignItems: 'center',
+    gap:               Space[2],
+    flexDirection:     'row',
+    paddingBottom:     Space[2],
   },
 
-  // ── Section shell ────────────────────────────────────────────────────────
+  // ── Section shell ────────────────────────────────────────────────────────────
   section: {
     marginTop: Space[8],
   },
 
-  // ── Featured card ────────────────────────────────────────────────────────
+  // ── Featured card ────────────────────────────────────────────────────────────
   featCard: {
     marginHorizontal: Space.screenH,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    height: 260,
-    backgroundColor: Colors.surfaceAlt,
-    ...Shadow.lg,
+    borderRadius:     Radius.lg,
+    overflow:         'hidden',
+    height:           260,
+    backgroundColor:  Colors.surfaceDeep,
+    // No shadow — spec A3: depth through tone, not elevation
   },
   featImage: {
-    width: '100%',
+    width:  '100%',
     height: '100%',
   },
   featBadge: {
-    position: 'absolute',
-    top: Space[3],
-    left: Space[3],
-    backgroundColor: Colors.danger,
-    borderRadius: Radius.xs,
-    paddingVertical: 3,
+    position:          'absolute',
+    top:               Space[3],
+    left:              Space[3],
+    backgroundColor:   Colors.accentTint,
+    borderRadius:      Radius.xs,
+    paddingVertical:   3,
     paddingHorizontal: Space[2],
+    borderWidth:       0.5,
+    borderColor:       Colors.accent,
   },
   featBadgeText: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
+    ...Type.label,
+    color:         Colors.accent,
     letterSpacing: 0.4,
+    textTransform: 'none',
   },
   featFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: Space[4],
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    position:       'absolute',
+    bottom:         0,
+    left:           0,
+    right:          0,
+    padding:        Space[4],
+    flexDirection:  'row',
+    alignItems:     'flex-end',
     justifyContent: 'space-between',
   },
   featFooterLeft: {
-    flex: 1,
-    gap: 3,
+    flex:         1,
+    gap:          3,
     paddingRight: Space[3],
   },
   featBrand: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.55)',
+    ...Type.label,
+    color:         'rgba(255,255,255,0.50)',
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
   },
   featName: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+    fontFamily:    FontFamily.serif,
+    fontSize:      18,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
+    letterSpacing: -0.4,
+    lineHeight:    22,
   },
   featPriceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space[2],
-    marginTop: 2,
+    alignItems:    'center',
+    gap:           Space[2],
+    marginTop:     2,
   },
   featPrice: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
+    fontFamily:    FontFamily.serif,
+    fontSize:      17,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
+    letterSpacing: -0.3,
   },
   featWas: {
-    fontSize: FontSize.sm,
-    color: 'rgba(255,255,255,0.38)',
+    ...Type.caption,
+    color:              'rgba(255,255,255,0.38)',
     textDecorationLine: 'line-through',
   },
-  featViewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.pill,
-    paddingVertical: 7,
-    paddingHorizontal: Space[3],
-  },
-  featViewBtnText: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    color: '#0A0A0A',
+  // Text-link CTA — no pill
+  featLink: {
+    ...Type.bodyStrong,
+    color:             'rgba(255,255,255,0.80)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.30)',
+    paddingBottom:     1,
   },
 
-  // ── Compositional divider — editorial breath ──────────────────────────────
+  // ── Hairline divider ────────────────────────────────────────────────────────
   divider: {
     marginHorizontal: Space.screenH,
-    marginTop: Space[6],
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.line,
+    marginTop:        Space[8],
+    height:           StyleSheet.hairlineWidth,
+    backgroundColor:  Colors.rule,
   },
 
-  // ── Flash Deals shelf ────────────────────────────────────────────────────
+  // ── Flash Deals shelf ────────────────────────────────────────────────────────
   shelfSection: {
-    marginTop: Space[6],
+    marginTop: Space[8],
   },
   shelfHead: {
     paddingHorizontal: Space.screenH,
-    marginBottom: Space[4],
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
+    marginBottom:      Space[5],
+    flexDirection:     'row',
+    alignItems:        'baseline',
+    justifyContent:    'space-between',
   },
+  // Serif title per spec A7 section headers
   shelfTitle: {
-    fontSize: FontSize['2xl'],
-    fontWeight: FontWeight.bold,
+    ...Type.title,
     color: Colors.ink1,
-    letterSpacing: -0.9,
   },
   seeAll: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.ink3,
+    ...Type.caption,
+    color:             Colors.ink3,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.ink4,
+    paddingBottom:     1,
   },
   shelfRail: {
     paddingHorizontal: Space.screenH,
-    paddingBottom: Space[1],
-    gap: Space[3],
-    alignItems: 'center',
+    paddingBottom:     Space[2],
+    gap:               Space[4],
+    alignItems:        'flex-start',   // was 'center' — caused top-misaligned mixed heights
   },
 
-  // ── Editorial break ──────────────────────────────────────────────────────
+  // ── Editorial card ──────────────────────────────────────────────────────────
   editCard: {
     marginHorizontal: Space.screenH,
-    backgroundColor: '#0E0E0E',
-    borderRadius: Radius.lg,
-    flexDirection: 'row',
-    height: 240,
-    overflow: 'hidden',
-    ...Shadow.lg,
+    backgroundColor:  Colors.ink1,
+    borderRadius:     Radius.lg,
+    flexDirection:    'row',
+    height:           220,
+    overflow:         'hidden',
+    // No shadow — spec A3
   },
   editLeft: {
-    flex: 1,
-    padding: Space[5],
+    flex:           1,
+    padding:        Space[5],
     justifyContent: 'space-between',
   },
   editEyebrow: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: 'rgba(255,255,255,0.25)',
-    letterSpacing: 1.6,
+    ...Type.label,
+    color:         'rgba(255,255,255,0.28)',
+    letterSpacing: 1.8,
   },
   editHeadline: {
-    fontSize: 24,
-    fontWeight: FontWeight.semibold,
-    color: '#FFFFFF',
-    letterSpacing: -0.8,
-    lineHeight: 29,
-    flex: 1,
-    paddingTop: Space[3],
+    fontFamily:    FontFamily.serifItalic,
+    fontSize:      22,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
+    letterSpacing: -0.6,
+    lineHeight:    27,
+    flex:          1,
+    paddingTop:    Space[3],
   },
   editCTA: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    alignSelf: 'flex-start',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.35)',
-    paddingBottom: 3,
-  },
-  editCTAText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: 'rgba(255,255,255,0.85)',
-    letterSpacing: 0.1,
+    ...Type.bodyStrong,
+    color:             'rgba(255,255,255,0.75)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.28)',
+    paddingBottom:     2,
+    alignSelf:         'flex-start',
   },
   editImgCol: {
-    width: 140,
+    width:    130,
     position: 'relative',
     overflow: 'hidden',
   },
   editImg: {
-    width: '100%',
+    width:  '100%',
     height: '100%',
   },
 });
