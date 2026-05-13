@@ -12,3 +12,4 @@ export { SearchBar } from './SearchBar';
 export { EmptyState } from './EmptyState';
 export { ErrorBanner } from './ErrorBanner';
 export { Skeleton, SkeletonRow } from './Skeleton';
+export { FloatingLabelInput } from './FloatingLabelInput';
