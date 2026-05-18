@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -19,19 +19,7 @@ import { FontFamily } from '../theme/fonts';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
-
-type Profile = {
-  CustomerProfileCode: number;
-  CustomerName: string;
-  Address: string;
-  StreetName: string;
-  CityName: string;
-  Zipcode: number;
-  CountryCode: number;
-  MobileNumber: number;
-  EmailID: string;
-  CartDetailsCount: number;
-};
+import { useSession } from '../hooks/useSession';
 
 type ProfileScreenProps = {
   navigation: {
@@ -144,44 +132,22 @@ const sectionStyles = StyleSheet.create({
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
-  const insets = useSafeAreaInsets();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const insets  = useSafeAreaInsets();
+  const session = useSession();
 
-  const headerAnim  = useEntrance(0);
-  const infoAnim    = useEntrance(80);
-  const addressAnim = useEntrance(160);
+  const headerAnim   = useEntrance(0);
+  const infoAnim     = useEntrance(80);
+  const addressAnim  = useEntrance(160);
   const activityAnim = useEntrance(240);
-  const logoutAnim  = useEntrance(300);
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-      if (userData) {
-        const parsed = JSON.parse(userData);
-        setProfile({
-          CustomerProfileCode: parsed.CustomerProfileCode,
-          CustomerName:        parsed.CustomerName,
-          Address:             parsed.Address,
-          StreetName:          parsed.StreetName,
-          CityName:            parsed.CityName,
-          Zipcode:             parsed.Zipcode,
-          CountryCode:         parsed.CountryCode,
-          MobileNumber:        parsed.MobileNumber,
-          EmailID:             parsed.EmailID,
-          CartDetailsCount:    parsed.CartDetailsCount,
-        });
-      }
-    };
-    fetchProfile();
-  }, []);
+  const logoutAnim   = useEntrance(300);
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem(STORAGE_KEYS.userData);
     navigation.navigate('Login');
   };
 
-  const displayName  = profile?.CustomerName || '—';
-  const displayEmail = profile?.EmailID || '—';
+  const displayName  = session?.name  || '—';
+  const displayEmail = session?.email || '—';
 
   return (
     <View style={styles.root}>
@@ -211,7 +177,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <ProfileRow label="Name"   value={displayName} />
           <ProfileRow
             label="Mobile"
-            value={profile?.MobileNumber ? String(profile.MobileNumber) : '—'}
+            value={session?.mobile || '—'}
           />
           <ProfileRow label="Email"  value={displayEmail} isLast />
         </Animated.View>
@@ -221,12 +187,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <SectionLabel>ADDRESS</SectionLabel>
           <ProfileRow
             label="Street"
-            value={profile?.Address || profile?.StreetName || '—'}
+            value={session?.address || session?.streetName || '—'}
           />
-          <ProfileRow label="City"     value={profile?.CityName || '—'} />
+          <ProfileRow label="City"     value={session?.city || '—'} />
           <ProfileRow
             label="Postcode"
-            value={profile?.Zipcode ? String(profile.Zipcode) : '—'}
+            value={session?.postcode || '—'}
             isLast
           />
         </Animated.View>

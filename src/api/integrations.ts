@@ -1,24 +1,32 @@
 import axiosInstance from "./axiosInstance";
-import { endpoints } from './endpoints'
-import { createCustomerInterface , PostCartSaveInterface , postLoginInterface , postCreateDeliveryAddressInterface , postUpdateDeliveryAddressInterface , postPlacedMultipleOrderInterface , postPlacedSingleOrderInterface } from "./interfaces";
+import { endpoints } from './endpoints';
+import {
+  createCustomerInterface,
+  PostCartSaveInterface,
+  postLoginInterface,
+  postCreateDeliveryAddressInterface,
+  postUpdateDeliveryAddressInterface,
+  postPlacedMultipleOrderInterface,
+  postPlacedSingleOrderInterface,
+  OrderHistoryRequest,
+  OrderDetailRequest,
+  CartQuantityRequest,
+  deleteCartInterface,
+} from "./interfaces";
 
 const getAllProducts = async () => {
   try {
-    const response = await axiosInstance.get(
-      `${endpoints.allProducts}`
-    );
+    const response = await axiosInstance.get(endpoints.allProducts);
     return response.data;
   } catch (error) {
-    console.error("Error fetching brands: ", error);
+    console.error("Error fetching products: ", error);
     throw error;
   }
 };
 
 const getBrands = async () => {
   try {
-    const response = await axiosInstance.get(
-      `${endpoints.getBrands}`
-    );
+    const response = await axiosInstance.get(endpoints.getBrands);
     return response.data;
   } catch (error) {
     console.error("Error fetching brands: ", error);
@@ -28,9 +36,7 @@ const getBrands = async () => {
 
 const getCategories = async () => {
   try {
-    const response = await axiosInstance.get(
-      `${endpoints.getCategory}`
-    );
+    const response = await axiosInstance.get(endpoints.getCategory);
     return response.data;
   } catch (error) {
     console.error("Error fetching categories: ", error);
@@ -38,7 +44,7 @@ const getCategories = async () => {
   }
 };
 
-const getSubCategories = async (categoryCode:string) => {
+const getSubCategories = async (categoryCode: string) => {
   try {
     const response = await axiosInstance.get(
       `${endpoints.getSubCategory}?Categorycode=${categoryCode}`
@@ -86,7 +92,7 @@ const selectProduct = async (inventorycode: string) => {
   }
 };
 
-const searchProducts = async (filterstring: string,category_id:string) => {
+const searchProducts = async (filterstring: string, category_id: string) => {
   try {
     const response = await axiosInstance.get(
       `${endpoints.searchProduct}?filterstring=${filterstring}&Category_Id=${category_id}`
@@ -112,10 +118,7 @@ const getSavedCartItems = async (customerprofilecode: number) => {
 
 const postCreateCustomer = async (data: createCustomerInterface) => {
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postCreateCustomer}`,
-      data
-    );
+    const response = await axiosInstance.post(endpoints.postCreateCustomer, data);
     return response.data;
   } catch (error) {
     console.error("Error creating customer: ", error);
@@ -125,10 +128,7 @@ const postCreateCustomer = async (data: createCustomerInterface) => {
 
 const postSaveCartItems = async (data: PostCartSaveInterface) => {
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postCartSaveItem}`,
-      data
-    );
+    const response = await axiosInstance.post(endpoints.postCartSaveItem, data);
     return response.data;
   } catch (error) {
     console.error("Error saving cart items: ", error);
@@ -138,10 +138,7 @@ const postSaveCartItems = async (data: PostCartSaveInterface) => {
 
 const loginCustomer = async (data: postLoginInterface) => {
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postLoginCustomer}`,
-      data
-    );
+    const response = await axiosInstance.post(endpoints.postLoginCustomer, data);
     return response.data;
   } catch (error) {
     console.error("Error logging in: ", error);
@@ -150,23 +147,20 @@ const loginCustomer = async (data: postLoginInterface) => {
 };
 
 const quantityIncrement = async (cartdetailscode: number, inventory_id: number) => {
+  const payload: CartQuantityRequest = { CartDetailsCode: cartdetailscode, Inventory_Id: inventory_id };
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.quantityIncrement}`,
-      { CartDetailsCode: cartdetailscode, Inventory_Id: inventory_id }
-    );
+    const response = await axiosInstance.post(endpoints.quantityIncrement, payload);
     return response.data;
   } catch (error) {
     console.error("Error incrementing quantity: ", error);
     throw error;
   }
 };
+
 const quantityDecrement = async (cartdetailscode: number, inventory_id: number) => {
+  const payload: CartQuantityRequest = { CartDetailsCode: cartdetailscode, Inventory_Id: inventory_id };
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.quantityDecrement}`,
-      { CartDetailsCode: cartdetailscode, Inventory_Id: inventory_id }
-    );
+    const response = await axiosInstance.post(endpoints.quantityDecrement, payload);
     return response.data;
   } catch (error) {
     console.error("Error decrementing quantity: ", error);
@@ -176,10 +170,7 @@ const quantityDecrement = async (cartdetailscode: number, inventory_id: number) 
 
 const postCreateDeliveryAddress = async (data: postCreateDeliveryAddressInterface) => {
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postCreateDeliveryAddress}`,
-      data
-    );
+    const response = await axiosInstance.post(endpoints.postCreateDeliveryAddress, data);
     return response.data;
   } catch (error) {
     console.error("Error creating delivery address: ", error);
@@ -189,10 +180,7 @@ const postCreateDeliveryAddress = async (data: postCreateDeliveryAddressInterfac
 
 const postDeleteDeliveryAddress = async (OrderDeliveryAddressCode: number) => {
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postDeleteDeliveryAddress}`,
-      { OrderDeliveryAddressCode: OrderDeliveryAddressCode }
-    );
+    const response = await axiosInstance.post(endpoints.postDeleteDeliveryAddress, { OrderDeliveryAddressCode });
     return response.data;
   } catch (error) {
     console.error("Error deleting delivery address: ", error);
@@ -226,10 +214,7 @@ const getDeliveryAddressForUpdate = async (orderdeliveryaddresscode: number, cus
 
 const postUpdateDeliveryAddress = async (data: postUpdateDeliveryAddressInterface) => {
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postUpdateDeliveryAddress}`,
-      data
-    );
+    const response = await axiosInstance.post(endpoints.postUpdateDeliveryAddress, data);
     return response.data;
   } catch (error) {
     console.error("Error updating delivery address: ", error);
@@ -239,22 +224,17 @@ const postUpdateDeliveryAddress = async (data: postUpdateDeliveryAddressInterfac
 
 const postPlacedSingleOrder = async (data: postPlacedSingleOrderInterface) => {
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postPlacedSingleOrder}`,
-      data
-    );
+    const response = await axiosInstance.post(endpoints.postPlacedSingleOrder, data);
     return response.data;
   } catch (error) {
     console.error("Error placing single order: ", error);
     throw error;
   }
 };
+
 const postPlacedMultipleOrder = async (data: postPlacedMultipleOrderInterface) => {
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postPlacedMultipleOrder}`,
-      data
-    );
+    const response = await axiosInstance.post(endpoints.postPlacedMultipleOrder, data);
     return response.data;
   } catch (error) {
     console.error("Error placing multiple order: ", error);
@@ -263,14 +243,9 @@ const postPlacedMultipleOrder = async (data: postPlacedMultipleOrderInterface) =
 };
 
 const postCnfOrderDetail = async (OrderMasterCode: string, CustomerProfileCode: number) => {
+  const payload: OrderDetailRequest = { OrderNumber: OrderMasterCode, CustomerProfileCode };
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postCnfOrderDetail}`,
-      {
-        "OrderNumber": OrderMasterCode, 
-        "CustomerProfileCode": CustomerProfileCode
-      }
-    );
+    const response = await axiosInstance.post(endpoints.postCnfOrderDetail, payload);
     return response.data;
   } catch (error) {
     console.error("Error confirming order detail: ", error);
@@ -278,12 +253,10 @@ const postCnfOrderDetail = async (OrderMasterCode: string, CustomerProfileCode: 
   }
 };
 
-const postDeleteCartItem = async (cartdetailscode: string) => {
+const postDeleteCartItem = async (cartdetailscode: number) => {
+  const payload: deleteCartInterface = { CartDetailsCode: cartdetailscode };
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.deleteCartItem}`,
-      { CartDetailsCode: cartdetailscode }
-    );
+    const response = await axiosInstance.post(endpoints.deleteCartItem, payload);
     return response.data;
   } catch (error) {
     console.error("Error deleting cart item: ", error);
@@ -292,11 +265,9 @@ const postDeleteCartItem = async (cartdetailscode: string) => {
 };
 
 const postOrderHistory = async (customerprofilecode: number) => {
+  const payload: OrderHistoryRequest = { CustomerProfileCode: customerprofilecode };
   try {
-    const response = await axiosInstance.post(
-      `${endpoints.postOrderHistoryDetail}`,
-      { CustomerProfileCode: customerprofilecode }
-    );
+    const response = await axiosInstance.post(endpoints.postOrderHistoryDetail, payload);
     return response.data;
   } catch (error) {
     console.error("Error fetching order history: ", error);
@@ -312,22 +283,25 @@ const postOrderHistory = async (customerprofilecode: number) => {
 //   POST /removeFromWishlist  { CustomerProfileCode, WishlistItemCode }
 // All three should return the standard { statusCode, result, userMessage } envelope.
 
-const getWishlist = async (_customerprofilecode: number): Promise<never> => {
-  throw new Error('getWishlist: real endpoint not yet available');
+const getWishlist = async (_customerprofilecode: number) => {
+  // TODO: real endpoint not yet available — returns empty result until wired
+  return { statusCode: 0, result: [], userMessage: '' };
 };
 
 const addToWishlist = async (
   _customerprofilecode: number,
   _inventory_id: number,
-): Promise<never> => {
-  throw new Error('addToWishlist: real endpoint not yet available');
+) => {
+  // TODO: real endpoint not yet available — no-op until wired
+  return { statusCode: 0, result: null, userMessage: '' };
 };
 
 const removeFromWishlist = async (
   _customerprofilecode: number,
   _wishlistItemCode: number,
-): Promise<never> => {
-  throw new Error('removeFromWishlist: real endpoint not yet available');
+) => {
+  // TODO: real endpoint not yet available — no-op until wired
+  return { statusCode: 0, result: null, userMessage: '' };
 };
 
 export {

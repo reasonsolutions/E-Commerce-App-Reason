@@ -24,7 +24,7 @@ These rules override all other instructions.
 
 ## Current Project Phase
 
-**Phase: Premium UX Refinement — Phase 2 in progress (5 of 11 screens frozen)**
+**Phase: Premium UX Refinement — Phase 3 in progress + Phase 4A consolidation complete**
 
 All foundational engineering phases are complete:
 
@@ -33,6 +33,7 @@ All foundational engineering phases are complete:
 - **Cart synchronization cleanup** — phantom writes eliminated, `CartContext` rewritten to server-authoritative integer count, `CartScreen` mutations wired to real server APIs
 - **Design-system foundations stabilized** — `Colors.star` token added, `Price` currency corrected, `useEntrance` extracted to shared hook, dead component variants deprecated
 - **Phase 2 premium redesign** — Login, Home, ProductScreen, OrderSuccessScreen, CartScreen redesigned and frozen. Motion vocabulary, font system, and haptic infrastructure established.
+- **Phase 4A consolidation** — utility extraction (`formatDate`, `orderStatus`), Order domain model + adapter, `UserSession` domain model + `sessionAdapter` + `useSession`, `DarkHeader` component extracted, `FadeImage` component extracted, `integrations.ts` cleanup, `postDeleteCartItem` numeric typing fix, wishlist stubs changed from throws to empty-result envelopes.
 
 **Frozen screens (define the visual standard — do not modify):**
 Login · Home · ProductScreen · OrderSuccessScreen · CartScreen
@@ -41,12 +42,13 @@ Login · Home · ProductScreen · OrderSuccessScreen · CartScreen
 ResultScreen → WishlistScreen → OrderHistoryScreen → ProfileScreen → AddressScreen → OrderDetailScreen
 
 See `docs/project-modernization-audit.md §16` for full Phase 2 implementation detail, frozen patterns, and binding rules.
+See `docs/project-modernization-audit.md §17` for Phase 4A consolidation detail, remaining DTO leakage areas, and recommended next phase.
 
 ---
 
 ## Canonical Documentation
 
-- **`docs/project-modernization-audit.md`** — primary engineering blueprint. Records all architectural decisions, patterns established, remaining debt, Phase 2 frozen patterns, and the forward plan. Use this as the ground-truth reference before making any structural change. **§16 documents all Phase 2 implementation decisions and binding patterns for Phase 3.**
+- **`docs/project-modernization-audit.md`** — primary engineering blueprint. Records all architectural decisions, patterns established, remaining debt, Phase 2 frozen patterns, and the forward plan. Use this as the ground-truth reference before making any structural change. **§16 documents all Phase 2 implementation decisions and binding patterns for Phase 3. §17 documents Phase 4A consolidation work, remaining DTO leakage, remaining session read sites, and recommended Phase 4B.**
 - **`docs/premium-ux-refinement-spec.md`** — screen-by-screen premium UX spec. Part B status table shows which screens are frozen vs pending. Use as the design brief for Phase 3 work.
 - **`docs/ui-audit.md`** — historical reference only. Captures the original state assessment before modernization. Superseded by the modernization audit.
 
@@ -111,10 +113,13 @@ There is no Vite dev server — this is a React Native app using Metro bundler.
 │   ├── api/
 │   │   ├── axiosInstance.ts       # Axios base URL + timeout config
 │   │   ├── services.ts            # Mock/real router — all screens import from here
-│   │   ├── integrations.ts        # Real API call implementations
-│   │   ├── interfaces.ts          # TypeScript interfaces for all API types
+│   │   ├── integrations.ts        # Real API call implementations (cleaned Phase 4A)
+│   │   ├── interfaces.ts          # TypeScript interfaces — API DTOs + domain models
 │   │   ├── endpoints.js           # API endpoint string constants
 │   │   ├── url.js                 # Base URL constant
+│   │   ├── adapters/
+│   │   │   ├── orderAdapter.ts    # DTO → Order / OrderDetail / DeliveryAddress domain
+│   │   │   └── sessionAdapter.ts  # DTO → UserSession domain (Phase 4A)
 │   │   └── mock/                  # Mock data and mock service implementations
 │   ├── components/
 │   │   ├── ui/                    # Presentational primitives (no side effects)
@@ -125,16 +130,24 @@ There is no Vite dev server — this is a React Native app using Metro bundler.
 │   │   └── CartContext.js         # Single cartCount integer — server-authoritative
 │   ├── hooks/
 │   │   ├── useAsyncState.ts       # Cancellation-safe async state hook
-│   │   └── useEntrance.ts         # Shared entrance animation hook
+│   │   ├── useEntrance.ts         # Shared entrance animation hook
+│   │   ├── useHaptic.ts           # Haptic feedback wrapper (Phase 2)
+│   │   ├── useTactile.ts          # Press-scale animator (Phase 2)
+│   │   └── useSession.ts          # AsyncStorage session read → UserSession | null (Phase 4A)
 │   ├── navigation/
 │   │   └── AppNavigator.js        # Stack navigator, 11 routes, initial route: Login
 │   ├── screens/                   # 11 screens
 │   ├── theme/
 │   │   ├── tokens.ts              # Colors, Space, Radius, FontSize, FontWeight, Shadow, ZIndex
 │   │   ├── typography.ts          # Type.* preset system
+│   │   ├── fonts.ts               # FontFamily constants (serif/mono/sans) — Phase 2
+│   │   ├── motion.ts              # Motion vocabulary (Tap/Settle/Carry) — Phase 2
 │   │   └── index.ts              # Re-export barrel
 │   ├── config/
 │   │   └── storageKeys.ts         # STORAGE_KEYS constants — use instead of raw strings
+│   ├── utils/
+│   │   ├── formatDate.ts          # ISO date → display string (Phase 4A)
+│   │   └── orderStatus.ts         # OrderStatusCode → OrderStatus label (Phase 4A)
 │   └── data/
 │       └── mockData.js            # Local fallback data
 ├── android/
@@ -266,6 +279,8 @@ Key roles for premium screens:
 | `SearchBar` | Active |
 | `Price` | Active — currency `$`, `size` prop (sm/base/lg/xl). Use for all light-background price display. Do not use in hero/overlay contexts where white text is required — those remain inline. |
 | `FloatingLabelInput` | **NEW (Phase 2)** — static-label underline input. Label always visible at `Type.label` scale. Only underline animates on focus (1→2px, Tap curve). Used in Login; safe for AddressScreen form fields. |
+| `DarkHeader` | **NEW (Phase 4A)** — dark editorial header primitive. Props: `eyebrow`, `title`, `titleFont` (`serif`\|`mono`), `onBack`, `rightSlot`, `paddingTop`. Used by WishlistScreen, OrderHistoryScreen, OrderDetailScreen, ResultScreen. |
+| `FadeImage` | **NEW (Phase 4A)** — `Animated.Image` with opacity fade-in on load. Props: `uri`, `width`, `height`, `borderRadius`, `resizeMode`, `style`, `imageStyle`. Uses `Motion.duration.settle`. Used by WishlistScreen, OrderHistoryScreen. |
 | `Rating` | **Deprecated** — `@deprecated` JSDoc present. Token violation fixed (`Colors.star`). Adopt before use. |
 | `SectionLabel` | **Deprecated** — `@deprecated` JSDoc present. Zero screen usage. |
 
@@ -351,12 +366,15 @@ These are documented and intentionally not addressed yet. Do not fix them as sid
 |---|---|
 | Cold-start cart badge zero | `cartCount` starts at 0; only populated after `CartScreen` is visited. Fix: fetch cart count in the post-login flow. Tracked as P1-01 in audit doc. |
 | Quantity mutation single-unit | `quantityIncrement`/`quantityDecrement` adjust by exactly one unit per call. CartScreen calls once per tap regardless of delta. Tracked as P1-02. |
-| Wishlist backend | `getWishlist`/`removeFromWishlist` use mock data. Real endpoints not yet integrated. |
-| Session/AsyncStorage centralization | Each screen reads `STORAGE_KEYS.userData` independently. A session context would centralize this. |
+| Wishlist backend | `getWishlist`/`removeFromWishlist` use mock data. Real endpoints not yet integrated. In production mode stubs now return empty-result envelopes (no longer throw) — resolved Phase 4A. |
+| Session reads not yet using `useSession` | AddressScreen, OrderHistoryScreen, OrderDetailScreen, WishlistScreen, CartScreen still read `STORAGE_KEYS.userData` directly. Adopt `useSession` per-screen during Phase 3 redesign. ProfileScreen already migrated (Phase 4A). |
+| DTO field names in screen code | AddressScreen, WishlistScreen, CartScreen still reference raw backend field names. Add domain adapters as each screen enters Phase 3 scope. See audit §17.8. |
+| API response types are `any` | `axiosInstance` responses are untyped. Incremental hardening planned in Phase 4B. See audit §17.7. |
 | AddressScreen fetch error state | Missing `ErrorState` for delivery address fetch failure. Will be addressed in Phase 3 (B7). |
 | Navigation prop typing | Most screens use `any`-typed navigation props. Should be typed with `StackNavigationProp` generics. |
 | Login 55KB SVG | **RESOLVED Phase 2.** WebView eliminated. Hero is now pure React Native gradient composition. |
 | `Type.*` adoption | **RESOLVED Phase 2.** Broadly adopted across all 5 frozen screens. Remaining Phase 3 screens still use inline token values — adopt during their redesign. |
+| `postDeleteCartItem` string type | **RESOLVED Phase 4A.** Parameter corrected to `number`. `String()` cast removed from CartScreen call site. |
 
 ---
 

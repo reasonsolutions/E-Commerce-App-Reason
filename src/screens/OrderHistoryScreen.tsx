@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,17 +16,18 @@ import { postOrderHistory } from '../api/services';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useFocusEffect } from '@react-navigation/native';
-import { EmptyState, StatusBadge, BottomNavBar } from '../components/ui';
+import { EmptyState, StatusBadge, BottomNavBar, DarkHeader, FadeImage } from '../components/ui';
 import { ErrorState } from '../components/system';
-import type { OrderStatus } from '../components/ui';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
+import { formatDate } from '../utils/formatDate';
+import { orderStatusLabel } from '../utils/orderStatus';
+import type { Order } from '../api/interfaces';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -37,60 +38,23 @@ type OrderHistoryScreenProps = {
   navigation: NavigationProp;
 };
 
-type OrderItem = {
-  Inventory_Id: number;
-  Item_Id: number;
-  Variant: string;
-  Name: string;
-  Images: string;
-  Quantity: number;
-  Amount: number;
-  OrderStatus: number;
-  Brand_Id: number;
-  Brand_Name: string;
-  OrderNumber?: string;
-  OrderedDate?: string;
-};
-
-const STATUS_MAP: Record<number, OrderStatus> = {
-  1: 'Confirmed',
-  2: 'Shipped',
-  3: 'Delivered',
-  4: 'Cancelled',
-};
-
 // 4:5 portrait — canonical card ratio
 const IMG_W = 64;
 const IMG_H = 80;
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 // ── Single order row ──────────────────────────────────────────────────────────
 const OrderRow: React.FC<{
-  item: OrderItem;
-  onPress: (item: OrderItem) => void;
+  item: Order;
+  onPress: (item: Order) => void;
   delay: number;
   isLast: boolean;
 }> = ({ item, onPress, delay, isLast }) => {
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const imgOpacity = useRef(new Animated.Value(0)).current;
-
-  const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.settle,
-      easing:          Motion.easing.out,
-      useNativeDriver: true,
-    }).start();
-  }, [imgOpacity]);
-
-  const status     = STATUS_MAP[item.OrderStatus];
-  const firstImage = item.Images.split(';')[0] || '';
+  const status     = orderStatusLabel(item.status);
+  const firstImage = item.images[0] ?? '';
 
   return (
     <Animated.View style={entrance}>
@@ -102,31 +66,29 @@ const OrderRow: React.FC<{
           onPress={() => { haptic.light(); onPress(item); }}
         >
           {/* Portrait image */}
-          <View style={styles.imgWrap}>
-            <Animated.Image
-              source={{ uri: firstImage }}
-              style={[styles.img, { opacity: imgOpacity }]}
-              resizeMode="cover"
-              onLoad={onLoad}
-            />
-          </View>
+          <FadeImage
+            uri={firstImage}
+            width={IMG_W}
+            height={IMG_H}
+            borderRadius={Radius.sm}
+          />
 
           {/* Content */}
           <View style={styles.content}>
             {/* Top — brand + name + amount */}
             <View style={styles.contentTop}>
               <View style={styles.metaLeft}>
-                {item.Brand_Name ? (
-                  <Text style={styles.brand}>{item.Brand_Name.toUpperCase()}</Text>
+                {item.brand ? (
+                  <Text style={styles.brand}>{item.brand.toUpperCase()}</Text>
                 ) : null}
-                <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
-                {item.Variant ? (
-                  <Text style={styles.variant}>{item.Variant}</Text>
+                <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+                {item.variant ? (
+                  <Text style={styles.variant}>{item.variant}</Text>
                 ) : null}
               </View>
               {/* Amount — right-aligned serif */}
               <View style={styles.amountBlock}>
-                <Text style={styles.amount}>${item.Amount.toFixed(2)}</Text>
+                <Text style={styles.amount}>${item.amount.toFixed(2)}</Text>
                 <Icon name="chevron-forward" size={13} color={Colors.ink5} />
               </View>
             </View>
@@ -134,11 +96,11 @@ const OrderRow: React.FC<{
             {/* Bottom — order meta + status */}
             <View style={styles.contentBottom}>
               <View style={styles.orderMeta}>
-                {item.OrderNumber ? (
-                  <Text style={styles.orderNumber}>#{item.OrderNumber}</Text>
+                {item.orderNumber ? (
+                  <Text style={styles.orderNumber}>#{item.orderNumber}</Text>
                 ) : null}
-                {item.OrderedDate ? (
-                  <Text style={styles.orderDate}>{formatDate(item.OrderedDate)}</Text>
+                {item.orderedDate ? (
+                  <Text style={styles.orderDate}>{formatDate(item.orderedDate)}</Text>
                 ) : null}
               </View>
               {status ? <StatusBadge status={status} /> : null}
@@ -157,7 +119,7 @@ const OrderRow: React.FC<{
 const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const { data: orders, loading, isError, error, run } = useAsyncState<OrderItem[]>([]);
+  const { data: orders, loading, isError, error, run } = useAsyncState<Order[]>([]);
 
   const fetchOrders = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -165,8 +127,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
         if (!userData) return [];
         const user = JSON.parse(userData);
-        const response = await postOrderHistory(user.CustomerProfileCode);
-        return response.result.OrdHistoryDetails || [];
+        return postOrderHistory(user.CustomerProfileCode);
       }, cancelled),
     [run],
   );
@@ -188,7 +149,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   const orderList  = orders ?? [];
   const orderCount = orderList.length;
 
-  const renderItem = ({ item, index }: ListRenderItemInfo<OrderItem>) => (
+  const renderItem = ({ item, index }: ListRenderItemInfo<Order>) => (
     <OrderRow
       item={item}
       onPress={(order) => navigation.navigate('OrderDetails', { orderItem: order })}
@@ -232,7 +193,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
       <FlatList
         data={orderList}
         renderItem={renderItem}
-        keyExtractor={(item, index) => `${item.Inventory_Id}-${index}`}
+        keyExtractor={(item, index) => `${item.inventoryId}-${index}`}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -252,30 +213,12 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
 
-      {/* Dark editorial header — matches WishlistScreen/ResultScreen pattern */}
-      <View style={[styles.header, { paddingTop: insets.top + Space[2] }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Icon name="chevron-back" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.headerTitleBlock}>
-            <Text style={styles.headerEyebrow}>YOUR ORDERS</Text>
-            <Text style={styles.headerTitle}>
-              {orderCount === 0
-                ? 'History'
-                : `${orderCount} ${orderCount === 1 ? 'order' : 'orders'}`}
-            </Text>
-          </View>
-
-          <View style={styles.headerRight} />
-        </View>
-        <View style={styles.headerSeam} />
-      </View>
+      <DarkHeader
+        eyebrow="YOUR ORDERS"
+        title={orderCount === 0 ? 'History' : `${orderCount} ${orderCount === 1 ? 'order' : 'orders'}`}
+        onBack={() => navigation.goBack()}
+        paddingTop={insets.top + Space[2]}
+      />
 
       {renderBody()}
 
@@ -291,49 +234,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.surface,
-  },
-
-  // ── Header ───────────────────────────────────────────────────────────────────
-  header: {
-    backgroundColor: Colors.ink1,
-    paddingHorizontal: Space.screenH,
-    paddingBottom: Space[4],
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-  },
-  backBtn: {
-    width:  36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems:     'center',
-  },
-  headerTitleBlock: {
-    flex: 1,
-    paddingHorizontal: Space[3],
-    gap: 3,
-  },
-  headerEyebrow: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.30)',
-  },
-  headerTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      26,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.5,
-    lineHeight:    26 * 1.1,
-  },
-  headerRight: {
-    width: 36,
-  },
-  headerSeam: {
-    height:          StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginTop:       Space[4],
-    marginHorizontal: -Space.screenH,
   },
 
   // ── List ──────────────────────────────────────────────────────────────────────
@@ -356,20 +256,6 @@ const styles = StyleSheet.create({
   divider: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
-  },
-
-  // ── Image — 4:5 portrait ──────────────────────────────────────────────────────
-  imgWrap: {
-    width:           IMG_W,
-    height:          IMG_H,
-    borderRadius:    Radius.sm,
-    backgroundColor: Colors.surfaceDeep,
-    overflow:        'hidden',
-    flexShrink:      0,
-  },
-  img: {
-    width:  '100%',
-    height: '100%',
   },
 
   // ── Content ───────────────────────────────────────────────────────────────────

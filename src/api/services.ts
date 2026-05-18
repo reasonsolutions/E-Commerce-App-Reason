@@ -15,6 +15,8 @@
 import { MOCK_MODE } from '../config/env';
 import * as real from './integrations';
 import * as mock from './mock/mockIntegrations';
+import { adaptOrder, adaptOrderDetailResponse } from './adapters/orderAdapter';
+import type { Order, OrderDetailResponse } from './interfaces';
 
 const api = MOCK_MODE ? mock : real;
 
@@ -49,8 +51,19 @@ export const postUpdateDeliveryAddress   = api.postUpdateDeliveryAddress;
 // ─── Orders ───────────────────────────────────────────────────────────────────
 export const postPlacedSingleOrder   = api.postPlacedSingleOrder;
 export const postPlacedMultipleOrder = api.postPlacedMultipleOrder;
-export const postCnfOrderDetail      = api.postCnfOrderDetail;
-export const postOrderHistory        = api.postOrderHistory;
+
+export async function postOrderHistory(customerProfileCode: number): Promise<Order[]> {
+  const raw = await api.postOrderHistory(customerProfileCode);
+  return (raw.result?.OrdHistoryDetails ?? []).map(adaptOrder);
+}
+
+export async function postCnfOrderDetail(
+  orderNumber: string,
+  customerProfileCode: number,
+): Promise<OrderDetailResponse> {
+  const raw = await api.postCnfOrderDetail(orderNumber, customerProfileCode);
+  return adaptOrderDetailResponse(raw.result);
+}
 
 // ─── Wishlist ─────────────────────────────────────────────────────────────────
 // TODO: Real endpoints not yet finalized. See integrations.ts for stub signatures.

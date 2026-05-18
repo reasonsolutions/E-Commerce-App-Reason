@@ -4,79 +4,38 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Animated,
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import Icon from 'react-native-vector-icons/Ionicons';
 import { postCnfOrderDetail } from '../api/services';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
-import { Skeleton, SkeletonRow, StatusBadge } from '../components/ui';
+import { Skeleton, SkeletonRow, StatusBadge, DarkHeader } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
-import type { OrderStatus } from '../components/ui';
+import { formatDate } from '../utils/formatDate';
+import { orderStatusLabel } from '../utils/orderStatus';
+import type { OrderDetail, OrderDetailResponse } from '../api/interfaces';
 
 // 4:5 portrait — canonical card ratio
 const IMG_W = 88;
 const IMG_H = 110;
 
-type OrderItem = {
-  Inventory_Id: number;
-  Item_Id: number;
-  Variant: string;
-  Name: string;
-  Images: string;
-  Quantity: number;
-  Amount: number;
-  OrderStatus: number;
-  Brand_Id: number;
-  Brand_Name: string;
-  OrderNumber?: string;
-  OrderDate?: string;
-  CreatedDate?: string;
-};
-
-type DeliveryDetail = {
-  OrderDeliveryAddressCode: number;
-  CustomerName: string;
-  MobileNumber: number;
-  FullAddress: string;
-  CustomerProfileCode: number;
-};
-
-type OrderDetailProps = {
-  OrderDetails: OrderItem[];
-  DeliveryDetail: DeliveryDetail[];
-};
-
 type OrderDetailScreenRouteParams = {
-  orderItem: OrderItem;
+  orderItem: OrderDetail;
 };
 
 type OrderDetailScreenProps = {
   navigation: StackNavigationProp<any>;
 };
 
-const STATUS_MAP: Record<number, OrderStatus> = {
-  1: 'Confirmed',
-  2: 'Shipped',
-  3: 'Delivered',
-  4: 'Cancelled',
-};
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric',
-  });
-}
 
 // ── Flat detail row — label left, value right ────────────────────────────────
 const DetailRow: React.FC<{
@@ -131,10 +90,10 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const insets = useSafeAreaInsets();
   const route  = useRoute<RouteProp<{ params: OrderDetailScreenRouteParams }, 'params'>>();
   const orderItem   = route.params?.orderItem;
-  const orderNumber = orderItem?.OrderNumber;
+  const orderNumber = orderItem?.orderNumber;
 
   const { data: orderDetails, loading, isError, error, run } =
-    useAsyncState<OrderDetailProps>(null);
+    useAsyncState<OrderDetailResponse>(null);
 
   const fetchOrderDetails = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -142,8 +101,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
         if (!userData) throw new Error('Session expired. Please log in again.');
         const user = JSON.parse(userData);
-        const response = await postCnfOrderDetail(String(orderNumber), user.CustomerProfileCode);
-        return response.result;
+        return postCnfOrderDetail(String(orderNumber), user.CustomerProfileCode);
       }, cancelled),
     [run, orderNumber],
   );
@@ -160,28 +118,15 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const orderAnim   = useEntrance(160);
   const deliveryAnim = useEntrance(240);
 
-  // ── Shared header ──────────────────────────────────────────────────────────
   const Header = (
-    <Animated.View
-      style={[styles.header, { paddingTop: insets.top + Space[2] }, headerAnim]}
-    >
-      <View style={styles.headerRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Icon name="chevron-back" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleBlock}>
-          <Text style={styles.headerEyebrow}>YOUR ORDER</Text>
-          <Text style={styles.headerTitle}>
-            {orderNumber ? `#${orderNumber}` : 'Details'}
-          </Text>
-        </View>
-        <View style={styles.headerRight} />
-      </View>
-      <View style={styles.headerSeam} />
+    <Animated.View style={headerAnim}>
+      <DarkHeader
+        eyebrow="YOUR ORDER"
+        title={orderNumber ? `#${orderNumber}` : 'Details'}
+        titleFont="mono"
+        onBack={() => navigation.goBack()}
+        paddingTop={insets.top + Space[2]}
+      />
     </Animated.View>
   );
 
@@ -221,10 +166,10 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     );
   }
 
-  const order    = orderItem ?? orderDetails?.OrderDetails[0];
-  const delivery = orderDetails?.DeliveryDetail[0];
-  const firstImg = order?.Images?.split(';').filter(Boolean)[0] ?? '';
-  const status   = order ? STATUS_MAP[order.OrderStatus] : undefined;
+  const order    = orderItem ?? orderDetails?.orderDetails[0];
+  const delivery = orderDetails?.deliveryDetail[0];
+  const firstImg = order?.images[0] ?? '';
+  const status   = order ? orderStatusLabel(order.status) : undefined;
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (!order || !delivery) {
@@ -293,17 +238,17 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             </View>
           ) : null}
           <View style={styles.productMeta}>
-            {order.Brand_Name ? (
-              <Text style={styles.brand}>{order.Brand_Name.toUpperCase()}</Text>
+            {order.brand ? (
+              <Text style={styles.brand}>{order.brand.toUpperCase()}</Text>
             ) : null}
-            <Text style={styles.productName} numberOfLines={3}>{order.Name}</Text>
-            {order.Variant ? (
-              <Text style={styles.variant}>{order.Variant}</Text>
+            <Text style={styles.productName} numberOfLines={3}>{order.name}</Text>
+            {order.variant ? (
+              <Text style={styles.variant}>{order.variant}</Text>
             ) : null}
             <View style={styles.amountRow}>
-              <Text style={styles.amount}>${order.Amount.toFixed(2)}</Text>
-              {order.Quantity > 1 ? (
-                <Text style={styles.qty}>× {order.Quantity}</Text>
+              <Text style={styles.amount}>${order.amount.toFixed(2)}</Text>
+              {order.quantity > 1 ? (
+                <Text style={styles.qty}>× {order.quantity}</Text>
               ) : null}
             </View>
           </View>
@@ -312,13 +257,13 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         {/* ── Order details section ── */}
         <Animated.View style={[styles.section, orderAnim]}>
           <Text style={styles.sectionEyebrow}>ORDER</Text>
-          {order.OrderNumber ? (
-            <DetailRow label="NUMBER" value={`#${order.OrderNumber}`} />
+          {order.orderNumber ? (
+            <DetailRow label="NUMBER" value={`#${order.orderNumber}`} />
           ) : null}
-          {order.CreatedDate ? (
-            <DetailRow label="DATE" value={formatDate(order.CreatedDate)} />
+          {order.createdDate ? (
+            <DetailRow label="DATE" value={formatDate(order.createdDate)} />
           ) : null}
-          <DetailRow label="QUANTITY" value={String(order.Quantity)} />
+          <DetailRow label="QUANTITY" value={String(order.quantity)} />
           {status ? (
             <DetailRow
               label="STATUS"
@@ -326,16 +271,16 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
               isLast
             />
           ) : (
-            <DetailRow label="STATUS" value={String(order.OrderStatus)} isLast />
+            <DetailRow label="STATUS" value={String(order.status)} isLast />
           )}
         </Animated.View>
 
         {/* ── Delivery section ── */}
         <Animated.View style={[styles.section, deliveryAnim]}>
           <Text style={styles.sectionEyebrow}>DELIVERY</Text>
-          <DetailRow label="NAME"    value={delivery.CustomerName} />
-          <DetailRow label="MOBILE"  value={String(delivery.MobileNumber)} />
-          <DetailRow label="ADDRESS" value={delivery.FullAddress} isLast />
+          <DetailRow label="NAME"    value={delivery.customerName} />
+          <DetailRow label="MOBILE"  value={delivery.mobile} />
+          <DetailRow label="ADDRESS" value={delivery.fullAddress} isLast />
         </Animated.View>
       </ScrollView>
     </View>
@@ -346,49 +291,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.surface,
-  },
-
-  // ── Header ───────────────────────────────────────────────────────────────────
-  header: {
-    backgroundColor:   Colors.ink1,
-    paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[4],
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-  },
-  backBtn: {
-    width:  36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems:     'center',
-  },
-  headerTitleBlock: {
-    flex: 1,
-    paddingHorizontal: Space[3],
-    gap: 3,
-  },
-  headerEyebrow: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.30)',
-  },
-  headerTitle: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      18,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: 0.3,
-    lineHeight:    18 * 1.2,
-  },
-  headerRight: {
-    width: 36,
-  },
-  headerSeam: {
-    height:           StyleSheet.hairlineWidth,
-    backgroundColor:  'rgba(255,255,255,0.06)',
-    marginTop:        Space[4],
-    marginHorizontal: -Space.screenH,
   },
 
   // ── State wrappers ────────────────────────────────────────────────────────────

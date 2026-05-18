@@ -1481,3 +1481,217 @@ Priority is emotional impact × shared-component leverage:
 6. **OrderDetailScreen** (B10) — `DetailRow` flat layout. SafeAreaView fix bundled.
 
 Phase 3 should not begin until Phase 2 QA pass is confirmed complete on all 5 frozen screens.
+
+---
+
+## 17. Phase 4A — Architecture Consolidation
+
+**Completed:** May 14, 2026
+**TypeScript status:** 0 errors throughout all Phase 4A work.
+**Scope:** API layer hardening, utility extraction, domain model boundaries, shared component extraction, session access standardization. No runtime behavior changes. No visual changes.
+
+This phase ran in parallel with Phase 3 visual work. All changes are backward-compatible — services.ts contract, mock routing, and screen behavior are unchanged.
+
+---
+
+### 17.1 Utility extraction
+
+Two utility modules extracted from inline screen logic:
+
+**`src/utils/formatDate.ts`**
+Formats ISO-8601 date strings to human-readable display (`"DD MMM YYYY"`). Previously duplicated as inline one-liners in OrderHistoryScreen and OrderDetailScreen. Single canonical implementation, used by both screens.
+
+**`src/utils/orderStatus.ts`**
+Maps `OrderStatusCode` integers (1–4) to `OrderStatus` string labels consumed by `StatusBadge`. Previously inlined per screen. Now a typed lookup with the `OrderStatusCode` union type (`1 | 2 | 3 | 4`) enforced at the call site.
+
+---
+
+### 17.2 Domain model boundary — Order
+
+The Order domain model and its DTO→domain adapter were established as the first clean separation between backend response shapes and screen-facing data.
+
+**`src/api/interfaces.ts` additions:**
+```typescript
+export type OrderStatusCode = 1 | 2 | 3 | 4;
+
+export interface Order {
+  inventoryId: number; itemId: number; variant: string;
+  name: string; brand: string; brandId: number;
+  images: string[];       // parsed from semicolon-delimited DTO string
+  quantity: number; amount: number;
+  status: OrderStatusCode;
+  orderNumber: string; orderedDate: string;
+}
+
+export interface OrderDetail extends Order {
+  createdDate: string;
+}
+
+export interface DeliveryAddress {
+  code: number; customerName: string; mobile: string;
+  fullAddress: string; customerProfileCode: number;
+}
+
+export interface OrderDetailResponse {
+  orderDetails: OrderDetail[];
+  deliveryDetail: DeliveryAddress[];
+}
+```
+
+**`src/api/adapters/orderAdapter.ts`** — `adaptOrder(raw)` and `adaptOrderDetailResponse(raw)` convert backend DTO field names to camelCase domain fields. The adapter layer is the single point where `postOrderHistoryDetailsInterface` DTO fields (`Brand_Id`, `Images` semicolon string, `OrderStatus` integer) are translated. Screen code uses only domain fields.
+
+**`src/api/services.ts` wrapping:** `postOrderHistory` and `postCnfOrderDetail` are wrapped functions (not pass-throughs) that call the raw integration, run the adapter, and return typed domain objects. Screens receive `Order[]` and `OrderDetailResponse` — DTO field names never reach screen code.
+
+---
+
+### 17.3 Session domain model + useSession hook
+
+**`src/api/interfaces.ts` addition:**
+```typescript
+export interface UserSession {
+  profileCode: number; name: string; email: string; mobile: string;
+  address: string; streetName: string; city: string;
+  postcode: string; countryCode: string;
+}
+```
+
+**`src/api/adapters/sessionAdapter.ts`** — `adaptSession(raw): UserSession | null` normalizes the `LoggedInCustomerInterface` backend shape stored in AsyncStorage to the clean domain model. Handles number-to-string coercions for `MobileNumber`, `Zipcode`, `CountryCode`. Returns `null` if `CustomerProfileCode` is absent (invalid/expired session).
+
+**`src/hooks/useSession.ts`** — reads `STORAGE_KEYS.userData` from AsyncStorage, parses safely inside try/catch, runs `adaptSession`, returns `UserSession | null`. No provider, no context, no navigation side effects. Cancellation-safe (ignores result if component unmounts during read).
+
+**First adoption — ProfileScreen:** Direct `AsyncStorage.getItem` + `JSON.parse` + raw DTO field access (`CustomerName`, `EmailID`, `MobileNumber`, `Address`, `StreetName`, `CityName`, `Zipcode`) replaced with `useSession()` and normalized domain fields (`name`, `email`, `mobile`, `address`, `streetName`, `city`, `postcode`). Local `Profile` type and `useEffect` fetch removed. All display behavior, logout, navigation, and entrance animations preserved.
+
+**Remaining direct session reads (not yet migrated):**
+- `AddressScreen` — reads `CustomerProfileCode` directly from AsyncStorage for address fetch and mutations
+- `OrderHistoryScreen` — reads `CustomerProfileCode` directly for order history fetch
+- `OrderDetailScreen` — reads `CustomerProfileCode` directly for order detail fetch
+- `WishlistScreen` — reads `CustomerProfileCode` directly for wishlist fetch and mutations
+- `CartScreen` — reads `CustomerProfileCode` directly via cart hydration
+
+These are intentionally deferred. `useSession` adoption should proceed screen-by-screen as each screen enters Phase 3 visual redesign scope, to avoid pure-refactor churn in screens that will be rewritten.
+
+---
+
+### 17.4 DarkHeader component extraction
+
+**`src/components/ui/DarkHeader.tsx`** — extracted the dark editorial header pattern duplicated identically across four Phase 3 screens.
+
+Props:
+```typescript
+interface DarkHeaderProps {
+  eyebrow: string;           // mono label, 30% opacity white
+  title: string;             // main header text
+  titleFont?: 'serif' | 'mono';  // default 'serif' (26px −0.5ls); 'mono' = 18px +0.3ls
+  onBack: () => void;        // chevron-back handler
+  rightSlot?: React.ReactNode;   // optional — count display, etc.; absent = 36px spacer
+  paddingTop: number;        // insets.top + Space[2], computed by caller
+}
+```
+
+Replaced inline header JSX in: **WishlistScreen**, **OrderHistoryScreen**, **OrderDetailScreen**, **ResultScreen**.
+
+Dead styles removed per screen: `header`, `headerRow`, `backBtn`, `headerTitleBlock`, `headerEyebrow`, `headerTitle`, `headerRight`, `headerSeam` (×4 screens, ~36 style declarations total).
+
+OrderDetailScreen became the only screen where `titleFont="mono"` is used — order numbers in `#12345` format. ResultScreen passes `rightSlot` with a product count `Text`. All other screens omit `rightSlot` (renders a 36px spacer for balance symmetry).
+
+**Not yet unified:** ProfileScreen header — visually similar dark editorial header but contains a two-line identity block (name + email) with different internal structure. Deferred until ProfileScreen Phase 3 redesign.
+
+---
+
+### 17.5 FadeImage component extraction
+
+**`src/components/ui/FadeImage.tsx`** — extracted the repeated `Animated.Value(0)` + `onLoad` → `Animated.timing` opacity fade pattern into a single primitive.
+
+Props:
+```typescript
+interface FadeImageProps {
+  uri: string; width: number; height: number;
+  borderRadius?: number; resizeMode?: ImageResizeMode;
+  style?: StyleProp<ViewStyle>; imageStyle?: StyleProp<ImageStyle>;
+}
+```
+
+Internal behavior: opacity starts at 0, fades to 1 on `onLoad` using `Motion.duration.settle` (320ms) + `Motion.easing.out` + `useNativeDriver: true`. Container owns `backgroundColor: Colors.surfaceDeep`, `overflow: 'hidden'`, `flexShrink: 0`.
+
+Replaced in: **WishlistScreen** (`WishlistRow` image), **OrderHistoryScreen** (`OrderRow` image). Both removed `useRef`, `useCallback` (for `onLoad`), and `Motion` imports that were exclusively used for the fade pattern.
+
+**Screens intentionally left untouched:**
+- `ResultScreen` — three distinct fade instances: `HeroCard` and `SpanCard` use `Motion.duration.carry`/`easing.inOut`; `GridTile` uses settle/out but with `StyleSheet.absoluteFillObject` layout. Mixed timings and non-standard container shapes do not fit the primitive.
+- `OrderDetailScreen` — static `Animated.Image` with no opacity fade animation.
+
+---
+
+### 17.6 integrations.ts cleanup
+
+**Template literal removal:** All 13 static POST endpoint strings stripped of unnecessary template literal wrapping (e.g. `` `${endpoints.allProducts}` `` → `endpoints.allProducts`). Template literals retained only where query string interpolation is required (all GET calls with `?param=value` query strings).
+
+**Shorthand normalization:** `{ OrderDeliveryAddressCode: OrderDeliveryAddressCode }` → `{ OrderDeliveryAddressCode }`.
+
+**Request payload interfaces added to `interfaces.ts`:**
+```typescript
+export interface OrderHistoryRequest    { CustomerProfileCode: number; }
+export interface OrderDetailRequest     { OrderNumber: string; CustomerProfileCode: number; }
+export interface CartQuantityRequest    { CartDetailsCode: number; Inventory_Id: number; }
+```
+Applied to `postOrderHistory`, `postCnfOrderDetail`, `quantityIncrement`, `quantityDecrement`. `PostCartSaveInterface` and `postCreateDeliveryAddressInterface` were already typed correctly.
+
+**`postDeleteCartItem` numeric typing fix:**
+- `deleteCartInterface.CartDetailsCode` corrected from `string` to `number` — matched `SavedCartItemInterface.CartDetailsCode: number`
+- `integrations.ts` param: `string → number`
+- `mockIntegrations.ts` param: `string → number`. The defensive `String(cartdetailscode).split(',').map(Number)` coercion chain removed; simplified to direct numeric equality filter
+- `CartScreen.tsx` call site: `String(item.CartDetailsCode)` cast removed
+
+This was a silent type mismatch — the string coercion worked at runtime but obscured the real type and made the mock filter logic unnecessarily defensive.
+
+**Wishlist stub behavior change:**
+- Before: `getWishlist`, `addToWishlist`, `removeFromWishlist` in production mode were typed as `Promise<never>` and threw `Error('real endpoint not yet available')` at runtime
+- After: return silent empty-result envelopes matching the standard `{ statusCode: 0, result: [], userMessage: '' }` shape. No runtime throw.
+- The TODO comment block is preserved. Mock layer (which had real in-memory implementations) is unaffected.
+- Rationale: throwing stubs are "implemented but crashes" — misleading. The new behavior is correct: in production before the endpoint exists, wishlist silently returns empty rather than crashing the screen.
+
+---
+
+### 17.7 Remaining API-layer weaknesses (post–Phase 4A)
+
+These are documented for the next API hardening pass. None block Phase 3 visual work.
+
+| Weakness | Notes |
+|---|---|
+| All response types are `any` | `axiosInstance.get/post` return type is `any`. A typed `ApiResponse<T>` envelope wrapper would surface response shape mismatches at compile time. |
+| `loginCustomer` / `postCreateCustomer` response untyped | Return shape (`LoggedInCustomerInterface`) is known but not expressed on the function return type. |
+| `getDeliveryAddresses` / `getDeliveryAddressForUpdate` return untyped | `DeliveryAddressInterface` exists in interfaces.ts but is not applied to the return. |
+| `postPlacedSingleOrder` / `postPlacedMultipleOrder` response untyped | Order placement success envelope not captured. |
+| `services.ts` wishlist comment outdated | Still refers to "will throw in production" — stale after Phase 4A stub change. |
+| `endpoints.js` and `url.js` are plain JS | Endpoint string typos are undetectable at compile time. Migrate to `.ts` with `as const`. |
+
+---
+
+### 17.8 Remaining DTO leakage areas (post–Phase 4A)
+
+The Order domain boundary is clean. These areas still expose raw DTO field names in screen code:
+
+| Screen | Leaking DTO fields | Next action |
+|---|---|---|
+| `AddressScreen` | `CustomerProfileCode`, `OrderDeliveryAddressCode`, `MobileNumber`, `FullAddress` | Add `DeliveryAddress` adapter; adopt during Phase 3 B7 |
+| `WishlistScreen` | `WishlistItemCode`, `Inventory_Id`, `Brand_Name`, `Images`, `ComparePrice` | Add `WishlistItem` domain type; adopt during Phase 3 B5 |
+| `CartScreen` | `CartDetailsCode`, `CartMasterCode`, `Inventory_Id`, `Brand_Name`, `ComparePrice` | Add `CartItem` domain type; adopt with CartItem.tsx migration |
+| `HomeScreen` | Product fields via `ProductInterface` directly | Low priority — HomeScreen is frozen; address when unfrozen |
+| `ProductScreen` | `ProductDetailInterface`, `VariantInterface` fields directly | Low priority — frozen; DTO field access is isolated to the screen |
+
+---
+
+### 17.9 Recommended next phase (Phase 4B)
+
+With Phase 3 visual redesigns and Phase 4A consolidation complete, the highest-value remaining work:
+
+1. **`useSession` rollout** — adopt in AddressScreen, OrderHistoryScreen, OrderDetailScreen, WishlistScreen as each enters redesign. Eliminates remaining direct AsyncStorage reads and DTO field access in session data.
+
+2. **`DeliveryAddress` adapter** — add `adaptDeliveryAddress` mirroring `adaptOrder`. AddressScreen is the first Phase 3 screen with real mutation exposure.
+
+3. **Response type hardening** — add typed `ApiResponse<T>` wrapper for the 4 highest-traffic endpoints: `postOrderHistory`, `postCnfOrderDetail`, `getSavedCartItems`, `loginCustomer`. Incremental — not a full pass.
+
+4. **`endpoints.js` → `endpoints.ts`** — mechanical migration, zero behavior change, closes the string-typo gap.
+
+5. **Cart badge cold-start (P1-01)** — remains the only user-visible P1 bug unfixed. Fetch cart count post-login in `App.tsx` or `Login.tsx` success handler.
+
+Phase 4B should not introduce new architecture. It is a continuation of the same consolidation register: type consistency, adapter coverage, and incremental API hardening.

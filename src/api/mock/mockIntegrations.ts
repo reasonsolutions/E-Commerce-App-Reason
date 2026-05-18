@@ -106,9 +106,8 @@ const postSaveCartItems = async (data: PostCartSaveInterface) => {
   return delay(ok(true, 'Item added to cart.'));
 };
 
-const postDeleteCartItem = async (cartdetailscode: string) => {
-  const codes = String(cartdetailscode).split(',').map(Number);
-  _cartItems = _cartItems.filter(item => !codes.includes(item.CartDetailsCode));
+const postDeleteCartItem = async (cartdetailscode: number) => {
+  _cartItems = _cartItems.filter(item => item.CartDetailsCode !== cartdetailscode);
   return delay(ok(true, 'Cart item deleted.'));
 };
 

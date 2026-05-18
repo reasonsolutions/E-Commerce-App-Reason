@@ -316,6 +316,8 @@ Used by Home Flash Deals, ResultScreen, WishlistScreen (potentially). Single ref
 | `DetailRow.tsx` | **NEW** — `components/ui/` | 3 |
 | `ProfileRow.tsx` | **NEW** — `components/ui/` | 3 |
 | `CartItem.tsx` | Migrate from `.js`, restyle (bundles P2-03) | 2 |
+| `DarkHeader.tsx` | **NEW** — `components/ui/` — extracted Phase 4A; replaces inline dark header JSX in WishlistScreen, OrderHistoryScreen, OrderDetailScreen, ResultScreen | 4A ✅ |
+| `FadeImage.tsx` | **NEW** — `components/ui/` — extracted Phase 4A; replaces `Animated.Value` + `onLoad` fade pattern in WishlistScreen, OrderHistoryScreen | 4A ✅ |
 
 ---
 

@@ -223,7 +223,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     setCartCount((prev: number) => Math.max(0, prev - item.Quantity));
 
     try {
-      await postDeleteCartItem(String(item.CartDetailsCode));
+      await postDeleteCartItem(item.CartDetailsCode);
     } catch {
       fetchCart();
     }

@@ -13,3 +13,5 @@ export { EmptyState } from './EmptyState';
 export { ErrorBanner } from './ErrorBanner';
 export { Skeleton, SkeletonRow } from './Skeleton';
 export { FloatingLabelInput } from './FloatingLabelInput';
+export { DarkHeader } from './DarkHeader';
+export { FadeImage } from './FadeImage';

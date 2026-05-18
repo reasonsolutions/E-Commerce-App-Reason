@@ -16,7 +16,7 @@ import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { getProductsByCategory, getAllProducts } from '../api/services';
 import { ProductByCategoryProductDetails } from '../api/interfaces';
-import { Skeleton, Price, EmptyState } from '../components/ui';
+import { Skeleton, Price, EmptyState, DarkHeader } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -383,38 +383,18 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
 
-      {/* Dark editorial header */}
-      <Animated.View
-        style={[
-          styles.header,
-          { paddingTop: insets.top + Space[2] },
-          headerAnim,
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Icon name="chevron-back" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.headerTitleBlock}>
-            <Text style={styles.headerEyebrow}>COLLECTION</Text>
-            <Text style={styles.headerTitle} numberOfLines={1}>{categoryName}</Text>
-          </View>
-
-          <View style={styles.headerRight}>
-            {!loading && deduplicated.length > 0 && (
-              <Text style={styles.headerCount}>
-                {deduplicated.length}
-              </Text>
-            )}
-          </View>
-        </View>
-        {/* Single hairline seam — matches frozen screen header pattern */}
-        <View style={styles.headerSeam} />
+      <Animated.View style={[styles.headerWrap, headerAnim]}>
+        <DarkHeader
+          eyebrow="COLLECTION"
+          title={categoryName}
+          onBack={() => navigation.goBack()}
+          paddingTop={insets.top + Space[2]}
+          rightSlot={
+            !loading && deduplicated.length > 0
+              ? <Text style={styles.headerCount}>{deduplicated.length}</Text>
+              : undefined
+          }
+        />
       </Animated.View>
 
       <ScrollView
@@ -507,54 +487,14 @@ const styles = StyleSheet.create({
   },
 
   // ── Header ──────────────────────────────────────────────────────────────────
-  header: {
-    backgroundColor: Colors.ink1,
-    paddingHorizontal: Space.screenH,
-    paddingBottom: Space[4],
+  headerWrap: {
     zIndex: 2,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitleBlock: {
-    flex: 1,
-    paddingHorizontal: Space[3],
-    gap: 3,
-  },
-  headerEyebrow: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.30)',
-  },
-  headerTitle: {
-    fontFamily: FontFamily.serif,
-    fontSize:   26,
-    fontWeight: '400',
-    color:      '#FFFFFF',
-    letterSpacing: -0.5,
-    lineHeight: 26 * 1.1,
-  },
-  headerRight: {
-    width: 36,
-    alignItems: 'flex-end',
-  },
   headerCount: {
-    fontFamily: FontFamily.mono,
-    fontSize:   11,
-    color:      'rgba(255,255,255,0.28)',
+    fontFamily:    FontFamily.mono,
+    fontSize:      11,
+    color:         'rgba(255,255,255,0.28)',
     letterSpacing: 0.5,
-  },
-  headerSeam: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginTop: Space[4],
-    marginHorizontal: -Space.screenH,
   },
 
   // ── Scroll canvas ────────────────────────────────────────────────────────────

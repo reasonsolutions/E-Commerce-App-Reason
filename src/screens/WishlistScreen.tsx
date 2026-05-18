@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,12 +16,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { getWishlist, removeFromWishlist } from '../api/services';
 import { WishlistItemInterface } from '../api/mock/mockData';
-import { EmptyState, BottomNavBar, Price } from '../components/ui';
+import { EmptyState, BottomNavBar, Price, DarkHeader, FadeImage } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
@@ -51,17 +50,6 @@ const WishlistRow: React.FC<{
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const imgOpacity = useRef(new Animated.Value(0)).current;
-
-  const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.settle,
-      easing:          Motion.easing.out,
-      useNativeDriver: true,
-    }).start();
-  }, [imgOpacity]);
-
   const hasDiscount = item.ComparePrice > item.Price;
 
   return (
@@ -74,14 +62,12 @@ const WishlistRow: React.FC<{
           onPress={() => { haptic.light(); onPress(item.Inventory_Id); }}
         >
           {/* Portrait image */}
-          <View style={styles.imgWrap}>
-            <Animated.Image
-              source={{ uri: item.Images.split(';')[0] }}
-              style={[styles.img, { opacity: imgOpacity }]}
-              resizeMode="cover"
-              onLoad={onLoad}
-            />
-          </View>
+          <FadeImage
+            uri={item.Images.split(';')[0]}
+            width={IMG_W}
+            height={IMG_H}
+            borderRadius={Radius.sm}
+          />
 
           {/* Content */}
           <View style={styles.content}>
@@ -220,30 +206,12 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
 
-      {/* Dark editorial header */}
-      <View style={[styles.header, { paddingTop: insets.top + Space[2] }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Icon name="chevron-back" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.headerTitleBlock}>
-            <Text style={styles.headerEyebrow}>SAVED ITEMS</Text>
-            <Text style={styles.headerTitle}>
-              {itemCount === 0 ? 'Wishlist' : `${itemCount} ${itemCount === 1 ? 'piece' : 'pieces'}`}
-            </Text>
-          </View>
-
-          {/* Spacer — keeps title block centred against back btn */}
-          <View style={styles.headerRight} />
-        </View>
-        {/* Single hairline seam — matches ResultScreen/frozen header pattern */}
-        <View style={styles.headerSeam} />
-      </View>
+      <DarkHeader
+        eyebrow="SAVED ITEMS"
+        title={itemCount === 0 ? 'Wishlist' : `${itemCount} ${itemCount === 1 ? 'piece' : 'pieces'}`}
+        onBack={() => navigation.goBack()}
+        paddingTop={insets.top + Space[2]}
+      />
 
       {renderBody()}
 
@@ -259,49 +227,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.surface,
-  },
-
-  // ── Header ───────────────────────────────────────────────────────────────────
-  header: {
-    backgroundColor: Colors.ink1,
-    paddingHorizontal: Space.screenH,
-    paddingBottom: Space[4],
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitleBlock: {
-    flex: 1,
-    paddingHorizontal: Space[3],
-    gap: 3,
-  },
-  headerEyebrow: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.30)',
-  },
-  headerTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      26,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.5,
-    lineHeight:    26 * 1.1,
-  },
-  headerRight: {
-    width: 36,
-  },
-  headerSeam: {
-    height:          StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginTop:       Space[4],
-    marginHorizontal: -Space.screenH,
   },
 
   // ── List ──────────────────────────────────────────────────────────────────────
@@ -333,20 +258,6 @@ const styles = StyleSheet.create({
   divider: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
-  },
-
-  // ── Image — 4:5 portrait ──────────────────────────────────────────────────────
-  imgWrap: {
-    width:           IMG_W,
-    height:          IMG_H,
-    borderRadius:    Radius.sm,
-    backgroundColor: Colors.surfaceDeep,
-    overflow:        'hidden',
-    flexShrink:      0,
-  },
-  img: {
-    width:  '100%',
-    height: '100%',
   },
 
   // ── Content ───────────────────────────────────────────────────────────────────
