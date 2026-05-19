@@ -5,11 +5,11 @@ export const getAllProducts = async () => {
   const response = await axiosInstance.post(productEndpoints.allProducts, {
     brands: [],
     categories: [],
-    subCategories: [7],
+    subCategories: [],
     searchQuery: '%',
     priceRange: { from: null, to: null },
     discount: '%',
-    pagination: { pageNumber: 1, pageSize: 50 },
+    pagination: { pageNumber: 1, pageSize: 10 },
   });
   return response.data?.result?.Products ?? [];
 };
