@@ -1,12 +1,13 @@
 import axios from 'axios';
-import { url } from './url';
+import { API_BASE_URL } from '@env';
 import { classifyError, apiLog } from './apiError';
 
 const axiosInstance = axios.create({
-  baseURL: url,
+  baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
+    'Accept': '*/*',
   },
 });
 

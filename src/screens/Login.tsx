@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   TouchableOpacity,
 } from 'react-native';
-import { loginCustomer } from '../api/services';
+import { loginCustomer } from '../api/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useNavigation } from '@react-navigation/native';

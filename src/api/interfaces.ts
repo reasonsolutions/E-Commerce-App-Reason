@@ -101,24 +101,33 @@ export interface MultipleOrderDetailInterface {
 
 
 //result of allproducts api
+export interface ProductVariant {
+    InventoryID: string;
+    Variant: string;
+    Stock: number;
+    SKU: string;
+    PriceDetails: {
+        Price: number;
+        ComparePrice: number;
+    };
+}
+
 export interface ProductInterface {
-    Item_Id: number;
+    ItemID: number;
     Name: string;
-    Price: number;
-    ComparePrice: number;
     Description: string;
-    SubCategory_Id: number;
+    SubcategoryID: string;
     Images: string;
-    Date_Created: string;
-    Brand_Id: number;
-    Brand_Name: string;
+    CreatedDate: string;
+    BrandID: string;
+    BrandName: string;
     SCName: string;
-    Category_Id: number;
+    CategoryID: string;
     CategoryName: string;
     CategoryImage: string;
-    Inventory_Id: number;
-    Variant: string;
-    Count: number;
+    MinPrice: number;
+    MaxComparePrice: number;
+    Variants: ProductVariant[];
 }
 
 
@@ -279,6 +288,61 @@ export interface SavedCartItemInterface {
     Brand_Name: string;
 }
 
+
+// ─── Place order (new /placeOrder endpoint) ───────────────────────────────────
+
+export interface PlaceOrderItemDetail {
+  InventoryId:        number;
+  Quantity:           number;
+  Amount:             number;
+  DeliveryCharges:    number;
+  DeliveryChargesVAT: number;
+  ItemCharges:        number;
+  ItemChargesVAT:     number;
+  Discount:           number;
+  VAT:                number;
+  OrderStatus:        number;
+}
+
+export interface PlaceOrderDetail {
+  OrganisationID: string;
+  ItemDetails:    PlaceOrderItemDetail[];
+}
+
+export interface PlaceOrderInterface {
+  CustomerProfileCode:      number;
+  OrderDeliveryAddressCode: number;
+  CartMasterCode:           number;
+  TotalAmount:              number;
+  CouponCode?:              string;
+  OrderDetails:             PlaceOrderDetail[];
+}
+
+// ─── Wishlist (confirmed real endpoints) ─────────────────────────────────────
+
+export interface WishlistItemInterface {
+  WishlistItemCode:     number;
+  CustomerProfileCode:  number;
+  Inventory_Id:         number;
+  Item_Id:              number;
+  Name:                 string;
+  Images:               string;
+  Price:                number;
+  ComparePrice:         number;
+  Variant:              string;
+  Brand_Name:           string;
+  AddedDate:            string;
+}
+
+export interface PostAddToWishlistInterface {
+  CustomerProfileCode: number;
+  InventoryId:         number;
+}
+
+export interface PostDeleteWishlistInterface {
+  WishlistCode:        number;
+  CustomerProfileCode: number;
+}
 
 //result of order history api
 export interface postOrderHistoryDetailsInterface {

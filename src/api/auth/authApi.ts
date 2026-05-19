@@ -1,0 +1,13 @@
+import axiosInstance from '../axiosInstance';
+import { authEndpoints } from '../endpoints';
+import type { createCustomerInterface, postLoginInterface } from '../interfaces';
+
+export const loginCustomer = async (data: postLoginInterface) => {
+  const response = await axiosInstance.post(authEndpoints.postLoginCustomer, data);
+  return response.data;
+};
+
+export const postCreateCustomer = async (data: createCustomerInterface) => {
+  const response = await axiosInstance.post(authEndpoints.postCreateCustomer, data);
+  return response.data;
+};

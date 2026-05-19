@@ -21,7 +21,9 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { ProductDetailInterface, VariantInterface, PostCartSaveInterface } from '../api/interfaces';
-import { postSaveCartItems, selectProduct, addToWishlist, removeFromWishlist, getWishlist } from '../api/services';
+import { postSaveCartItems } from '../api/cart';
+import { selectProduct } from '../api/product';
+import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
 import {
   QuantityStepper,
   Skeleton,

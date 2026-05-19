@@ -21,7 +21,7 @@ import { heroBanner } from '../data/mockData';
 import CategoryItem from '../components/CategoryItem';
 import ProductCard from '../components/ProductCard';
 import { CategoryInterface, ProductInterface } from '../api/interfaces';
-import { getAllProducts, getCategories } from '../api/services';
+import { getAllProducts, getCategories } from '../api/product';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -125,18 +125,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     useCallback(() => {
       const cancelled = { current: false };
       runCategories(() => getCategories().then((d) => d.result), cancelled);
-      runProducts(() => getAllProducts().then((d) => d.result), cancelled);
+      runProducts(() => getAllProducts(), cancelled);
       return () => { cancelled.current = true; };
     }, [runCategories, runProducts]),
   );
 
   const deduplicatedProducts = products
-    ? Array.from(new Map(products.map((p) => [p.Item_Id, p])).values())
+    ? Array.from(new Map(products.filter(p => p.ItemID != null).map((p) => [p.ItemID, p])).values())
     : null;
 
   const featuredProduct = deduplicatedProducts?.[0] ?? null;
   const flashDealProducts = deduplicatedProducts
-    ? deduplicatedProducts.filter((p, i) => i > 0 && p.ComparePrice > p.Price)
+    ? deduplicatedProducts.filter((p, i) => i > 0 && p.MaxComparePrice > p.MinPrice)
     : null;
   const shelfProducts = flashDealProducts?.length
     ? flashDealProducts
@@ -152,7 +152,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     ({ item, index }: { item: ProductInterface; index: number }) => (
       <ProductCard
         product={item}
-        onPress={() => navigation.navigate('Product', { product: item.Inventory_Id })}
+        onPress={() => navigation.navigate('Product', { product: item.Variants?.[0]?.InventoryID })}
         tall={index === 0}
       />
     ),
@@ -164,6 +164,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <CategoryItem
         category={item}
         onPress={() => navigation.navigate('Result', { categoryId: item.Category_Id, categoryName: item.CategoryName })}
+
       />
     ),
     [navigation],
@@ -287,7 +288,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <TouchableOpacity
               style={styles.featCard}
               activeOpacity={0.88}
-              onPress={() => navigation.navigate('Product', { product: featuredProduct.Inventory_Id })}
+              onPress={() => navigation.navigate('Product', { product: featuredProduct.Variants?.[0]?.InventoryID })}
             >
               <Image
                 source={{ uri: featuredProduct.Images?.split(';')[0] || '' }}
@@ -301,32 +302,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               />
 
               {/* Ember badge — replaces red danger chip */}
-              {featuredProduct.ComparePrice > featuredProduct.Price && (
+              {featuredProduct.MaxComparePrice > featuredProduct.MinPrice && (
                 <View style={styles.featBadge}>
                   <Text style={styles.featBadgeText}>
-                    -{Math.round(((featuredProduct.ComparePrice - featuredProduct.Price) / featuredProduct.ComparePrice) * 100)}%
+                    -{Math.round(((featuredProduct.MaxComparePrice - featuredProduct.MinPrice) / featuredProduct.MaxComparePrice) * 100)}%
                   </Text>
                 </View>
               )}
 
               <View style={styles.featFooter}>
                 <View style={styles.featFooterLeft}>
-                  {featuredProduct.Brand_Name ? (
-                    <Text style={styles.featBrand}>{featuredProduct.Brand_Name}</Text>
+                  {featuredProduct.BrandName ? (
+                    <Text style={styles.featBrand}>{featuredProduct.BrandName}</Text>
                   ) : null}
                   <Text style={styles.featName} numberOfLines={1}>
                     {featuredProduct.Name}
                   </Text>
                   <View style={styles.featPriceRow}>
-                    <Text style={styles.featPrice}>${featuredProduct.Price.toFixed(2)}</Text>
-                    {featuredProduct.ComparePrice > featuredProduct.Price && (
-                      <Text style={styles.featWas}>${featuredProduct.ComparePrice.toFixed(2)}</Text>
+                    <Text style={styles.featPrice}>${featuredProduct.MinPrice.toFixed(2)}</Text>
+                    {featuredProduct.MaxComparePrice > featuredProduct.MinPrice && (
+                      <Text style={styles.featWas}>${featuredProduct.MaxComparePrice.toFixed(2)}</Text>
                     )}
                   </View>
                 </View>
                 {/* Text-link CTA — no pill, more editorial */}
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('Product', { product: featuredProduct.Inventory_Id })}
+                  onPress={() => navigation.navigate('Product', { product: featuredProduct.Variants?.[0]?.InventoryID })}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={styles.featLink}>View →</Text>
@@ -360,7 +361,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <FlatList
               data={shelfProducts}
               renderItem={renderProduct}
-              keyExtractor={(item: ProductInterface) => String(item.Item_Id)}
+              keyExtractor={(item: ProductInterface) => String(item.ItemID)}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.shelfRail}

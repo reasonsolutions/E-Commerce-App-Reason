@@ -16,7 +16,7 @@ import { Toaster } from 'sonner-native';
 import { GluestackUIProvider } from './src/lib/gluestack/provider';
 import { CartProvider, useCart } from './src/context/CartContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import { getSavedCartItems } from './src/api/services';
+import { getSavedCartItems } from './src/api/cart';
 import { STORAGE_KEYS } from './src/config/storageKeys';
 
 function CartHydrator(): null {
@@ -33,7 +33,7 @@ function CartHydrator(): null {
         return;
       }
       getSavedCartItems(user.CustomerProfileCode)
-        .then((res) => {
+        .then((res: { result?: Array<{ Quantity: number }> }) => {
           if (cancelled) return;
           const items: Array<{ Quantity: number }> = res.result || [];
           const total = items.reduce((sum, item) => sum + item.Quantity, 0);

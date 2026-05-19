@@ -18,7 +18,7 @@ import { Colors, Space, Radius, Shadow } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
-import { getSavedCartItems, quantityIncrement, quantityDecrement, postDeleteCartItem } from '../api/services';
+import { getSavedCartItems, quantityIncrement, quantityDecrement, postDeleteCartItem } from '../api/cart';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';

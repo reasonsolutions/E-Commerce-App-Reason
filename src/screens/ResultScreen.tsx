@@ -14,7 +14,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import { getProductsByCategory, getAllProducts } from '../api/services';
+import { getProductsByCategory, getAllProducts } from '../api/product';
 import { ProductByCategoryProductDetails } from '../api/interfaces';
 import { Skeleton, Price, EmptyState, DarkHeader } from '../components/ui';
 import { ErrorState } from '../components/system';

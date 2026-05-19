@@ -31,9 +31,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = fals
     }).start();
   }, [imgOpacity]);
 
-  const hasDiscount = product.ComparePrice > product.Price;
+  const hasDiscount = product.MaxComparePrice > product.MinPrice;
   const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    ? Math.round(((product.MaxComparePrice - product.MinPrice) / product.MaxComparePrice) * 100)
     : 0;
 
   // 4:5 portrait ratio per spec B12. Tall variant for first card in shelf.
@@ -59,14 +59,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = fals
       </View>
 
       <View style={styles.info}>
-        {product.Brand_Name ? (
-          <Text style={styles.brand} numberOfLines={1}>{product.Brand_Name}</Text>
+        {product.BrandName ? (
+          <Text style={styles.brand} numberOfLines={1}>{product.BrandName}</Text>
         ) : null}
         <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
         <View style={styles.priceRow}>
-          <Text style={styles.price}>${product.Price.toFixed(2)}</Text>
+          <Text style={styles.price}>${product.MinPrice.toFixed(2)}</Text>
           {hasDiscount && (
-            <Text style={styles.was}>${product.ComparePrice.toFixed(2)}</Text>
+            <Text style={styles.was}>${product.MaxComparePrice.toFixed(2)}</Text>
           )}
         </View>
       </View>
