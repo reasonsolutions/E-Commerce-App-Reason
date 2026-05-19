@@ -294,54 +294,28 @@ export interface postOrderHistoryDetailsInterface {
     Brand_Name: string
 }
 
-// ── Domain models — Session ───────────────────────────────────────────────────
-
-export interface UserSession {
-  profileCode: number;
-  name:        string;
-  email:       string;
-  mobile:      string;
-  address:     string;
-  streetName:  string;
-  city:        string;
-  postcode:    string;
-  countryCode: string;
-}
-
-// ── Domain models — Order ─────────────────────────────────────────────────────
-// These use clean camelCase naming. Backend DTO field names must not appear in
-// screen or component code after adapters are applied.
-
 export type OrderStatusCode = 1 | 2 | 3 | 4;
 
-export interface Order {
-  inventoryId:  number;
-  itemId:       number;
-  variant:      string;
-  name:         string;
-  brand:        string;
-  brandId:      number;
-  images:       string[];   // parsed from semicolon-delimited DTO string
-  quantity:     number;
-  amount:       number;
-  status:       OrderStatusCode;
-  orderNumber:  string;
-  orderedDate:  string;
+export interface OrderHistoryItemInterface {
+    Inventory_Id:  number;
+    Item_Id:       number;
+    Variant:       string;
+    Name:          string;
+    Brand_Name:    string;
+    Brand_Id:      number;
+    Images:        string;
+    Quantity:      number;
+    Amount:        number;
+    OrderStatus:   OrderStatusCode;
+    OrderNumber:   string;
+    OrderedDate:   string;
 }
 
-export interface OrderDetail extends Order {
-  createdDate:  string;
+export interface OrderDetailItemExtendedInterface extends OrderHistoryItemInterface {
+    CreatedDate: string;
 }
 
-export interface DeliveryAddress {
-  code:                number;
-  customerName:        string;
-  mobile:              string;
-  fullAddress:         string;
-  customerProfileCode: number;
-}
-
-export interface OrderDetailResponse {
-  orderDetails:   OrderDetail[];
-  deliveryDetail: DeliveryAddress[];
+export interface OrderDetailResponseInterface {
+    OrderDetails:   OrderDetailItemExtendedInterface[];
+    DeliveryDetail: DeliveryAddressInterface[];
 }

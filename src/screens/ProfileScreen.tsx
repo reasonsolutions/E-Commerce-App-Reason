@@ -146,8 +146,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     navigation.navigate('Login');
   };
 
-  const displayName  = session?.name  || '—';
-  const displayEmail = session?.email || '—';
+  const displayName  = session?.CustomerName || '—';
+  const displayEmail = session?.EmailID      || '—';
 
   return (
     <View style={styles.root}>
@@ -177,7 +177,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <ProfileRow label="Name"   value={displayName} />
           <ProfileRow
             label="Mobile"
-            value={session?.mobile || '—'}
+            value={session?.MobileNumber !== undefined ? String(session.MobileNumber) : '—'}
           />
           <ProfileRow label="Email"  value={displayEmail} isLast />
         </Animated.View>
@@ -187,12 +187,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           <SectionLabel>ADDRESS</SectionLabel>
           <ProfileRow
             label="Street"
-            value={session?.address || session?.streetName || '—'}
+            value={session?.Address || session?.StreetName || '—'}
           />
-          <ProfileRow label="City"     value={session?.city || '—'} />
+          <ProfileRow label="City"     value={session?.CityName || '—'} />
           <ProfileRow
             label="Postcode"
-            value={session?.postcode || '—'}
+            value={session?.Zipcode !== undefined ? String(session.Zipcode) : '—'}
             isLast
           />
         </Animated.View>

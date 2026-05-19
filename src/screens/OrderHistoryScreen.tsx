@@ -27,7 +27,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { formatDate } from '../utils/formatDate';
 import { orderStatusLabel } from '../utils/orderStatus';
-import type { Order } from '../api/interfaces';
+import type { OrderHistoryItemInterface } from '../api/interfaces';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -45,16 +45,16 @@ const IMG_H = 80;
 
 // ── Single order row ──────────────────────────────────────────────────────────
 const OrderRow: React.FC<{
-  item: Order;
-  onPress: (item: Order) => void;
+  item: OrderHistoryItemInterface;
+  onPress: (item: OrderHistoryItemInterface) => void;
   delay: number;
   isLast: boolean;
 }> = ({ item, onPress, delay, isLast }) => {
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const status     = orderStatusLabel(item.status);
-  const firstImage = item.images[0] ?? '';
+  const status     = orderStatusLabel(item.OrderStatus);
+  const firstImage = item.Images?.split(';').filter(Boolean)[0] ?? '';
 
   return (
     <Animated.View style={entrance}>
@@ -78,17 +78,17 @@ const OrderRow: React.FC<{
             {/* Top — brand + name + amount */}
             <View style={styles.contentTop}>
               <View style={styles.metaLeft}>
-                {item.brand ? (
-                  <Text style={styles.brand}>{item.brand.toUpperCase()}</Text>
+                {item.Brand_Name ? (
+                  <Text style={styles.brand}>{item.Brand_Name.toUpperCase()}</Text>
                 ) : null}
-                <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-                {item.variant ? (
-                  <Text style={styles.variant}>{item.variant}</Text>
+                <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
+                {item.Variant ? (
+                  <Text style={styles.variant}>{item.Variant}</Text>
                 ) : null}
               </View>
               {/* Amount — right-aligned serif */}
               <View style={styles.amountBlock}>
-                <Text style={styles.amount}>${item.amount.toFixed(2)}</Text>
+                <Text style={styles.amount}>${item.Amount.toFixed(2)}</Text>
                 <Icon name="chevron-forward" size={13} color={Colors.ink5} />
               </View>
             </View>
@@ -96,11 +96,11 @@ const OrderRow: React.FC<{
             {/* Bottom — order meta + status */}
             <View style={styles.contentBottom}>
               <View style={styles.orderMeta}>
-                {item.orderNumber ? (
-                  <Text style={styles.orderNumber}>#{item.orderNumber}</Text>
+                {item.OrderNumber ? (
+                  <Text style={styles.orderNumber}>#{item.OrderNumber}</Text>
                 ) : null}
-                {item.orderedDate ? (
-                  <Text style={styles.orderDate}>{formatDate(item.orderedDate)}</Text>
+                {item.OrderedDate ? (
+                  <Text style={styles.orderDate}>{formatDate(item.OrderedDate)}</Text>
                 ) : null}
               </View>
               {status ? <StatusBadge status={status} /> : null}
@@ -119,7 +119,7 @@ const OrderRow: React.FC<{
 const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const { data: orders, loading, isError, error, run } = useAsyncState<Order[]>([]);
+  const { data: orders, loading, isError, error, run } = useAsyncState<OrderHistoryItemInterface[]>([]);
 
   const fetchOrders = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -149,7 +149,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   const orderList  = orders ?? [];
   const orderCount = orderList.length;
 
-  const renderItem = ({ item, index }: ListRenderItemInfo<Order>) => (
+  const renderItem = ({ item, index }: ListRenderItemInfo<OrderHistoryItemInterface>) => (
     <OrderRow
       item={item}
       onPress={(order) => navigation.navigate('OrderDetails', { orderItem: order })}
@@ -193,7 +193,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
       <FlatList
         data={orderList}
         renderItem={renderItem}
-        keyExtractor={(item, index) => `${item.inventoryId}-${index}`}
+        keyExtractor={(item, index) => `${item.Inventory_Id}-${index}`}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}

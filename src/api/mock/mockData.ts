@@ -176,7 +176,9 @@ export const mockProductDetailMap: Record<number, { detail: ProductDetailInterfa
     variants: [
       { Inventory_Id: 1, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '11', Count: 0, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
       { Inventory_Id: 2, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '12', Count: 0, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
-      { Inventory_Id: 3, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '14', Count: 189, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
+      { Inventory_Id: 3, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '13', Count: 45, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
+      { Inventory_Id: 4, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '14', Count: 189, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
+      { Inventory_Id: 5, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '15', Count: 72, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
     ],
   },
   65: {
