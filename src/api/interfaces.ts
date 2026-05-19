@@ -10,7 +10,21 @@ export interface PostCartSaveInterface {
 
 
 export interface deleteCartInterface {
-    "CartDetailsCode":string
+    CartDetailsCode: number;
+}
+
+export interface OrderHistoryRequest {
+    CustomerProfileCode: number;
+}
+
+export interface OrderDetailRequest {
+    OrderNumber: string;
+    CustomerProfileCode: number;
+}
+
+export interface CartQuantityRequest {
+    CartDetailsCode: number;
+    Inventory_Id: number;
 }
 
 export interface createCustomerInterface {
@@ -278,4 +292,56 @@ export interface postOrderHistoryDetailsInterface {
     OrderStatus: number,
     Brand_Id: number,
     Brand_Name: string
+}
+
+// ── Domain models — Session ───────────────────────────────────────────────────
+
+export interface UserSession {
+  profileCode: number;
+  name:        string;
+  email:       string;
+  mobile:      string;
+  address:     string;
+  streetName:  string;
+  city:        string;
+  postcode:    string;
+  countryCode: string;
+}
+
+// ── Domain models — Order ─────────────────────────────────────────────────────
+// These use clean camelCase naming. Backend DTO field names must not appear in
+// screen or component code after adapters are applied.
+
+export type OrderStatusCode = 1 | 2 | 3 | 4;
+
+export interface Order {
+  inventoryId:  number;
+  itemId:       number;
+  variant:      string;
+  name:         string;
+  brand:        string;
+  brandId:      number;
+  images:       string[];   // parsed from semicolon-delimited DTO string
+  quantity:     number;
+  amount:       number;
+  status:       OrderStatusCode;
+  orderNumber:  string;
+  orderedDate:  string;
+}
+
+export interface OrderDetail extends Order {
+  createdDate:  string;
+}
+
+export interface DeliveryAddress {
+  code:                number;
+  customerName:        string;
+  mobile:              string;
+  fullAddress:         string;
+  customerProfileCode: number;
+}
+
+export interface OrderDetailResponse {
+  orderDetails:   OrderDetail[];
+  deliveryDetail: DeliveryAddress[];
 }

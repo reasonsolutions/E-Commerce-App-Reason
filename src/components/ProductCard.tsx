@@ -1,116 +1,146 @@
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, GestureResponderEvent } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import React, { useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  GestureResponderEvent,
+} from 'react-native';
 import { ProductInterface } from '../api/interfaces';
+import { Colors, Space, Radius } from '../theme';
+import { Type } from '../theme/typography';
+import { FontFamily } from '../theme/fonts';
+
+// Card width is fixed so FlatList snap interval math (HomeScreen) is unchanged.
+const CARD_W = 180;
 
 interface ProductCardProps {
   product: ProductInterface;
   onPress?: (event: GestureResponderEvent) => void;
   onFavoritePress?: (product: ProductInterface) => void;
+  tall?: boolean;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, onFavoritePress }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = false }) => {
+  const imgOpacity = useRef(new Animated.Value(0)).current;
+
+  const onLoad = useCallback(() => {
+    Animated.timing(imgOpacity, {
+      toValue: 1, duration: 400, useNativeDriver: true,
+    }).start();
+  }, [imgOpacity]);
+
+  const hasDiscount = product.ComparePrice > product.Price;
+  const discountPct = hasDiscount
+    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    : 0;
+
+  // 4:5 portrait ratio per spec B12. Tall variant for first card in shelf.
+  const imgH = tall ? CARD_W * 1.48 : CARD_W * 1.25;
+
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
-      <View style={styles.imageContainer}>
-        <Image
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.86}>
+      {/* surfaceDeep bg so transparent product images don't dissolve */}
+      <View style={[styles.imgWrap, { height: imgH }]}>
+        <Animated.Image
           source={{ uri: product.Images?.split(';')[0] || '' }}
-          style={styles.image}
+          style={[styles.img, { opacity: imgOpacity }]}
+          resizeMode="cover"
+          onLoad={onLoad}
         />
-        {/* <TouchableOpacity
-          style={styles.favoriteButton}
-          onPress={() => onFavoritePress && onFavoritePress(product)}
-        >
-          
-        </TouchableOpacity> */}
-      </View>
-      <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
-        {product.Price && (
-          <Text style={styles.price}>${product.Price}</Text>
-        )}
-        {product.ComparePrice && (
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text
-              style={[
-          styles.price,
-          {
-            color: 'red',
-            textDecorationLine: 'line-through',
-            marginRight: 6,
-            fontSize: 14,
-            fontWeight: '400',
-          },
-              ]}
-            >
-              ${product.ComparePrice}
-            </Text>
-            {/* Discounted price is already rendered above */}
+
+        {/* Ember badge — top-left, mono label per spec A7 */}
+        {hasDiscount && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>-{discountPct}%</Text>
           </View>
         )}
+      </View>
+
+      <View style={styles.info}>
+        {product.Brand_Name ? (
+          <Text style={styles.brand} numberOfLines={1}>{product.Brand_Name}</Text>
+        ) : null}
+        <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>${product.Price.toFixed(2)}</Text>
+          {hasDiscount && (
+            <Text style={styles.was}>${product.ComparePrice.toFixed(2)}</Text>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-    width: 150,
+  card: {
+    width: CARD_W,
   },
-  imageContainer: {
-    position: 'relative',
-    marginBottom: 8,
+  imgWrap: {
+    width:           CARD_W,
+    borderRadius:    Radius.md,
+    overflow:        'hidden',
+    backgroundColor: Colors.surfaceDeep,
+    position:        'relative',
   },
-  image: {
-    width: '100%',
-    height: 120,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F5',
+  img: {
+    width:  '100%',
+    height: '100%',
   },
-  favoriteButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
+  // Ember tint + ember border — reads as a label, not a danger chip
+  badge: {
+    position:          'absolute',
+    top:               10,
+    left:              10,
+    backgroundColor:   Colors.accentTint,
+    borderRadius:      Radius.xs,
+    paddingVertical:   2,
+    paddingHorizontal: 5,
+    borderWidth:       0.5,
+    borderColor:       Colors.accent,
   },
-  content: {
-    flex: 1,
+  badgeText: {
+    ...Type.label,
+    color:         Colors.accent,
+    letterSpacing: 0.4,
+    textTransform: 'none',
+  },
+  info: {
+    paddingTop:        Space[2] + 2,
+    paddingHorizontal: 2,
+    gap:               3,
+  },
+  brand: {
+    ...Type.label,
+    color: Colors.ink4,
   },
   name: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontFamily:    FontFamily.serif,
+    fontSize:      14,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.2,
+    lineHeight:    19,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems:    'baseline',
+    gap:           Space[1] + 2,
+    marginTop:     2,
   },
   price: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#007AFF',
+    fontFamily:    FontFamily.serif,
+    fontSize:      15,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.3,
+  },
+  was: {
+    ...Type.caption,
+    textDecorationLine: 'line-through',
+    color:              Colors.ink4,
   },
 });
 
