@@ -12,7 +12,8 @@
   ],
   "compilerOptions": {
     "types": [
-      "nativewind/types"
+      "nativewind/types",
+      "jest"
     ]
   }
 }

@@ -1,16 +1,14 @@
 export interface PostCartSaveInterface {
-  "CustomerLoginCode": null,
-  "CustomerProfileCode": number,
-  "Inventory_Id": number,
-  "BranchCode": null,
-  "CountryCode": null,
-  "Quantity": number,
-  "SpecialRemarks": string
+  CustomerProfileCode: number;
+  InventoryId: number;
+  Quantity: number;
+  IsPurchased: boolean;
 }
 
 
 export interface deleteCartInterface {
     CartDetailsCode: number;
+    IsPurchased: boolean;
 }
 
 export interface OrderHistoryRequest {
@@ -157,10 +155,36 @@ export interface CategoryBrandInterface {
 //result of getcategory api
 
 export interface CategoryInterface {
-    Category_Id: number;
+    CategoryId: number;
     CategoryName: string;
     CategoryImage: string;
     Brands: CategoryBrandInterface[];
+}
+
+// raw row from getProductsByCategory — one row per inventory variant
+export interface CategoryProductRaw {
+    ItemID: number;
+    Description: string;
+    SubCategoryID: number;
+    Images: string;
+    CreatedDate: string;
+    BrandID: number;
+    MerchantID: number;
+    BrandName: string;
+    CategoryID: number;
+    CategoryName: string;
+    CategoryImage: string;
+    SCName: string;
+    Inventory_Id: number;
+    Variant: string;
+    Count: number;
+    Date_Created: string;
+    Date_Updated: string;
+    Price: number | null;
+    ComparePrice: number | null;
+    SKU: string | null;
+    ApprovedBy: number | null;
+    ApprovedOn: string | null;
 }
 
 //get products by category api result
@@ -200,34 +224,32 @@ export interface SubCategoryInterface {
     Name: string;
 }
 
-//result of select product api
-export interface ProductDetailInterface {
-    Brand_Id: number;
-    Brand_Name: string;
-    Date_Created: string;
-    Inventory_Id: number;
+// result of getProductByItemId api
+export interface VariantPriceDetails {
+    Price: number | null;
+    ComparePrice: number | null;
+}
+
+export interface VariantInterface {
+    InventoryId: string;
     Variant: string;
-    Count: number;
-    Item_Id: number;
+    Stock: number;
+    SKU: string;
+    PriceDetails: VariantPriceDetails;
+    StockStatus: { Value: number; Description: string };
+}
+
+export interface ProductDetailInterface {
+    ItemId: string;
     Name: string;
-    Price: number;
-    ComparePrice: number;
     Description: string;
     Images: string;
-    Category_Id: number;
+    BrandId: number;
+    BrandName: string;
+    CategoryId: string;
     CategoryName: string;
-    SCName: string;
-}
-//result of select product api (second part)
-export interface VariantInterface {
-    "Inventory_Id": number,
-    "Images": string,
-    "Price": number,
-    "ComparePrice": number,
-    "Variant": string,
-    "Count": number,
-    "Date_Created": string,
-    "Date_Updated": string
+    SubCategoryName: string;
+    Variants: VariantInterface[];
 }
 
 export interface LoggedInCustomerInterface {
@@ -277,15 +299,19 @@ export interface OrderInterface {
 export interface SavedCartItemInterface {
     CartDetailsCode: number;
     CartMasterCode: number;
-    Inventory_Id: number;
+    InventoryId: number;
     Quantity: number;
+    IsPurchased: boolean;
     Images: string;
     Name: string;
-    Price: number;
-    ComparePrice: number;
     Count: number;
     Variant: string;
-    Brand_Name: string;
+    BrandName: string;
+    Price: number;
+    PriceDetails: {
+        Price: number;
+        ComparePrice: number;
+    };
 }
 
 
@@ -321,17 +347,17 @@ export interface PlaceOrderInterface {
 // ─── Wishlist (confirmed real endpoints) ─────────────────────────────────────
 
 export interface WishlistItemInterface {
-  WishlistItemCode:     number;
+  WishlistCode:         number;
   CustomerProfileCode:  number;
-  Inventory_Id:         number;
-  Item_Id:              number;
+  InventoryID:          number;
+  BrandName:            string;
   Name:                 string;
-  Images:               string;
+  AddedOn:              string;
+  StockCount:           number;
   Price:                number;
   ComparePrice:         number;
-  Variant:              string;
-  Brand_Name:           string;
-  AddedDate:            string;
+  SKU:                  string;
+  IsInStock:            number;
 }
 
 export interface PostAddToWishlistInterface {

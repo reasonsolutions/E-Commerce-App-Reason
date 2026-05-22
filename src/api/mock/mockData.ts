@@ -5,6 +5,7 @@ import {
   ProductDetailInterface,
   VariantInterface,
   SavedCartItemInterface,
+  WishlistItemInterface,
   DeliveryAddressInterface,
   LoggedInCustomerInterface,
   OrderDetailItemInterface,
@@ -28,37 +29,37 @@ export function ok<T>(result: T, message?: string): ApiEnvelope<T> {
 
 export const mockCategories: CategoryInterface[] = [
   {
-    Category_Id: 1,
+    CategoryId: 1,
     CategoryName: 'Footwear',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146432/shoes_xu0vfr.png',
     Brands: [{ Brand_Id: 1, Brand_Name: 'Nike' }],
   },
   {
-    Category_Id: 2,
+    CategoryId: 2,
     CategoryName: 'Watches',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146431/watch_ztlcto.png',
     Brands: [{ Brand_Id: 5, Brand_Name: 'Casio' }],
   },
   {
-    Category_Id: 3,
+    CategoryId: 3,
     CategoryName: 'Bag',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146429/bags_x9w0pz.png',
     Brands: [{ Brand_Id: 6, Brand_Name: 'Van Heusen' }],
   },
   {
-    Category_Id: 4,
+    CategoryId: 4,
     CategoryName: 'Pants',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146429/jeans_zmbaiy.png',
     Brands: [{ Brand_Id: 7, Brand_Name: 'Allen Solly' }],
   },
   {
-    Category_Id: 5,
+    CategoryId: 5,
     CategoryName: 'Clothes',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146428/shirt_mjjvxn.png',
     Brands: [{ Brand_Id: 8, Brand_Name: 'ARROW' }],
   },
   {
-    Category_Id: 7,
+    CategoryId: 7,
     CategoryName: 'Skin Care',
     CategoryImage: 'https://png.pngtree.com/png-clipart/20221015/original/pngtree-skincare-logo-png-image_8689417.png',
     Brands: [{ Brand_Id: 11, Brand_Name: 'Lakme' }],
@@ -163,83 +164,89 @@ export const mockProducts: ProductInterface[] = [
 
 // ─── Product detail + variants (for selectProduct) ───────────────────────────
 
+const mockVariant = (id: string, label: string, price: number, comparePrice: number, stock: number): VariantInterface => ({
+  InventoryId: id,
+  Variant: label,
+  Stock: stock,
+  SKU: `SKU-${id}`,
+  PriceDetails: { Price: price, ComparePrice: comparePrice },
+  StockStatus: { Value: stock > 0 ? 1 : 2, Description: stock > 0 ? 'in_stock' : 'out_of_stock' },
+});
+
 export const mockProductDetailMap: Record<number, { detail: ProductDetailInterface; variants: VariantInterface[] }> = {
   3: {
     detail: {
-      Brand_Id: 1, Brand_Name: 'Nike', Date_Created: '2024-07-01T00:00:00',
-      Inventory_Id: 3, Variant: '14', Count: 189,
-      Item_Id: 1, Name: "Cortez Men's Shoes", Price: 7495, ComparePrice: 8495,
+      ItemId: '3', BrandId: 1, BrandName: 'Nike',
+      Name: "Cortez Men's Shoes",
       Description: "Was 1972. Now 2023. Sometimes more is better. Recrafting the revered look, we've refreshed the design with a wider toe area and firmer side panels so you can comfortably wear them day in, day out.",
-      Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/21c42b51-791a-4b61-ba86-735a490e0a811710483429334NikeCortezMensShoes6.jpg;https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/c0e48663-2149-4170-a755-ae6913d737dc1710483429351NikeCortezMensShoes5.jpg;',
-      Category_Id: 1, CategoryName: 'Footwear', SCName: 'Shoes',
+      Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/21c42b51-791a-4b61-ba86-735a490e0a811710483429334NikeCortezMensShoes6.jpg;',
+      CategoryId: '1', CategoryName: 'Footwear', SubCategoryName: 'Shoes',
+      Variants: [
+        mockVariant('1', '11', 7495, 8495, 0),
+        mockVariant('2', '12', 7495, 8495, 0),
+        mockVariant('3', '13', 7495, 8495, 45),
+        mockVariant('4', '14', 7495, 8495, 189),
+        mockVariant('5', '15', 7495, 8495, 72),
+      ],
     },
-    variants: [
-      { Inventory_Id: 1, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '11', Count: 0, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
-      { Inventory_Id: 2, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '12', Count: 0, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
-      { Inventory_Id: 3, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '13', Count: 45, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
-      { Inventory_Id: 4, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '14', Count: 189, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
-      { Inventory_Id: 5, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;', Price: 7495, ComparePrice: 8495, Variant: '15', Count: 72, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
-    ],
+    variants: [],
   },
   65: {
     detail: {
-      Brand_Id: 1, Brand_Name: 'Nike', Date_Created: '2025-09-22T11:33:42.193',
-      Inventory_Id: 65, Variant: 'UK 5.5', Count: 100,
-      Item_Id: 31, Name: "Air Jordan 40 PF 'Blue Suede'", Price: 5000, ComparePrice: 6000,
+      ItemId: '65', BrandId: 1, BrandName: 'Nike',
+      Name: "Air Jordan 40 PF 'Blue Suede'",
       Description: "There's only one way to celebrate 40 years of Air Jordans. Full-length Zoom Strobel + ZoomX foam. Herringbone traction. Washed suede.",
-      Images: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/fe12ac0f-c417-429f-9c91-085e283c332f/AIR+JORDAN+40+PF.png;https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/a6db5942-521f-45e8-92bb-d68430ef6443/AIR+JORDAN+40+PF.png;',
-      Category_Id: 1, CategoryName: 'Footwear', SCName: 'Shoes',
+      Images: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/fe12ac0f-c417-429f-9c91-085e283c332f/AIR+JORDAN+40+PF.png;',
+      CategoryId: '1', CategoryName: 'Footwear', SubCategoryName: 'Shoes',
+      Variants: [
+        mockVariant('65', 'UK 5.5', 5000, 6000, 100),
+        mockVariant('66', 'UK 6',   5000, 6000, 2),
+        mockVariant('67', 'UK 10',  5000, 6000, 1),
+      ],
     },
-    variants: [
-      { Inventory_Id: 65, Images: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/fe12ac0f-c417-429f-9c91-085e283c332f/AIR+JORDAN+40+PF.png;', Price: 5000, ComparePrice: 6000, Variant: 'UK 5.5', Count: 100, Date_Created: '2025-09-22T11:33:42.193', Date_Updated: '2025-09-22T11:33:42.193' },
-      { Inventory_Id: 66, Images: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/fe12ac0f-c417-429f-9c91-085e283c332f/AIR+JORDAN+40+PF.png;', Price: 5000, ComparePrice: 6000, Variant: 'UK 6', Count: 2, Date_Created: '2025-09-22T11:33:42.193', Date_Updated: '2025-09-22T11:33:42.193' },
-      { Inventory_Id: 67, Images: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/fe12ac0f-c417-429f-9c91-085e283c332f/AIR+JORDAN+40+PF.png;', Price: 5000, ComparePrice: 6000, Variant: 'UK 10', Count: 1, Date_Created: '2025-09-22T11:33:42.193', Date_Updated: '2025-09-22T11:33:42.193' },
-    ],
+    variants: [],
   },
   8: {
     detail: {
-      Brand_Id: 5, Brand_Name: 'Casio', Date_Created: '2024-07-01T00:00:00',
-      Inventory_Id: 8, Variant: 'Units', Count: 158,
-      Item_Id: 9, Name: 'Men Analogue and Digital Chronograph Solar Powered Watch ECB-950MP-1ADF', Price: 1600, ComparePrice: 1700,
+      ItemId: '8', BrandId: 5, BrandName: 'Casio',
+      Name: 'Men Analogue and Digital Chronograph Solar Powered Watch ECB-950MP-1ADF',
       Description: 'Display: analogue and digital. Movement: quartz. Power Source: solar. Water resistance: 100 m. Warranty: 2 years.',
-      Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/22598992/2023/3/31/8742cd00-78ba-4dd9-85bf-4c24379f243c1680261731212Watches1.jpg;https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/22598992/2023/3/31/8f3f3761-0292-4b9b-9351-b439ba7ac2281680261731230Watches4.jpg;',
-      Category_Id: 2, CategoryName: 'Watches', SCName: 'Watches',
+      Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/22598992/2023/3/31/8742cd00-78ba-4dd9-85bf-4c24379f243c1680261731212Watches1.jpg;',
+      CategoryId: '2', CategoryName: 'Watches', SubCategoryName: 'Watches',
+      Variants: [mockVariant('8', 'Units', 1600, 1700, 158)],
     },
-    variants: [
-      { Inventory_Id: 8, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/22598992/2023/3/31/8742cd00-78ba-4dd9-85bf-4c24379f243c1680261731212Watches1.jpg;', Price: 1600, ComparePrice: 1700, Variant: 'Units', Count: 158, Date_Created: '2024-07-01T00:00:00', Date_Updated: '2024-07-01T00:00:00' },
-    ],
+    variants: [],
   },
   59: {
     detail: {
-      Brand_Id: 11, Brand_Name: 'Lakme', Date_Created: '2025-09-18T10:17:51.99',
-      Inventory_Id: 59, Variant: '40-50 ML', Count: 50,
-      Item_Id: 28, Name: 'Matte Sunscreen SPF 50 PA+++ Niacinamide with UVA/B Protection - 50 ml',
-      Price: 250, ComparePrice: 349,
+      ItemId: '59', BrandId: 11, BrandName: 'Lakme',
+      Name: 'Matte Sunscreen SPF 50 PA+++ Niacinamide with UVA/B Protection - 50 ml',
       Description: '100% Original Products. Concerns: Sun Protection. Key Ingredients: Vitamin B3. Preferences: Fragrance-Free, SPF 30 to 50.',
-      Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/2137201/2025/4/14/4b95c457-97cf-4f02-84bf-7ef89ac36d481744628244363-Lakme-Matte-Sunscreen-SPF-50-PA-Niacinamide-with-UVAB-Protec-3.jpg;https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/2137201/2025/4/14/37d0ac75-fd66-4dea-8ee8-d69385551ab21744628244322-Lakme-Matte-Sunscreen-SPF-50-PA-Niacinamide-with-UVAB-Protec-4.jpg;',
-      Category_Id: 7, CategoryName: 'Skin Care', SCName: 'Sunscreen',
+      Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/2137201/2025/4/14/4b95c457-97cf-4f02-84bf-7ef89ac36d481744628244363-Lakme-Matte-Sunscreen-SPF-50-PA-Niacinamide-with-UVAB-Protec-3.jpg;',
+      CategoryId: '7', CategoryName: 'Skin Care', SubCategoryName: 'Sunscreen',
+      Variants: [
+        mockVariant('59', '40-50 ML',  250, 349, 50),
+        mockVariant('60', '80-100 gm', 250, 349, 20),
+        mockVariant('61', '60-70 ML',  250, 349, 50),
+      ],
     },
-    variants: [
-      { Inventory_Id: 59, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/2137201/2025/4/14/4b95c457-97cf-4f02-84bf-7ef89ac36d481744628244363-Lakme-Matte-Sunscreen-SPF-50-PA-Niacinamide-with-UVAB-Protec-3.jpg;', Price: 250, ComparePrice: 349, Variant: '40-50 ML', Count: 50, Date_Created: '2025-09-18T10:17:51.99', Date_Updated: '2025-09-18T10:17:51.99' },
-      { Inventory_Id: 60, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/2137201/2025/4/14/37d0ac75-fd66-4dea-8ee8-d69385551ab21744628244322-Lakme-Matte-Sunscreen-SPF-50-PA-Niacinamide-with-UVAB-Protec-4.jpg;', Price: 250, ComparePrice: 349, Variant: '80-100 gm', Count: 20, Date_Created: '2025-09-18T10:17:51.99', Date_Updated: '2025-09-18T10:17:51.99' },
-      { Inventory_Id: 61, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/2137201/2025/4/14/442258bb-87f8-401c-b828-94efe5f833001744628244280-Lakme-Matte-Sunscreen-SPF-50-PA-Niacinamide-with-UVAB-Protec-5.jpg;', Price: 250, ComparePrice: 349, Variant: '60-70 ML', Count: 50, Date_Created: '2025-09-18T10:17:51.99', Date_Updated: '2025-09-18T10:17:51.99' },
-    ],
+    variants: [],
   },
   23: {
     detail: {
-      Brand_Id: 8, Brand_Name: 'ARROW', Date_Created: '2024-09-18T07:30:07.96',
-      Inventory_Id: 23, Variant: 'S', Count: 10,
-      Item_Id: 17, Name: 'Polo Collar Pure Cotton T-shirt', Price: 1499, ComparePrice: 1599,
+      ItemId: '23', BrandId: 8, BrandName: 'ARROW',
+      Name: 'Polo Collar Pure Cotton T-shirt',
       Description: 'Yellow T-shirt for men. Solid Regular length. Polo collar. Short, regular sleeves. Knitted cotton fabric. Button closure.',
-      Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28292176/2024/3/15/6eb511d5-087a-40d2-be3c-1ff9c4c94ba51710499906168ArrowSportMenPoloCollarAppliqueT-shirt5.jpg;https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28292176/2024/3/15/d1f5a6a6-d590-43f0-a114-4db3d41b5b9d1710499906241ArrowSportMenPoloCollarAppliqueT-shirt6.jpg;https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28292176/2024/3/15/a9aed791-63db-424c-9b3c-cefc431cc65a1710499906190ArrowSportMenPoloCollarAppliqueT-shirt7.jpg;',
-      Category_Id: 5, CategoryName: 'Clothes', SCName: 'T-Shirt',
+      Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28292176/2024/3/15/6eb511d5-087a-40d2-be3c-1ff9c4c94ba51710499906168ArrowSportMenPoloCollarAppliqueT-shirt5.jpg;',
+      CategoryId: '5', CategoryName: 'Clothes', SubCategoryName: 'T-Shirt',
+      Variants: [
+        mockVariant('23', 'S',  1499, 1599, 10),
+        mockVariant('24', 'M',  1499, 1599, 19),
+        mockVariant('25', 'XL', 1499, 1599, 30),
+        mockVariant('26', 'L',  1499, 1599, 20),
+      ],
     },
-    variants: [
-      { Inventory_Id: 23, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28292176/2024/3/15/6eb511d5-087a-40d2-be3c-1ff9c4c94ba51710499906168ArrowSportMenPoloCollarAppliqueT-shirt5.jpg;', Price: 1499, ComparePrice: 1599, Variant: 'S', Count: 10, Date_Created: '2024-09-18T07:30:07.96', Date_Updated: '2024-09-18T07:30:07.96' },
-      { Inventory_Id: 24, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28292176/2024/3/15/6eb511d5-087a-40d2-be3c-1ff9c4c94ba51710499906168ArrowSportMenPoloCollarAppliqueT-shirt5.jpg;', Price: 1499, ComparePrice: 1599, Variant: 'M', Count: 19, Date_Created: '2024-09-18T07:30:07.96', Date_Updated: '2024-09-18T07:30:07.96' },
-      { Inventory_Id: 25, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28292176/2024/3/15/6eb511d5-087a-40d2-be3c-1ff9c4c94ba51710499906168ArrowSportMenPoloCollarAppliqueT-shirt5.jpg;', Price: 1499, ComparePrice: 1599, Variant: 'XL', Count: 30, Date_Created: '2024-09-18T07:30:07.96', Date_Updated: '2024-09-18T07:30:07.96' },
-      { Inventory_Id: 26, Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28292176/2024/3/15/6eb511d5-087a-40d2-be3c-1ff9c4c94ba51710499906168ArrowSportMenPoloCollarAppliqueT-shirt5.jpg;', Price: 1499, ComparePrice: 1599, Variant: 'L', Count: 20, Date_Created: '2024-09-18T07:30:07.96', Date_Updated: '2024-09-18T07:30:07.96' },
-    ],
+    variants: [],
   },
 };
 
@@ -254,41 +261,44 @@ export const mockCartItems: SavedCartItemInterface[] = [
   {
     CartDetailsCode: 320,
     CartMasterCode: 159,
-    Inventory_Id: 7,
+    InventoryId: 7,
     Quantity: 1,
-    Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/17264162/2023/3/14/b0b4f604-db5c-411e-95ef-a53731d1bd171678775868510-Crocs-Unisex-Off-White-Sliders-8121678775868171-1.jpg;https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/17264162/2023/3/14/eb393456-9bd3-4804-b4ff-20a445697e451678775868496-Crocs-Unisex-Off-White-Sliders-8121678775868171-2.jpg;',
+    IsPurchased: false,
+    Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/17264162/2023/3/14/b0b4f604-db5c-411e-95ef-a53731d1bd171678775868510-Crocs-Unisex-Off-White-Sliders-8121678775868171-1.jpg;',
     Name: 'Unisex Off White Sliders',
     Price: 1247,
-    ComparePrice: 1347,
+    PriceDetails: { Price: 1247, ComparePrice: 1347 },
     Count: 196,
     Variant: '10',
-    Brand_Name: 'Crocs',
+    BrandName: 'Crocs',
   },
   {
     CartDetailsCode: 321,
     CartMasterCode: 159,
-    Inventory_Id: 65,
+    InventoryId: 65,
     Quantity: 1,
+    IsPurchased: false,
     Images: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/fe12ac0f-c417-429f-9c91-085e283c332f/AIR+JORDAN+40+PF.png;',
     Name: "Air Jordan 40 PF 'Blue Suede'",
     Price: 5000,
-    ComparePrice: 6000,
+    PriceDetails: { Price: 5000, ComparePrice: 6000 },
     Count: 100,
     Variant: 'UK 5.5',
-    Brand_Name: 'Nike',
+    BrandName: 'Nike',
   },
   {
     CartDetailsCode: 322,
     CartMasterCode: 159,
-    Inventory_Id: 59,
+    InventoryId: 59,
     Quantity: 2,
+    IsPurchased: false,
     Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/2137201/2025/4/14/4b95c457-97cf-4f02-84bf-7ef89ac36d481744628244363-Lakme-Matte-Sunscreen-SPF-50-PA-Niacinamide-with-UVAB-Protec-3.jpg;',
     Name: 'Matte Sunscreen SPF 50 PA+++',
     Price: 250,
-    ComparePrice: 349,
+    PriceDetails: { Price: 250, ComparePrice: 349 },
     Count: 50,
     Variant: '40-50 ML',
-    Brand_Name: 'Lakme',
+    BrandName: 'Lakme',
   },
 ];
 
@@ -465,46 +475,32 @@ export const mockOrderDetail: { OrderDetails: OrderDetailItemInterface[]; Delive
 
 // ─── Wishlist (new domain — future API stub) ──────────────────────────────────
 
-export interface WishlistItemInterface {
-  WishlistItemCode: number;
-  CustomerProfileCode: number;
-  Inventory_Id: number;
-  Item_Id: number;
-  Name: string;
-  Images: string;
-  Price: number;
-  ComparePrice: number;
-  Variant: string;
-  Brand_Name: string;
-  AddedDate: string;
-}
-
 export const mockWishlistItems: WishlistItemInterface[] = [
   {
-    WishlistItemCode: 1,
+    WishlistCode: 1,
     CustomerProfileCode: 100079,
-    Inventory_Id: 3,
-    Item_Id: 1,
+    InventoryID: 3,
     Name: "Cortez Men's Shoes",
-    Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/28282410/2024/3/15/af0f1c2c-b604-4c10-8148-6c2cda15ffaa1710483429264NikeCortezMensShoes1.jpg;',
+    BrandName: 'Nike',
+    AddedOn: '2025-10-01T09:00:00.000',
+    StockCount: 45,
     Price: 7495,
     ComparePrice: 8495,
-    Variant: '14',
-    Brand_Name: 'Nike',
-    AddedDate: '2025-10-01T09:00:00.000',
+    SKU: 'SKU-3',
+    IsInStock: 1,
   },
   {
-    WishlistItemCode: 2,
+    WishlistCode: 2,
     CustomerProfileCode: 100079,
-    Inventory_Id: 20,
-    Item_Id: 15,
+    InventoryID: 20,
     Name: 'Structured Shoulder Bag',
-    Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/29343624/2024/5/24/d272726d-c617-4a66-ada3-ed016a45e05c1716538603636-Van-Heusen-Women-Handbags-8891716538603161-4.jpg;',
+    BrandName: 'Van Heusen',
+    AddedOn: '2025-10-03T14:30:00.000',
+    StockCount: 191,
     Price: 1124,
     ComparePrice: 2499,
-    Variant: 'ONESIZE',
-    Brand_Name: 'Van Heusen',
-    AddedDate: '2025-10-03T14:30:00.000',
+    SKU: 'SKU-20',
+    IsInStock: 1,
   },
 ];
 

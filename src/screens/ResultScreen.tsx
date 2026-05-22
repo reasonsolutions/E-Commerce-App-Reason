@@ -333,11 +333,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           }
           return [];
         } else {
-          const data = await getProductsByCategory(categoryId ?? '');
-          if (data?.statusCode === 1) {
-            return deduplicateProducts(data.result.productsDetails || []);
-          }
-          return [];
+          const products = await getProductsByCategory(categoryId ?? '');
+          return deduplicateProducts(products);
         }
       }, cancelled),
     [run, categoryId, isFlashDeals],
@@ -375,7 +372,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   }
 
   const navigateToProduct = useCallback(
-    (inventoryId: number) => navigation.navigate('Product', { product: inventoryId }),
+    (itemId: number) => navigation.navigate('Product', { product: itemId }),
     [navigation],
   );
 
@@ -430,7 +427,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
               <Animated.View style={heroAnim}>
                 <HeroCard
                   product={heroProduct}
-                  onPress={() => navigateToProduct(heroProduct.Inventory_Id)}
+                  onPress={() => navigateToProduct(heroProduct.Item_Id)}
                 />
               </Animated.View>
             )}
@@ -445,7 +442,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                   <SpanCard
                     key={`span-${row.idx}`}
                     product={row.product}
-                    onPress={() => navigateToProduct(row.product.Inventory_Id)}
+                    onPress={() => navigateToProduct(row.product.Item_Id)}
                     delay={delay}
                   />
                 );
@@ -458,13 +455,13 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                 <View key={`pair-${row.leftIdx}`} style={styles.gridRow}>
                   <GridTile
                     product={row.left}
-                    onPress={() => navigateToProduct(row.left.Inventory_Id)}
+                    onPress={() => navigateToProduct(row.left.Item_Id)}
                     delay={leftDelay}
                   />
                   {row.right ? (
                     <GridTile
                       product={row.right}
-                      onPress={() => navigateToProduct(row.right!.Inventory_Id)}
+                      onPress={() => navigateToProduct(row.right!.Item_Id)}
                       delay={rightDelay}
                     />
                   ) : (

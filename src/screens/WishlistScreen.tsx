@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
 import type { WishlistItemInterface } from '../api/interfaces';
-import { EmptyState, BottomNavBar, Price, DarkHeader, FadeImage } from '../components/ui';
+import { EmptyState, BottomNavBar, Price, DarkHeader } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -59,24 +59,19 @@ const WishlistRow: React.FC<{
           {...handlers}
           style={styles.row}
           activeOpacity={1}
-          onPress={() => { haptic.light(); onPress(item.Inventory_Id); }}
+          onPress={() => { haptic.light(); onPress(item.InventoryID); }}
         >
-          {/* Portrait image */}
-          <FadeImage
-            uri={item.Images.split(';')[0]}
-            width={IMG_W}
-            height={IMG_H}
-            borderRadius={Radius.sm}
-          />
+          {/* Portrait image — API does not return image URL, show placeholder */}
+          <View style={{ width: IMG_W, height: IMG_H, borderRadius: Radius.sm, backgroundColor: Colors.surfaceDeep }} />
 
           {/* Content */}
           <View style={styles.content}>
-            {item.Brand_Name ? (
-              <Text style={styles.brand}>{item.Brand_Name.toUpperCase()}</Text>
+            {item.BrandName ? (
+              <Text style={styles.brand}>{item.BrandName.toUpperCase()}</Text>
             ) : null}
             <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
-            {item.Variant && item.Variant !== 'ONESIZE' ? (
-              <Text style={styles.variant}>{item.Variant}</Text>
+            {item.SKU ? (
+              <Text style={styles.variant}>{item.SKU}</Text>
             ) : null}
             <View style={styles.priceRow}>
               <Price
@@ -90,7 +85,7 @@ const WishlistRow: React.FC<{
           {/* Remove — plain × glyph, no circle background (CartScreen pattern) */}
           <TouchableOpacity
             style={styles.removeBtn}
-            onPress={() => { haptic.light(); onRemove(item.WishlistItemCode); }}
+            onPress={() => { haptic.light(); onRemove(item.WishlistCode); }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Text style={styles.removeGlyph}>×</Text>
@@ -110,7 +105,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
   const [items, setItems] = useState<WishlistItemInterface[]>([]);
-  const [profileCode, setProfileCode] = useState<number | null>(null);
+  const [profileCode, setProfileCode] = useState<number | null>(100080);
 
   useEffect(() => {
     if (fetched !== null) setItems(fetched);
@@ -120,10 +115,9 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     (cancelled?: { current: boolean }) =>
       run(async () => {
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-        if (!userData) return [];
-        const user = JSON.parse(userData);
-        setProfileCode(user.CustomerProfileCode);
-        const response = await getWishlist(user.CustomerProfileCode);
+        const code = userData ? JSON.parse(userData).CustomerProfileCode : 100080;
+        setProfileCode(code);
+        const response = await getWishlist(code);
         return response.statusCode === 1 ? (response.result || []) : [];
       }, cancelled),
     [run],
@@ -139,7 +133,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   const handleRemove = async (wishlistItemCode: number) => {
     if (!profileCode) return;
-    setItems(prev => prev.filter(i => i.WishlistItemCode !== wishlistItemCode));
+    setItems(prev => prev.filter(i => i.WishlistCode !== wishlistItemCode));
     await removeFromWishlist(profileCode, wishlistItemCode);
   };
 
@@ -190,7 +184,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       <FlatList
         data={items}
         renderItem={renderItem}
-        keyExtractor={item => String(item.WishlistItemCode)}
+        keyExtractor={item => String(item.WishlistCode)}
         contentContainerStyle={[
           styles.listContent,
           items.length === 0 && styles.listContentEmpty,

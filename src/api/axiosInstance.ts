@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@env';
 import { classifyError, apiLog } from './apiError';
+import { logRequest, logResponse, logError, TimedAxiosRequestConfig } from './apiLogger';
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -14,6 +15,8 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
   config => {
+    (config as TimedAxiosRequestConfig)._startTime = Date.now();
+    logRequest(config as TimedAxiosRequestConfig);
     // TODO: Inject auth token here once the backend requires it.
     // Example:
     //   const token = await AsyncStorage.getItem(STORAGE_KEYS.authToken);
@@ -21,7 +24,7 @@ axiosInstance.interceptors.request.use(
     return config;
   },
   err => {
-    // Request setup failures (e.g. bad config) — classify and forward.
+    logError(err);
     return Promise.reject(classifyError(err));
   },
 );
@@ -30,6 +33,7 @@ axiosInstance.interceptors.request.use(
 
 axiosInstance.interceptors.response.use(
   response => {
+    logResponse(response);
     // Successful HTTP response — return data as-is so all existing callers
     // that read response.data continue to work without changes.
     //
@@ -46,6 +50,7 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   err => {
+    logError(err);
     // All HTTP / network / timeout errors flow here.
     // Classify into a structured ApiError and log in dev only.
     const classified = classifyError(err);

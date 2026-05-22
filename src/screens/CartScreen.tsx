@@ -8,6 +8,7 @@ import {
   StatusBar,
   ScrollView,
   Animated,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -18,7 +19,7 @@ import { Colors, Space, Radius, Shadow } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
-import { getSavedCartItems, quantityIncrement, quantityDecrement, postDeleteCartItem } from '../api/cart';
+import { getSavedCartItems, postDeleteCartItem, updateCartItemQuantity } from '../api/cart';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -56,8 +57,9 @@ const CartRow: React.FC<{
     }).start();
   }, [imgOpacity]);
 
-  const lineTotal   = item.Price * item.Quantity;
-  const hasDiscount = item.ComparePrice > item.Price;
+  const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
+  const lineTotal    = item.Price * item.Quantity;
+  const hasDiscount  = comparePrice > item.Price;
 
   const handleDecrement = useCallback(() => {
     haptic.light();
@@ -91,8 +93,8 @@ const CartRow: React.FC<{
         {/* Top: meta + dismiss */}
         <View style={styles.cartTop}>
           <View style={styles.cartMeta}>
-            {item.Brand_Name ? (
-              <Text style={styles.cartBrand}>{item.Brand_Name}</Text>
+            {item.BrandName ? (
+              <Text style={styles.cartBrand}>{item.BrandName}</Text>
             ) : null}
             <Text style={styles.cartName} numberOfLines={2}>{item.Name}</Text>
             {item.Variant ? (
@@ -142,7 +144,7 @@ const CartRow: React.FC<{
             <Text style={styles.cartLineTotal}>${lineTotal.toFixed(2)}</Text>
             {hasDiscount && (
               <Text style={styles.cartUnitWas}>
-                was ${item.ComparePrice.toFixed(2)} ea
+                was ${comparePrice.toFixed(2)} ea
               </Text>
             )}
           </View>
@@ -160,6 +162,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
   const [cartItems, setCartItems] = useState<SavedCartItemInterface[]>([]);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     if (fetched !== null) {
@@ -173,9 +176,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     (cancelled?: { current: boolean }) =>
       run(async () => {
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-        if (!userData) return [];
-        const user = JSON.parse(userData);
-        const response = await getSavedCartItems(user.CustomerProfileCode);
+        const profileCode = userData ? JSON.parse(userData).CustomerProfileCode : 100079;
+        const response = await getSavedCartItems(profileCode);
         return response.result || [];
       }, cancelled),
     [run],
@@ -208,11 +210,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     setCartCount((prev: number) => prev + delta);
 
     try {
-      if (delta > 0) {
-        await quantityIncrement(item.CartDetailsCode, item.Inventory_Id);
-      } else {
-        await quantityDecrement(item.CartDetailsCode, item.Inventory_Id);
-      }
+      await updateCartItemQuantity(item.CartDetailsCode, item.InventoryId, quantity);
     } catch {
       fetchCart();
     }
@@ -233,10 +231,21 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     navigation.navigate('Address', { cartItems });
   }, [navigation, cartItems]);
 
-  const clearCart = useCallback(() => {
-    setCartItems([]);
-    setCartCount(0);
-  }, [setCartCount]);
+  const clearCart = useCallback(async () => {
+    setClearing(true);
+    try {
+      for (const item of cartItems) {
+        await postDeleteCartItem(item.CartDetailsCode);
+      }
+      setCartItems([]);
+      setCartCount(0);
+    } catch {
+      Alert.alert('Error', 'Failed to clear cart. Please try again.');
+      fetchCart();
+    } finally {
+      setClearing(false);
+    }
+  }, [cartItems, setCartCount, fetchCart]);
 
   const renderBody = () => {
     if (isError) {
@@ -375,9 +384,10 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           {cartItems.length > 0 ? (
             <TouchableOpacity
               onPress={clearCart}
+              disabled={clearing}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.clearBtn}>Clear</Text>
+              <Text style={styles.clearBtn}>{clearing ? '...' : 'Clear'}</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.headerSpacer} />

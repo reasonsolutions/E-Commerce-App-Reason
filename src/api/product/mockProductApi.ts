@@ -8,6 +8,7 @@ import {
   getMockSearchResults,
   getMockProductsByCategory,
 } from '../mock/mockData';
+import { ProductByCategoryProductDetails } from '../interfaces';
 
 function delay<T>(value: T): Promise<T> {
   return new Promise(resolve => setTimeout(() => resolve(value), MOCK_DELAY_MS));
@@ -21,9 +22,9 @@ export const getCategories = async () => delay(ok(mockCategories));
 
 export const getSubCategories = async (_categoryCode: string) => delay(ok([]));
 
-export const getProductsByCategory = async (categorycode: string) => {
+export const getProductsByCategory = async (categorycode: string): Promise<ProductByCategoryProductDetails[]> => {
   const products = getMockProductsByCategory(categorycode);
-  return delay(ok({ productsDetails: products, brandsDetails: mockBrands }));
+  return delay(products as unknown as ProductByCategoryProductDetails[]);
 };
 
 export const getProductsBySubCategory = async (_subcategorycode: string) =>
@@ -31,11 +32,17 @@ export const getProductsBySubCategory = async (_subcategorycode: string) =>
 
 export const selectProduct = async (inventorycode: string) => {
   const id = Number(inventorycode);
-  const { detail, variants } = getMockProductDetail(id);
-  return delay(ok([detail, variants]));
+  const { detail } = getMockProductDetail(id);
+  return delay(ok(detail));
 };
 
 export const searchProducts = async (filterstring: string, _category_id: string) => {
   const results = getMockSearchResults(filterstring);
   return delay(ok(results));
+};
+
+export const getProductByItemId = async (itemId: number | string) => {
+  const id = Number(itemId);
+  const { detail } = getMockProductDetail(id);
+  return delay(ok(detail));
 };

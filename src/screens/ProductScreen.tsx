@@ -3,6 +3,7 @@ import {
   StatusBar,
   Animated,
   Dimensions,
+  Alert,
 } from 'react-native';
 import {
   Box,
@@ -18,11 +19,9 @@ import { FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/storageKeys';
-import { ProductDetailInterface, VariantInterface, PostCartSaveInterface } from '../api/interfaces';
+import { ProductDetailInterface, PostCartSaveInterface } from '../api/interfaces';
 import { postSaveCartItems } from '../api/cart';
-import { selectProduct } from '../api/product';
+import { getProductByItemId } from '../api/product';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
 import {
   QuantityStepper,
@@ -42,14 +41,12 @@ import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useCart } from '../context/CartContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { useAppToast } from '../hooks/useAppToast';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_H = Math.round(SCREEN_H * 0.58);
 
 type ProductFetch = {
   product: ProductDetailInterface;
-  variants: VariantInterface[];
 };
 
 type ProductScreenProps = {
@@ -61,12 +58,11 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { setCartCount } = useCart();
   const haptic = useHaptic();
-  const toast = useAppToast();
 
   const [selectedVariant, setSelectedVariant] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
-  const [profileCode, setProfileCode] = useState<number | null>(null);
+  const [profileCode] = useState<number>(100079);
   const [wishlisted, setWishlisted] = useState<boolean>(false);
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
@@ -81,8 +77,8 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const fetchProduct = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
-        const res = await selectProduct(route?.params?.product ?? '1');
-        return { product: res.result[0], variants: res.result[1] };
+        const res = await getProductByItemId(route?.params?.product ?? '1');
+        return { product: res.result as ProductDetailInterface };
       }, cancelled),
     [run, route?.params?.product],
   );
@@ -102,22 +98,19 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   }, [data, plateAnim]);
 
   useEffect(() => {
+    if (!data?.product) return;
     let cancelled = false;
-    AsyncStorage.getItem(STORAGE_KEYS.userData).then(userData => {
-      if (cancelled || !userData) return;
-      const user = JSON.parse(userData);
-      setProfileCode(user.CustomerProfileCode);
-      getWishlist(user.CustomerProfileCode).then(res => {
-        if (cancelled) return;
-        if (res.statusCode === 1) {
-          const inventoryId = Number(route?.params?.product ?? 0);
-          const match = (res.result || []).find((w: any) => w.Inventory_Id === inventoryId);
-          if (match) { setWishlisted(true); setWishlistItemCode(match.WishlistItemCode); }
-        }
-      }).catch(() => {});
+    const code = profileCode ?? 100080;
+    const inventoryId = Number(data.product.Variants?.[0]?.InventoryId ?? 0);
+    getWishlist(code).then(res => {
+      if (cancelled) return;
+      if (res.statusCode === 1) {
+        const match = (res.result || []).find((w: any) => w.InventoryID === inventoryId);
+        if (match) { setWishlisted(true); setWishlistItemCode(match.WishlistCode); }
+      }
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [data]);
 
   const handleHeroImageLoad = useCallback(() => {
     Animated.timing(heroImgOpacity, {
@@ -127,16 +120,21 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   }, [heroImgOpacity]);
 
   const handleAddToCart = useCallback(async () => {
+    const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
     const requestbody: PostCartSaveInterface = {
-      CustomerLoginCode: null,
-      CustomerProfileCode: profileCode!,
-      Inventory_Id: selectedVariant ? parseInt(selectedVariant) : (data?.product?.Inventory_Id ?? 0),
-      BranchCode: null, CountryCode: null,
-      Quantity: quantity, SpecialRemarks: '',
+      CustomerProfileCode: profileCode,
+      InventoryId: selectedVariant ? parseInt(selectedVariant) : parseInt(firstVariantId ?? '0'),
+      Quantity: quantity,
+      IsPurchased: false,
     };
     try {
       setAddingToCart(true);
-      await postSaveCartItems(requestbody);
+      const res = await postSaveCartItems(requestbody);
+      if (res?.statusCode !== 1) {
+        haptic.warning();
+        Alert.alert("Couldn't add to bag", res?.userMessage ?? 'Something went wrong.');
+        return;
+      }
       setCartCount((prev: number) => prev + quantity);
       haptic.success();
       Animated.sequence([
@@ -146,26 +144,32 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       navigation.navigate('Cart');
     } catch {
       haptic.warning();
-      toast.error({ title: "Couldn't add to bag", description: 'Check your connection and try again.' });
+      Alert.alert("Couldn't add to bag", 'Check your connection and try again.');
     } finally {
       setAddingToCart(false);
     }
-  }, [profileCode, selectedVariant, data, quantity, haptic, toast, badgeScale, setCartCount, navigation]);
+  }, [profileCode, selectedVariant, data, quantity, haptic, badgeScale, setCartCount, navigation]);
 
   const handleWishlistToggle = useCallback(async () => {
     if (!profileCode) return;
     haptic.light();
-    const inventoryId = Number(route?.params?.product ?? 0);
+    const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
+    const inventoryId = selectedVariant ? parseInt(selectedVariant) : parseInt(firstVariantId ?? '0');
     if (wishlisted && wishlistItemCode !== null) {
       await removeFromWishlist(profileCode, wishlistItemCode).catch(() => {});
       setWishlisted(false); setWishlistItemCode(null);
     } else {
       const res = await addToWishlist(profileCode, inventoryId).catch(() => null);
+      if (res?.statusCode !== 1) {
+        haptic.warning();
+        Alert.alert('Wishlist', res?.userMessage ?? 'Something went wrong.');
+        return;
+      }
       if (res?.statusCode === 1) {
         getWishlist(profileCode).then(wRes => {
           if (wRes.statusCode === 1) {
-            const match = (wRes.result || []).find((w: any) => w.Inventory_Id === inventoryId);
-            if (match) setWishlistItemCode(match.WishlistItemCode);
+            const match = (wRes.result || []).find((w: any) => w.InventoryID === inventoryId);
+            if (match) setWishlistItemCode(match.WishlistCode);
           }
         }).catch(() => {});
         setWishlisted(true);
@@ -179,17 +183,20 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   }, [haptic]);
 
   const productDetails = data?.product ?? null;
-  const variantDetails = data?.variants ?? [];
+  const variantDetails = productDetails?.Variants ?? [];
+  const selectedVariantObj = variantDetails.find(v => v.InventoryId === selectedVariant) ?? variantDetails[0] ?? null;
   const variantOptions: VariantOption[] = variantDetails.map(v => ({
-    id: String(v.Inventory_Id),
+    id: v.InventoryId,
     label: v.Variant,
-    outOfStock: v.Count === 0,
+    outOfStock: v.StockStatus?.Description === 'out_of_stock',
   }));
   const imageUri       = productDetails?.Images ? productDetails.Images.split(';')[selectedImageIndex] : undefined;
   const imageThumbs    = productDetails?.Images ? productDetails.Images.split(';').filter(Boolean) : [];
-  const hasDiscount    = productDetails ? productDetails.ComparePrice > productDetails.Price : false;
-  const discountPct    = hasDiscount && productDetails
-    ? Math.round(((productDetails.ComparePrice - productDetails.Price) / productDetails.ComparePrice) * 100) : 0;
+  const activePrice        = selectedVariantObj?.PriceDetails?.Price ?? 0;
+  const activeComparePrice = selectedVariantObj?.PriceDetails?.ComparePrice ?? 0;
+  const hasDiscount    = activeComparePrice > activePrice;
+  const discountPct    = hasDiscount
+    ? Math.round(((activeComparePrice - activePrice) / activeComparePrice) * 100) : 0;
 
   const plateStyle = {
     opacity: plateAnim,
@@ -318,10 +325,10 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
             <Animated.View style={plateStyle}>
               <VStack className="bg-surface px-5 pt-5 pb-4" style={{ gap: Space[2] }}>
                 <ProductIdentity
-                  brand={productDetails?.Brand_Name}
+                  brand={productDetails?.BrandName}
                   name={productDetails?.Name ?? ''}
-                  price={productDetails?.Price ?? 0}
-                  comparePrice={productDetails?.ComparePrice}
+                  price={activePrice}
+                  comparePrice={activeComparePrice > activePrice ? activeComparePrice : undefined}
                   loading={!productDetails}
                 />
               </VStack>

@@ -248,7 +248,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     setSubmitting(true);
     try {
       const transformedArray = cartItems.map((item: SavedCartItemInterface) => ({
-        Inventory_Id:      item.Inventory_Id,
+        Inventory_Id:      item.InventoryId,
         Quantity:          item.Quantity,
         Amount:            item.Price * item.Quantity,
         DeliveryCharges:   0,

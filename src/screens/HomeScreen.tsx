@@ -152,7 +152,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     ({ item, index }: { item: ProductInterface; index: number }) => (
       <ProductCard
         product={item}
-        onPress={() => navigation.navigate('Product', { product: item.Variants?.[0]?.InventoryID })}
+        onPress={() => navigation.navigate('Product', { product: item.ItemID })}
         tall={index === 0}
       />
     ),
@@ -163,7 +163,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     ({ item }: { item: CategoryInterface }) => (
       <CategoryItem
         category={item}
-        onPress={() => navigation.navigate('Result', { categoryId: item.Category_Id, categoryName: item.CategoryName })}
+        onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
 
       />
     ),
@@ -267,7 +267,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <FlatList
               data={categories}
               renderItem={renderCategory}
-              keyExtractor={(item) => String(item.Category_Id)}
+              keyExtractor={(item) => String(item.CategoryId)}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoryRail}
@@ -288,7 +288,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <TouchableOpacity
               style={styles.featCard}
               activeOpacity={0.88}
-              onPress={() => navigation.navigate('Product', { product: featuredProduct.Variants?.[0]?.InventoryID })}
+              onPress={() => navigation.navigate('Product', { product: featuredProduct.ItemID })}
             >
               <Image
                 source={{ uri: featuredProduct.Images?.split(';')[0] || '' }}
@@ -327,7 +327,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </View>
                 {/* Text-link CTA — no pill, more editorial */}
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('Product', { product: featuredProduct.Variants?.[0]?.InventoryID })}
+                  onPress={() => navigation.navigate('Product', { product: featuredProduct.ItemID })}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={styles.featLink}>View →</Text>
@@ -389,7 +389,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             activeOpacity={0.88}
             onPress={() =>
               categories?.[0] &&
-              navigation.navigate('Result', { categoryId: categories[0].Category_Id })
+              navigation.navigate('Result', { categoryId: categories[0].CategoryId })
             }
           >
             {/* Left text column */}

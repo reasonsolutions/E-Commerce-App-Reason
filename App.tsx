@@ -25,14 +25,12 @@ function CartHydrator(): null {
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(STORAGE_KEYS.userData).then((raw) => {
-      if (!raw || cancelled) return;
-      let user: { CustomerProfileCode: number };
-      try {
-        user = JSON.parse(raw);
-      } catch {
-        return;
+      if (cancelled) return;
+      let profileCode = 100079;
+      if (raw) {
+        try { profileCode = JSON.parse(raw).CustomerProfileCode; } catch {}
       }
-      getSavedCartItems(user.CustomerProfileCode)
+      getSavedCartItems(profileCode)
         .then((res: { result?: Array<{ Quantity: number }> }) => {
           if (cancelled) return;
           const items: Array<{ Quantity: number }> = res.result || [];
@@ -57,8 +55,8 @@ function App(): React.JSX.Element {
               <CartHydrator />
               <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
               <AppNavigator />
-              <Toaster position="top-center" />
             </BottomSheetModalProvider>
+            <Toaster position="top-center" />
           </CartProvider>
         </GluestackUIProvider>
       </SafeAreaProvider>

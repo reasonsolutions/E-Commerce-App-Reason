@@ -1,54 +1,56 @@
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const authEndpoints = {
-  postLoginCustomer:   'postLoginCustomer',
-  postCreateCustomer:  'postCreateCustomer',
-  postConfirmCustomer: 'postConfirmCustomer',
+  postLoginCustomer:   'ecomm/postLoginCustomer',
+  postCreateCustomer:  'ecomm/postCreateCustomer',
+  postConfirmCustomer: 'ecomm/postConfirmCustomer',
 } as const;
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 export const productEndpoints = {
-  allProducts:              'allProducts',
-  getBrands:                'getBrands',
-  getProductsByBrands:      'getProductsByBrands',
-  getCategoryByBrand:       'getCategoryByBrand',
-  getCategory:              'getCategory',
-  getProductsByCategory:    'getProductsByCategory',
-  getSubCategoryByCategory: 'getSubCategoryByCategory',
-  getProductsBySubCategory: 'getProductsBySubCategory',
-  selectProduct:            'selectProduct',
-  searchProduct:            'searchProduct',
+  allProducts:              'ecomm/allProducts',
+  getBrands:                'ecomm/getBrands',
+  getProductsByBrands:      'ecomm/getProductsByBrands',
+  getCategoryByBrand:       'ecomm/getCategoryByBrand',
+  getCategory:              'ecomm/getCategory',
+  getProductsByCategory:    'ecomm/getProductsByCategory',
+  getSubCategoryByCategory: 'ecomm/getSubCategoryByCategory',
+  getProductsBySubCategory: 'ecomm/getProductsBySubCategory',
+  selectProduct:            'ecomm/selectProduct',
+  searchProduct:            'ecomm/searchProduct',
+  getProductByItemId:       'merchant/getProductByItemId',
 } as const;
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
 export const cartEndpoints = {
-  postCartSaveItem:  'postCartSaveItem',
-  deleteCartItem:    'deleteCartItem',
-  getSavedCartItems: 'getSaveCartItems',
-  quantityIncrement: 'quantityIncrement',
-  quantityDecrement: 'quantityDecrement',
+  postSaveCartItems:  'ecomm/postSaveCartItems',
+  deleteCartItem:    'ecomm/deleteCartItem',
+  getSavedCartItems: 'ecomm/getSaveCartItems',
+  quantityIncrement: 'ecomm/quantityIncrement',
+  quantityDecrement: 'ecomm/quantityDecrement',
+  updateCartItem:    'ecomm/postUpdateCartItem',
 } as const;
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 export const orderEndpoints = {
-  placeOrder:      'placeOrder',
-  getOrderHistory: 'getOrderHistory',
-  getOrderStatus:  'getOrderStatus',
+  placeOrder:      'ecomm/placeOrder',
+  getOrderHistory: 'ecomm/getOrderHistory',
+  getOrderStatus:  'ecomm/getOrderStatus',
 } as const;
 
 // ─── Addresses ────────────────────────────────────────────────────────────────
 export const addressEndpoints = {
-  postCreateDeliveryAddress:   'postCreateDeliveryAddress',
-  postDeleteDeliveryAddress:   'postDeleteDeliveryAddress',
-  getDeliveryAddress:          'getDeliveryAddress',
-  getDeliveryAddressForUpdate: 'getDeliveryAddressForUpdate',
-  postUpdateDeliveryAddress:   'postUpdateDeliveryAddress',
+  postCreateDeliveryAddress:   'ecomm/postCreateDeliveryAddress',
+  postDeleteDeliveryAddress:   'ecomm/postDeleteDeliveryAddress',
+  getDeliveryAddress:          'ecomm/getDeliveryAddress',
+  getDeliveryAddressForUpdate: 'ecomm/getDeliveryAddressForUpdate',
+  postUpdateDeliveryAddress:   'ecomm/postUpdateDeliveryAddress',
 } as const;
 
 // ─── Wishlist ─────────────────────────────────────────────────────────────────
 export const wishlistEndpoints = {
-  getWishlist:        'getWishlist',
-  postAddToWishlist:  'postAddToWishlist',
-  postDeleteWishlist: 'postDeleteWishlist',
+  getWishlist:        'ecomm/getWishlist',
+  postAddToWishlist:  'ecomm/postAddToWishlist',
+  postDeleteWishlist: 'ecomm/postDeleteWishlist',
 } as const;
 
 // Flat merged object for any reference that needs a single import

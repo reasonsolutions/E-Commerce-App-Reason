@@ -13,16 +13,16 @@ export const getSavedCartItems = async (_customerprofilecode: number) =>
   delay(ok(_cartItems));
 
 export const postSaveCartItems = async (data: PostCartSaveInterface) => {
-  const existing = _cartItems.find(item => item.Inventory_Id === data.Inventory_Id);
+  const existing = _cartItems.find(item => item.InventoryId === data.InventoryId);
 
   if (existing) {
     _cartItems = _cartItems.map(item =>
-      item.Inventory_Id === data.Inventory_Id
+      item.InventoryId === data.InventoryId
         ? { ...item, Quantity: item.Quantity + data.Quantity }
         : item,
     );
   } else {
-    const product = mockProducts.find(p => p.Variants?.[0]?.InventoryID === String(data.Inventory_Id));
+    const product = mockProducts.find(p => p.Variants?.[0]?.InventoryID === String(data.InventoryId));
     if (product) {
       const variant = product.Variants?.[0];
       _cartItems = [
@@ -30,15 +30,16 @@ export const postSaveCartItems = async (data: PostCartSaveInterface) => {
         {
           CartDetailsCode: _nextCartDetailsCode++,
           CartMasterCode:  159,
-          Inventory_Id:    data.Inventory_Id,
+          InventoryId:     data.InventoryId,
           Quantity:        data.Quantity,
+          IsPurchased:     false,
           Images:          product.Images,
           Name:            product.Name,
           Price:           variant?.PriceDetails.Price ?? product.MinPrice,
-          ComparePrice:    variant?.PriceDetails.ComparePrice ?? product.MaxComparePrice,
+          PriceDetails:    { Price: variant?.PriceDetails.Price ?? product.MinPrice, ComparePrice: variant?.PriceDetails.ComparePrice ?? product.MaxComparePrice },
           Count:           variant?.Stock ?? 0,
           Variant:         variant?.Variant ?? '',
-          Brand_Name:      product.BrandName,
+          BrandName:       product.BrandName,
         },
       ];
     }

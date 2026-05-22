@@ -2,6 +2,15 @@ import axiosInstance from '../axiosInstance';
 import { cartEndpoints } from '../endpoints';
 import type { PostCartSaveInterface, CartQuantityRequest, deleteCartInterface } from '../interfaces';
 
+export const updateCartItemQuantity = async (cartDetailsCode: number, inventoryId: number, quantity: number) => {
+  const response = await axiosInstance.post(cartEndpoints.updateCartItem, {
+    CartDetailsCode: cartDetailsCode,
+    InventoryId: inventoryId,
+    Quantity: quantity,
+  });
+  return response.data;
+};
+
 export const getSavedCartItems = async (customerprofilecode: number) => {
   const response = await axiosInstance.get(
     `${cartEndpoints.getSavedCartItems}?CustomerProfileCode=${customerprofilecode}`,
@@ -10,12 +19,12 @@ export const getSavedCartItems = async (customerprofilecode: number) => {
 };
 
 export const postSaveCartItems = async (data: PostCartSaveInterface) => {
-  const response = await axiosInstance.post(cartEndpoints.postCartSaveItem, data);
+  const response = await axiosInstance.post(cartEndpoints.postSaveCartItems, data);
   return response.data;
 };
 
 export const postDeleteCartItem = async (cartdetailscode: number) => {
-  const payload: deleteCartInterface = { CartDetailsCode: cartdetailscode };
+  const payload: deleteCartInterface = { CartDetailsCode: cartdetailscode, IsPurchased: false };
   const response = await axiosInstance.post(cartEndpoints.deleteCartItem, payload);
   return response.data;
 };
