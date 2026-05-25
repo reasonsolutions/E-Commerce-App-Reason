@@ -25,11 +25,10 @@ function CartHydrator(): null {
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(STORAGE_KEYS.userData).then((raw) => {
-      if (cancelled) return;
-      let profileCode = 100079;
-      if (raw) {
-        try { profileCode = JSON.parse(raw).CustomerProfileCode; } catch {}
-      }
+      if (cancelled || !raw) return;
+      let profileCode: number;
+      try { profileCode = JSON.parse(raw).CustomerProfileCode; } catch { return; }
+      if (!profileCode) return;
       getSavedCartItems(profileCode)
         .then((res: { result?: Array<{ Quantity: number }> }) => {
           if (cancelled) return;

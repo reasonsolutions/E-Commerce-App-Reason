@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Animated,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   StatusBar,
   useWindowDimensions,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import { loginCustomer } from '../api/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Keychain from 'react-native-keychain';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -25,6 +27,7 @@ import { useHaptic } from '../hooks/useHaptic';
 
 type RootStackParamList = {
   Home: undefined;
+  Register: undefined;
 };
 
 // ── Hero atmospheric composition ─────────────────────────────────────────────
@@ -226,8 +229,16 @@ const Login: React.FC = () => {
         shake();
         return;
       }
-      await AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(result.result));
-      navigation.navigate('Home');
+      const { AccessToken, ...userData } = result.result;
+      await Promise.all([
+        Keychain.setGenericPassword('token', AccessToken, {
+          service: STORAGE_KEYS.authToken,
+          securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
+        }),
+        AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(userData)),
+      ]);
+      setLoading(false);
+      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     } catch (error: any) {
       setLoading(false);
       setFieldError(error?.message ?? 'Something went wrong. Please try again.');
@@ -250,8 +261,8 @@ const Login: React.FC = () => {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* ── Dark atelier hero ──────────────────────────────────────────────── */}
-      <View style={[styles.hero, { height: heroHeight }]}>
+      {/* ── Dark atelier hero — absolutely positioned, excluded from keyboard resize ── */}
+      <View style={[styles.hero, { height: heroHeight }]} pointerEvents="none">
         <HeroArt heroHeight={heroHeight} />
 
         <Animated.View style={[styles.heroContent, entranceStyle(wordmarkAnim, 20)]}>
@@ -263,13 +274,18 @@ const Login: React.FC = () => {
         </Animated.View>
       </View>
 
-      {/* ── Light form panel ───────────────────────────────────────────────── */}
+      {/* ── Light form panel — sits below hero, scrolls above keyboard ── */}
       <KeyboardAvoidingView
-        style={styles.formPanel}
+        style={[styles.formPanel, { marginTop: heroHeight }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <View style={styles.formInner}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.formInner}
+          bounces={false}
+        >
           {/* Fields */}
           <Animated.View style={[styles.fieldsBlock, entranceStyle(fieldsAnim)]}>
             <FloatingLabelInput
@@ -285,7 +301,7 @@ const Login: React.FC = () => {
               label="Password"
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              showToggle
               returnKeyType="done"
               onSubmitEditing={handleLogin}
               activeColor={Colors.ink1}
@@ -323,8 +339,19 @@ const Login: React.FC = () => {
                 <Text style={styles.ctaLabel}>Log in</Text>
               )}
             </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Register')}
+              activeOpacity={0.7}
+              style={styles.registerLink}
+            >
+              <Text style={styles.registerText}>
+                Don't have an account?{' '}
+                <Text style={styles.registerTextBold}>Sign up</Text>
+              </Text>
+            </TouchableOpacity>
           </Animated.View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -333,11 +360,15 @@ const Login: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex:            1,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.surfaceDeep,
   },
 
   // ── Hero ────────────────────────────────────────────────────────────────────
   hero: {
+    position:          'absolute',
+    top:               0,
+    left:              0,
+    right:             0,
     backgroundColor:   Colors.ink1,
     justifyContent:    'flex-end',
     paddingHorizontal: Space.screenH,
@@ -410,6 +441,19 @@ const styles = StyleSheet.create({
     height:        6,
     borderRadius:  3,
     backgroundColor: '#FFFFFF',
+  },
+  registerLink: {
+    marginTop:  Space[4],
+    alignItems: 'center',
+  },
+  registerText: {
+    ...Type.caption,
+    color: Colors.ink3,
+  },
+  registerTextBold: {
+    ...Type.caption,
+    color:      Colors.ink1,
+    fontWeight: '600',
   },
 });
 

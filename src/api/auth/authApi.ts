@@ -11,3 +11,8 @@ export const postCreateCustomer = async (data: createCustomerInterface) => {
   const response = await axiosInstance.post(authEndpoints.postCreateCustomer, data);
   return response.data;
 };
+
+export const postConfirmCustomer = async (data: createCustomerInterface & { OTP: string }) => {
+  const response = await axiosInstance.post(authEndpoints.postConfirmCustomer, data);
+  return response.data;
+};

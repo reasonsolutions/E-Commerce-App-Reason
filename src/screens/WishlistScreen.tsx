@@ -12,8 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/storageKeys';
+import { useProfileCode } from '../hooks/useProfileCode';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
 import type { WishlistItemInterface } from '../api/interfaces';
 import { EmptyState, BottomNavBar, Price, DarkHeader } from '../components/ui';
@@ -105,7 +104,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
   const [items, setItems] = useState<WishlistItemInterface[]>([]);
-  const [profileCode, setProfileCode] = useState<number | null>(100080);
+  const profileCode = useProfileCode();
 
   useEffect(() => {
     if (fetched !== null) setItems(fetched);
@@ -114,13 +113,11 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const fetchWishlist = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
-        const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-        const code = userData ? JSON.parse(userData).CustomerProfileCode : 100080;
-        setProfileCode(code);
-        const response = await getWishlist(code);
+        if (!profileCode) return [];
+        const response = await getWishlist(profileCode);
         return response.statusCode === 1 ? (response.result || []) : [];
       }, cancelled),
-    [run],
+    [run, profileCode],
   );
 
   useFocusEffect(

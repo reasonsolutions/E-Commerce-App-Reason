@@ -10,6 +10,8 @@
 export const STORAGE_KEYS = {
   /** Full user profile object returned by loginCustomer. Shape: LoggedInCustomerInterface. */
   userData: 'userData',
+  /** Keychain service key for JWT access token. */
+  authToken: 'authToken',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

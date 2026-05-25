@@ -26,15 +26,20 @@ export const getDeliveryAddressForUpdate = async (
 export const postCreateDeliveryAddress = async (data: postCreateDeliveryAddressInterface) => {
   const newAddress = {
     OrderDeliveryAddressCode: _nextAddressCode++,
-    CustomerName:             data.CustomerName,
-    MobileNumber:             Number(data.MobileNumber),
-    FullAddress:              data.FullAddress,
-    CustomerProfileCode:      data.CustomerProfileCode,
-    CreatedDate:              new Date().toISOString(),
-    UpdatedDate:              null,
+    CustomerName:        data.CustomerName,
+    MobileNumber:        Number(data.MobileNumber),
+    CustomerProfileCode: data.CustomerProfileCode,
+    CreatedDate:         new Date().toISOString(),
+    UpdatedDate:         null,
+    Address:             data.Address,
+    StreetName:          data.StreetName,
+    City:                data.City,
+    Landmark:            data.Landmark,
+    Zipcode:             data.Zipcode,
+    IsPrimary:           data.IsPrimary === '1',
   };
   _addresses = [..._addresses, newAddress];
-  return delay(ok(true, 'Address created successfully.'));
+  return delay(ok(_addresses, 'Address created successfully.'));
 };
 
 export const postUpdateDeliveryAddress = async (data: postUpdateDeliveryAddressInterface) => {
@@ -44,15 +49,20 @@ export const postUpdateDeliveryAddress = async (data: postUpdateDeliveryAddressI
           ...a,
           CustomerName: data.CustomerName,
           MobileNumber: data.MobileNumber,
-          FullAddress:  data.FullAddress,
+          Address:      data.Address,
+          StreetName:   data.StreetName,
+          City:         data.City,
+          Landmark:     data.Landmark,
+          Zipcode:      String(data.Zipcode),
+          IsPrimary:    data.IsPrimary === 1,
           UpdatedDate:  new Date().toISOString(),
         }
       : a,
   );
-  return delay(ok(true, 'Address updated successfully.'));
+  return delay(ok(_addresses, 'Address updated successfully.'));
 };
 
 export const postDeleteDeliveryAddress = async (OrderDeliveryAddressCode: number) => {
   _addresses = _addresses.filter(a => a.OrderDeliveryAddressCode !== OrderDeliveryAddressCode);
-  return delay(ok(true, 'Address deleted.'));
+  return delay(ok(_addresses, 'Address deleted.'));
 };

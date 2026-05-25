@@ -23,3 +23,5 @@ export { ProductIdentity } from './ProductIdentity';
 export { HeroNavButton } from './HeroNavButton';
 export { VariantSheet } from './VariantSheet';
 export type { VariantOption } from './VariantSheet';
+export { FilterSheet } from './FilterSheet';
+export type { SortKey } from './FilterSheet';

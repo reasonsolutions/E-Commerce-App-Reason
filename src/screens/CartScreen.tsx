@@ -20,8 +20,7 @@ import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { getSavedCartItems, postDeleteCartItem, updateCartItemQuantity } from '../api/cart';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/storageKeys';
+import { useProfileCode } from '../hooks/useProfileCode';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useCart } from '../context/CartContext';
 import { useEntrance } from '../hooks/useEntrance';
@@ -163,6 +162,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
   const [cartItems, setCartItems] = useState<SavedCartItemInterface[]>([]);
   const [clearing, setClearing] = useState(false);
+  const profileCode = useProfileCode();
 
   useEffect(() => {
     if (fetched !== null) {
@@ -175,12 +175,11 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const fetchCart = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
-        const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-        const profileCode = userData ? JSON.parse(userData).CustomerProfileCode : 100079;
+        if (!profileCode) return [];
         const response = await getSavedCartItems(profileCode);
         return response.result || [];
       }, cancelled),
-    [run],
+    [run, profileCode],
   );
 
   useFocusEffect(

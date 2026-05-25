@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/storageKeys';
+import { clearSession } from '../utils/auth';
 import { BottomNavBar } from '../components/ui';
+import { getDeliveryAddresses } from '../api/address';
+import { DeliveryAddress } from './AddressScreen';
 import { Colors, Space } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -25,6 +26,7 @@ type ProfileScreenProps = {
   navigation: {
     navigate: (screen: string) => void;
     goBack: () => void;
+    reset: (state: { index: number; routes: { name: string }[] }) => void;
   };
 };
 
@@ -141,9 +143,21 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const activityAnim = useEntrance(240);
   const logoutAnim   = useEntrance(300);
 
+  const [primaryAddress, setPrimaryAddress] = useState<DeliveryAddress | null>(null);
+
+  useEffect(() => {
+    if (!session?.CustomerProfileCode) return;
+    getDeliveryAddresses(session.CustomerProfileCode).then(res => {
+      if (res.statusCode !== 1) return;
+      const list: DeliveryAddress[] = res.result || [];
+      const primary = list.find(a => a.IsPrimary) ?? list[0] ?? null;
+      setPrimaryAddress(primary);
+    }).catch(() => {});
+  }, [session?.CustomerProfileCode]);
+
   const handleLogout = async () => {
-    await AsyncStorage.removeItem(STORAGE_KEYS.userData);
-    navigation.navigate('Login');
+    await clearSession();
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   const displayName  = session?.CustomerName || '—';
@@ -185,14 +199,23 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         {/* Address */}
         <Animated.View style={[styles.sectionBlock, addressAnim]}>
           <SectionLabel>ADDRESS</SectionLabel>
+          {primaryAddress ? (
+            <>
+              <ProfileRow label="Name"   value={primaryAddress.CustomerName} />
+              <ProfileRow label="Street" value={[primaryAddress.Address, primaryAddress.StreetName].filter(Boolean).join(', ') || '—'} />
+              <ProfileRow label="City"   value={[primaryAddress.City, primaryAddress.Zipcode].filter(Boolean).join(' — ') || '—'} />
+              {primaryAddress.Landmark ? (
+                <ProfileRow label="Landmark" value={primaryAddress.Landmark} />
+              ) : null}
+              <ProfileRow label="Mobile" value={String(primaryAddress.MobileNumber)} isLast={false} />
+            </>
+          ) : (
+            <ProfileRow label="No address saved." isLast={false} />
+          )}
           <ProfileRow
-            label="Street"
-            value={session?.Address || session?.StreetName || '—'}
-          />
-          <ProfileRow label="City"     value={session?.CityName || '—'} />
-          <ProfileRow
-            label="Postcode"
-            value={session?.Zipcode !== undefined ? String(session.Zipcode) : '—'}
+            label="Manage addresses"
+            icon="chevron-forward"
+            onPress={() => navigation.navigate('AddressManagement')}
             isLast
           />
         </Animated.View>

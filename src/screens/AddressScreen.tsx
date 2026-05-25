@@ -31,10 +31,15 @@ export interface DeliveryAddress {
   OrderDeliveryAddressCode: number;
   CustomerName: string;
   MobileNumber: number | string;
-  FullAddress: string;
   CustomerProfileCode: number;
   CreatedDate: string;
   UpdatedDate: string | null;
+  Address: string | null;
+  StreetName: string | null;
+  City: string | null;
+  Landmark: string | null;
+  Zipcode: string | null;
+  IsPrimary: boolean;
 }
 
 type AddressScreenProps = {
@@ -52,8 +57,8 @@ type AddressScreenProps = {
   };
 };
 
-const EMPTY_FORM = { CustomerName: '', MobileNumber: '', FullAddress: '' };
-const EMPTY_ERRORS = { CustomerName: '', MobileNumber: '', FullAddress: '' };
+const EMPTY_FORM = { CustomerName: '', MobileNumber: '', Address: '', StreetName: '', City: '', Landmark: '', Zipcode: '' };
+const EMPTY_ERRORS = { CustomerName: '', MobileNumber: '', Address: '', StreetName: '', City: '', Landmark: '', Zipcode: '' };
 
 // ── Single address row ────────────────────────────────────────────────────────
 const AddressRow: React.FC<{
@@ -83,11 +88,22 @@ const AddressRow: React.FC<{
             <Text style={[styles.addressName, isSelected && styles.addressNameSelected]}>
               {item.CustomerName}
             </Text>
-            <Text style={styles.addressLine}>{item.FullAddress}</Text>
+            {(item.Address || item.StreetName) ? (
+              <Text style={styles.addressLine}>
+                {[item.Address, item.StreetName].filter(Boolean).join(', ')}
+              </Text>
+            ) : null}
+            {(item.City || item.Zipcode) ? (
+              <Text style={styles.addressLine}>
+                {[item.City, item.Zipcode].filter(Boolean).join(' — ')}
+              </Text>
+            ) : null}
+            {item.Landmark ? (
+              <Text style={styles.addressLineMuted}>{item.Landmark}</Text>
+            ) : null}
             <Text style={styles.addressMobile}>{String(item.MobileNumber)}</Text>
           </View>
 
-          {/* Radio mark */}
           <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
             {isSelected && <View style={styles.radioInner} />}
           </View>
@@ -183,7 +199,11 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     const errors = {
       CustomerName: form.CustomerName.trim() ? '' : 'Name is required',
       MobileNumber: form.MobileNumber.trim() ? '' : 'Mobile number is required',
-      FullAddress:  form.FullAddress.trim()  ? '' : 'Address is required',
+      Address:      form.Address.trim()      ? '' : 'Address is required',
+      StreetName:   form.StreetName.trim()   ? '' : 'Street name is required',
+      City:         form.City.trim()         ? '' : 'City is required',
+      Landmark:     '',
+      Zipcode:      form.Zipcode.trim()      ? '' : 'Zipcode is required',
     };
     setFormErrors(errors);
     return !Object.values(errors).some(Boolean);
@@ -197,18 +217,19 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       const response = await postCreateDeliveryAddress({
         CustomerName:        form.CustomerName.trim(),
         MobileNumber:        form.MobileNumber.trim(),
-        FullAddress:         form.FullAddress.trim(),
+        Address:             form.Address.trim(),
+        StreetName:          form.StreetName.trim(),
+        City:                form.City.trim(),
+        Landmark:            form.Landmark.trim(),
+        Zipcode:             form.Zipcode.trim(),
+        IsPrimary:           '0',
         CustomerProfileCode: profileCode,
       });
       if (response.statusCode === 1) {
-        const refreshed = await getDeliveryAddresses(profileCode);
-        if (refreshed.statusCode === 1) {
-          const list: DeliveryAddress[] = refreshed.result || [];
-          // Update addresses in state via re-run
-          await fetchAddresses();
-          if (list.length > 0) {
-            setSelectedAddressCode(list[list.length - 1].OrderDeliveryAddressCode);
-          }
+        const list: DeliveryAddress[] = response.result || [];
+        run(async () => list);
+        if (list.length > 0) {
+          setSelectedAddressCode(list[list.length - 1].OrderDeliveryAddressCode);
         }
         setForm(EMPTY_FORM);
         setFormErrors(EMPTY_ERRORS);
@@ -318,13 +339,43 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
           returnKeyType="next"
         />
         <FloatingLabelInput
-          label="Full address"
-          value={form.FullAddress}
-          onChangeText={text => handleChange('FullAddress', text)}
-          error={formErrors.FullAddress || null}
+          label="Address"
+          value={form.Address}
+          onChangeText={text => handleChange('Address', text)}
+          error={formErrors.Address || null}
           autoCapitalize="sentences"
+          returnKeyType="next"
+        />
+        <FloatingLabelInput
+          label="Street name"
+          value={form.StreetName}
+          onChangeText={text => handleChange('StreetName', text)}
+          error={formErrors.StreetName || null}
+          autoCapitalize="sentences"
+          returnKeyType="next"
+        />
+        <FloatingLabelInput
+          label="City"
+          value={form.City}
+          onChangeText={text => handleChange('City', text)}
+          error={formErrors.City || null}
+          autoCapitalize="words"
+          returnKeyType="next"
+        />
+        <FloatingLabelInput
+          label="Landmark (optional)"
+          value={form.Landmark}
+          onChangeText={text => handleChange('Landmark', text)}
+          autoCapitalize="sentences"
+          returnKeyType="next"
+        />
+        <FloatingLabelInput
+          label="Zipcode"
+          value={form.Zipcode}
+          onChangeText={text => handleChange('Zipcode', text)}
+          error={formErrors.Zipcode || null}
+          keyboardType="numeric"
           returnKeyType="done"
-          multiline
         />
       </View>
       {addError ? (
@@ -531,11 +582,25 @@ const styles = StyleSheet.create({
     color:      Colors.ink3,
     lineHeight: 13 * 1.5,
   },
+  addressLineMuted: {
+    ...Type.caption,
+    color:      Colors.ink4,
+    lineHeight: 13 * 1.5,
+  },
   addressMobile: {
     fontFamily:    FontFamily.mono,
     fontSize:      11,
     color:         Colors.ink4,
     letterSpacing: 0.2,
+  },
+  addressRight: {
+    flexDirection:  'column',
+    alignItems:     'center',
+    gap:            Space[2],
+    flexShrink:     0,
+  },
+  deleteBtn: {
+    padding: 2,
   },
   radioOuter: {
     width:         18,

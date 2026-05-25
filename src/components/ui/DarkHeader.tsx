@@ -92,8 +92,8 @@ const styles = StyleSheet.create({
     lineHeight:    18 * 1.2,
   },
   headerRight: {
-    width:      36,
-    alignItems: 'flex-end',
+    alignItems:  'flex-end',
+    flexShrink:  0,
   },
   headerSeam: {
     height:           StyleSheet.hairlineWidth,

@@ -41,6 +41,7 @@ import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useCart } from '../context/CartContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useProfileCode } from '../hooks/useProfileCode';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_H = Math.round(SCREEN_H * 0.58);
@@ -62,7 +63,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const [selectedVariant, setSelectedVariant] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
-  const [profileCode] = useState<number>(100079);
+  const profileCode = useProfileCode();
   const [wishlisted, setWishlisted] = useState<boolean>(false);
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
@@ -120,6 +121,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   }, [heroImgOpacity]);
 
   const handleAddToCart = useCallback(async () => {
+    if (!profileCode) return;
     const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
     const requestbody: PostCartSaveInterface = {
       CustomerProfileCode: profileCode,

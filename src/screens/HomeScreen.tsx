@@ -20,8 +20,10 @@ import { useCart } from '../context/CartContext';
 import { heroBanner } from '../data/mockData';
 import CategoryItem from '../components/CategoryItem';
 import ProductCard from '../components/ProductCard';
-import { CategoryInterface, ProductInterface } from '../api/interfaces';
-import { getAllProducts, getCategories } from '../api/product';
+import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interfaces';
+import { getAllProducts, getCategories, getBrands } from '../api/product';
+import axiosInstance from '../api/axiosInstance';
+import { productEndpoints } from '../api/endpoints';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -34,6 +36,51 @@ import { FontFamily } from '../theme/fonts';
 const { width: SCREEN_W } = Dimensions.get('window');
 const HERO_H   = 300;
 const BRIDGE_H = 80;
+
+const BRAND_DOMAINS: Record<string, string> = {
+  'nike':        'nike.com',
+  'casio':       'casio.com',
+  'van heusen':  'vanheusen.com',
+  'allen solly': 'pvhcorp.com',
+  'arrow':       'arrowshirts.com',
+  'parle':       'parle.com',
+  'lakme':       'lakmeindia.com',
+  'fogg':        'vini.co.in',
+  'crocs':       'crocs.com',
+};
+
+function brandFaviconUrl(brandName: string): string {
+  const key    = brandName.toLowerCase().trim();
+  const domain = BRAND_DOMAINS[key] ?? `${key.replace(/\s+/g, '')}.com`;
+  return `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=256`;
+}
+
+const FALLBACK_COLORS = [
+  Colors.ink2, Colors.ink3, Colors.accent,
+  Colors.ink1, Colors.ink3, Colors.ink2,
+  Colors.accent, Colors.ink1,
+];
+
+// ── Brand tile: favicon with letter fallback ─────────────────────────────────
+const BrandTile: React.FC<{ uri: string; name: string; fallbackColor: string }> = ({ uri, name, fallbackColor }) => {
+  const [failed, setFailed] = useState(false);
+  return (
+    <View style={styles.brandLogoWrap}>
+      {failed ? (
+        <Text style={[styles.brandFallbackLetter, { color: fallbackColor }]}>
+          {name.charAt(0).toUpperCase()}
+        </Text>
+      ) : (
+        <Image
+          source={{ uri }}
+          style={styles.brandLogo}
+          resizeMode="contain"
+          onError={() => setFailed(true)}
+        />
+      )}
+    </View>
+  );
+};
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -102,8 +149,53 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
   const { cartCount: cartItemsCount } = useCart();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [suggestions, setSuggestions]         = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heroImgOpacity = useRef(new Animated.Value(0)).current;
+
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (text.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const response = await axiosInstance.post(productEndpoints.allProducts, {
+          brands: [],
+          categories: [],
+          subCategories: [],
+          searchQuery: text.trim(),
+          priceRange: { from: null, to: null },
+          discount: '%',
+          pagination: { pageNumber: 1, pageSize: 6 },
+        });
+        const names: string[] = Array.from(
+          new Set<string>(
+            (response.data?.result?.Products ?? [])
+              .map((p: any) => p.Name)
+              .filter(Boolean),
+          ),
+        );
+        setSuggestions(names);
+        setShowSuggestions(names.length > 0);
+      } catch {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
+  }, []);
+
+  const commitSearch = useCallback((query: string) => {
+    const q = query.trim();
+    if (!q) return;
+    setShowSuggestions(false);
+    navigation.navigate('Result', { searchQuery: q, categoryName: `"${q}"` });
+  }, [navigation]);
 
   const {
     data: categories,
@@ -115,19 +207,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     run: runProducts,
   } = useAsyncState<ProductInterface[]>(null);
 
-  const heroAnim  = useEntrance(60, true);
-  const catAnim   = useEntrance(200);
-  const featAnim  = useEntrance(300);
-  const shelfAnim = useEntrance(380);
-  const editAnim  = useEntrance(460);
+  const {
+    data: brands,
+    run: runBrands,
+  } = useAsyncState<GetBrandItem[]>(null);
+
+  const heroAnim   = useEntrance(60, true);
+  const catAnim    = useEntrance(200);
+  const brandsAnim = useEntrance(260);
+  const featAnim   = useEntrance(320);
+  const shelfAnim  = useEntrance(400);
+  const editAnim   = useEntrance(480);
 
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
       runCategories(() => getCategories().then((d) => d.result), cancelled);
       runProducts(() => getAllProducts(), cancelled);
+      runBrands(
+        () => getBrands().then((d) => {
+          const list: GetBrandItem[] = d?.result ?? [];
+          return list.slice(0, 8);
+        }),
+        cancelled,
+      );
       return () => { cancelled.current = true; };
-    }, [runCategories, runProducts]),
+    }, [runCategories, runProducts, runBrands]),
   );
 
   const deduplicatedProducts = products
@@ -196,20 +301,42 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </View>
       </View>
 
+      {/* ── Search band + dropdown — outside ScrollView so dropdown overlays content ── */}
+      <View style={styles.searchBandWrap}>
+        <View style={styles.searchBand}>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            placeholder="Search products, brands…"
+            onSubmit={() => commitSearch(searchQuery)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 180)}
+          />
+        </View>
+        {showSuggestions && suggestions.length > 0 && (
+          <View style={styles.suggestionBox}>
+            {suggestions.map((s, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[styles.suggestionRow, i < suggestions.length - 1 && styles.suggestionDivider]}
+                onPress={() => {
+                  setSearchQuery(s);
+                  commitSearch(s);
+                }}
+                activeOpacity={0.7}
+              >
+                <Icon name="search-outline" size={14} color={Colors.ink4} />
+                <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        stickyHeaderIndices={[0]}
       >
-        {/* ── Sticky search band ─────────────────────────────────────────── */}
-        <View style={styles.searchBand}>
-          <SearchBar
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search products, brands…"
-          />
-        </View>
 
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <Animated.View style={heroAnim}>
@@ -281,6 +408,36 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </View>
           )}
         </Animated.View>
+
+        {/* ── Brands rail ────────────────────────────────────────────────── */}
+        {brands && brands.length > 0 && (
+          <Animated.View style={[styles.brandsSection, brandsAnim]}>
+            <View style={styles.shelfHead}>
+              <Text style={styles.shelfTitle}>Brands</Text>
+            </View>
+            <FlatList
+              data={brands}
+              keyExtractor={(item) => String(item.BrandId)}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.brandsRail}
+              renderItem={({ item, index }) => {
+                const faviconUri = brandFaviconUrl(item.BrandName);
+                const fallbackColor = FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+                return (
+                  <TouchableOpacity
+                    style={styles.brandChip}
+                    activeOpacity={0.75}
+                    onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
+                  >
+                    <BrandTile uri={faviconUri} name={item.BrandName} fallbackColor={fallbackColor} />
+                    <Text style={styles.brandLabel} numberOfLines={1}>{item.BrandName}</Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </Animated.View>
+        )}
 
         {/* ── Featured card ──────────────────────────────────────────────── */}
         {deduplicatedProducts !== null && featuredProduct && (
@@ -488,12 +645,48 @@ const styles = StyleSheet.create({
     paddingBottom: Space[10],
   },
 
-  // ── Sticky search band ──────────────────────────────────────────────────────
+  // ── Search band + dropdown ───────────────────────────────────────────────────
+  searchBandWrap: {
+    backgroundColor: Colors.ink1,
+    zIndex:          20,
+  },
   searchBand: {
-    backgroundColor:   Colors.ink1,
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[1],
     paddingBottom:     Space[3],
+  },
+  suggestionBox: {
+    position:         'absolute',
+    top:              '100%',
+    left:             Space.screenH,
+    right:            Space.screenH,
+    backgroundColor:  Colors.surface,
+    borderRadius:     Radius.md,
+    borderWidth:      StyleSheet.hairlineWidth,
+    borderColor:      Colors.rule,
+    shadowColor:      '#000',
+    shadowOffset:     { width: 0, height: 4 },
+    shadowOpacity:    0.10,
+    shadowRadius:     12,
+    elevation:        8,
+    overflow:         'hidden',
+    zIndex:           20,
+  },
+  suggestionRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               Space[3],
+    paddingHorizontal: Space[4],
+    paddingVertical:   Space[3] + 2,
+  },
+  suggestionDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  suggestionText: {
+    ...Type.body,
+    color:   Colors.ink1,
+    flex:    1,
   },
 
   // ── Hero ────────────────────────────────────────────────────────────────────
@@ -691,6 +884,49 @@ const styles = StyleSheet.create({
     paddingBottom:     Space[2],
     gap:               Space[4],
     alignItems:        'flex-start',   // was 'center' — caused top-misaligned mixed heights
+  },
+
+  // ── Brands rail ─────────────────────────────────────────────────────────────
+  brandsSection: {
+    marginTop: Space[6],
+  },
+  brandsRail: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[2],
+    gap:               Space[3],
+  },
+  brandChip: {
+    alignItems: 'center',
+    width:      88,
+    gap:        Space[2],
+  },
+  brandLogoWrap: {
+    width:           80,
+    height:          80,
+    borderRadius:    40,
+    backgroundColor: '#FFFFFF',
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 1 },
+    shadowOpacity:   0.08,
+    shadowRadius:    4,
+    elevation:       2,
+    alignItems:      'center',
+    justifyContent:  'center',
+    overflow:        'hidden',
+  },
+  brandLogo: {
+    width:  56,
+    height: 56,
+  },
+  brandLabel: {
+    ...Type.caption,
+    color:     Colors.ink2,
+    textAlign: 'center',
+  },
+  brandFallbackLetter: {
+    fontFamily: FontFamily.serifItalic,
+    fontSize:   28,
+    lineHeight: 32,
   },
 
   // ── Editorial card ──────────────────────────────────────────────────────────

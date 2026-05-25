@@ -9,6 +9,7 @@ export const getBrands                = product.getBrands;
 export const getCategories            = product.getCategories;
 export const getSubCategories         = product.getSubCategories;
 export const getProductsByCategory    = product.getProductsByCategory;
+export const getProductsByBrand       = product.getProductsByBrand;
 export const getProductsBySubCategory = product.getProductsBySubCategory;
 export const selectProduct            = product.selectProduct;
 export const searchProducts           = product.searchProducts;

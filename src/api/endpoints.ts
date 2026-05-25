@@ -1,6 +1,6 @@
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const authEndpoints = {
-  postLoginCustomer:   'ecomm/postLoginCustomer',
+  postLoginCustomer:   'token/postLoginCustomer',
   postCreateCustomer:  'ecomm/postCreateCustomer',
   postConfirmCustomer: 'ecomm/postConfirmCustomer',
 } as const;

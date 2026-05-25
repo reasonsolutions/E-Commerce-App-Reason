@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@env';
+import * as Keychain from 'react-native-keychain';
 import { classifyError, apiLog } from './apiError';
 import { logRequest, logResponse, logError, TimedAxiosRequestConfig } from './apiLogger';
+import { STORAGE_KEYS } from '../config/storageKeys';
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -14,13 +16,18 @@ const axiosInstance = axios.create({
 // ── Request interceptor ───────────────────────────────────────────────────────
 
 axiosInstance.interceptors.request.use(
-  config => {
+  async config => {
     (config as TimedAxiosRequestConfig)._startTime = Date.now();
     logRequest(config as TimedAxiosRequestConfig);
-    // TODO: Inject auth token here once the backend requires it.
-    // Example:
-    //   const token = await AsyncStorage.getItem(STORAGE_KEYS.authToken);
-    //   if (token) config.headers.Authorization = `Bearer ${token}`;
+    const isAuthEndpoint = config.url?.startsWith('token/') ||
+      config.url?.includes('postCreateCustomer') ||
+      config.url?.includes('postConfirmCustomer');
+    if (!isAuthEndpoint) {
+      const credentials = await Keychain.getGenericPassword({ service: STORAGE_KEYS.authToken });
+      if (credentials) {
+        config.headers.Authorization = `Bearer ${credentials.password}`;
+      }
+    }
     return config;
   },
   err => {

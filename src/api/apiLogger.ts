@@ -4,9 +4,7 @@ const MAX_PAYLOAD_LENGTH = 1000;
 
 const SENSITIVE_KEYS = new Set([
   'token',
-  'password',
   'authorization',
-  'otp',
   'accesstoken',
   'refreshtoken',
 ]);
@@ -15,7 +13,18 @@ const SENSITIVE_KEYS = new Set([
 
 export interface TimedAxiosRequestConfig extends InternalAxiosRequestConfig {
   _startTime?: number;
+  _logId?: number;
 }
+
+// ── Per-request store — holds request info until response arrives ─────────────
+interface PendingLog {
+  method: string;
+  url: string;
+  payload?: string;
+}
+
+let _nextId = 1;
+const _pending = new Map<number, PendingLog>();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,18 +54,25 @@ function shortUrl(url: string | undefined): string {
 export function logRequest(config: TimedAxiosRequestConfig): void {
   if (!__DEV__) return;
 
+  const id = _nextId++;
+  config._logId = id;
+
   const method = (config.method ?? 'GET').toUpperCase();
   const url = config.url ?? 'unknown';
-  const params = config.params;
   const body = config.data
     ? maskSensitive(typeof config.data === 'string' ? JSON.parse(config.data) : config.data)
     : undefined;
+  const params = config.params
+    ? maskSensitive(config.params)
+    : undefined;
 
-  console.group?.(`🚀 [API] ${method} ${shortUrl(url)}`);
-  console.log('URL     :', url);
-  if (params) console.log('Params  :', truncate(maskSensitive(params)));
-  if (body)   console.log('Body    :', truncate(body));
-  console.groupEnd?.();
+  const payloadStr = body
+    ? truncate(body)
+    : params
+    ? truncate(params)
+    : undefined;
+
+  _pending.set(id, { method, url: shortUrl(url), payload: payloadStr });
 }
 
 // ── Response logger ───────────────────────────────────────────────────────────
@@ -65,16 +81,23 @@ export function logResponse(response: AxiosResponse): void {
   if (!__DEV__) return;
 
   const config = response.config as TimedAxiosRequestConfig;
-  const method = (config.method ?? 'GET').toUpperCase();
-  const url = config.url ?? 'unknown';
-  const status = response.status;
-  const duration = config._startTime ? `${Date.now() - config._startTime}ms` : '–';
+  const id = config._logId;
+  const pending = id != null ? _pending.get(id) : undefined;
+  if (id != null) _pending.delete(id);
 
-  console.group?.(`✅ [API] ${method} ${shortUrl(url)} · ${status} · ${duration}`);
-  console.log('Status  :', status, response.statusText);
-  console.log('Time    :', duration);
-  console.log('Response:', truncate(response.data));
-  console.groupEnd?.();
+  const method = pending?.method ?? (config.method ?? 'GET').toUpperCase();
+  const url = pending?.url ?? shortUrl(config.url);
+  const duration = config._startTime ? `${Date.now() - config._startTime}ms` : '–';
+  const status = response.status;
+
+  console.log(
+    `\n─────────────────────────────────────────\n` +
+    `🚀  ${method} ${url}\n` +
+    (pending?.payload ? `📤  Payload  : ${pending.payload}\n` : '') +
+    `✅  Status   : ${status} · ${duration}\n` +
+    `📥  Response : ${truncate(response.data)}\n` +
+    `─────────────────────────────────────────`,
+  );
 }
 
 // ── Error logger ──────────────────────────────────────────────────────────────
@@ -84,15 +107,22 @@ export function logError(error: unknown): void {
 
   const err = error as any;
   const config = err?.config as TimedAxiosRequestConfig | undefined;
-  const method = config?.method?.toUpperCase() ?? 'REQUEST';
-  const url = config?.url ?? 'unknown';
+  const id = config?._logId;
+  const pending = id != null ? _pending.get(id) : undefined;
+  if (id != null) _pending.delete(id);
+
+  const method = pending?.method ?? config?.method?.toUpperCase() ?? 'REQUEST';
+  const url = pending?.url ?? shortUrl(config?.url);
   const status = err?.response?.status ?? 'NO_RESPONSE';
   const duration = config?._startTime ? `${Date.now() - config._startTime}ms` : '–';
 
-  console.group?.(`❌ [API] ${method} ${shortUrl(url)} · ${status} · ${duration}`);
-  console.log('Status  :', status);
-  console.log('Time    :', duration);
-  console.log('Message :', err?.message ?? 'unknown error');
-  if (err?.response?.data) console.log('Body    :', truncate(err.response.data));
-  console.groupEnd?.();
+  console.log(
+    `\n─────────────────────────────────────────\n` +
+    `🚀  ${method} ${url}\n` +
+    (pending?.payload ? `📤  Payload  : ${pending.payload}\n` : '') +
+    `❌  Status   : ${status} · ${duration}\n` +
+    `💬  Message  : ${err?.message ?? 'unknown error'}\n` +
+    (err?.response?.data ? `📥  Response : ${truncate(err.response.data)}\n` : '') +
+    `─────────────────────────────────────────`,
+  );
 }

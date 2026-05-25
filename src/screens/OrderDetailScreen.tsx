@@ -280,7 +280,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           <Text style={styles.sectionEyebrow}>DELIVERY</Text>
           <DetailRow label="NAME"    value={delivery.CustomerName} />
           <DetailRow label="MOBILE"  value={String(delivery.MobileNumber)} />
-          <DetailRow label="ADDRESS" value={delivery.FullAddress} isLast />
+          <DetailRow label="ADDRESS" value={[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).join(', ')} isLast />
         </Animated.View>
       </ScrollView>
     </View>

@@ -43,18 +43,28 @@ export interface postLoginInterface {
 }
 
 export interface postCreateDeliveryAddressInterface {
-    "CustomerName":string,
-    "MobileNumber":string,
-    "FullAddress":string,
-    "CustomerProfileCode": number
+    CustomerName: string;
+    MobileNumber: string;
+    Address: string;
+    StreetName: string;
+    City: string;
+    Landmark: string;
+    Zipcode: string;
+    IsPrimary: string;
+    CustomerProfileCode: number;
 }
 
 export interface postUpdateDeliveryAddressInterface {
-"CustomerProfileCode":number,
-"OrderDeliveryAddressCode":number,
-"CustomerName":string,
-"MobileNumber":number,
-"FullAddress":string
+    CustomerProfileCode: number;
+    OrderDeliveryAddressCode: number;
+    CustomerName: string;
+    MobileNumber: number;
+    Address: string;
+    StreetName: string;
+    City: string;
+    Landmark: string;
+    Zipcode: number;
+    IsPrimary: number;
 }
 
 export interface postPlacedSingleOrderInterface {
@@ -133,6 +143,12 @@ export interface ProductInterface {
 export interface BrandInterface {
     Brand_Id: number;
     Brand_Name: string;
+    BrandImage: string;
+}
+
+export interface GetBrandItem {
+    BrandId: number;
+    BrandName: string;
     BrandImage: string;
 }
 
@@ -269,10 +285,15 @@ export interface DeliveryAddressInterface {
     OrderDeliveryAddressCode: number;
     CustomerName: string;
     MobileNumber: number;
-    FullAddress: string;
     CustomerProfileCode: number;
     CreatedDate: string;
     UpdatedDate: string | null;
+    Address: string | null;
+    StreetName: string | null;
+    City: string | null;
+    Landmark: string | null;
+    Zipcode: string | null;
+    IsPrimary: boolean;
 }
 
 //Order api result
