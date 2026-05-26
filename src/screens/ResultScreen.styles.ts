@@ -50,6 +50,14 @@ export const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
   },
 
+  // ── Search band ──────────────────────────────────────────────────────────────
+  searchBand: {
+    backgroundColor:   Colors.ink1,
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[2],
+    paddingBottom:     Space[3],
+  },
+
   // ── Scroll canvas ────────────────────────────────────────────────────────────
   scroll: {
     flex: 1,

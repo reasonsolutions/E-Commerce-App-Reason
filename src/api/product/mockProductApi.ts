@@ -22,8 +22,8 @@ export const getCategories = async () => delay(ok(mockCategories));
 
 export const getSubCategories = async (_categoryCode: string) => delay(ok([]));
 
-export const getProductsByCategory = async (categorycode: string): Promise<ProductByCategoryProductDetails[]> => {
-  const products = getMockProductsByCategory(categorycode);
+export const getProductsByCategory = async (categorycode: string | number, _pageNumber = 1, _pageSize = 20): Promise<ProductByCategoryProductDetails[]> => {
+  const products = getMockProductsByCategory(String(categorycode));
   return delay(products as unknown as ProductByCategoryProductDetails[]);
 };
 

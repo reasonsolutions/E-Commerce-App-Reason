@@ -8,7 +8,6 @@ import {
   StatusBar,
   ScrollView,
   Animated,
-  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -26,6 +25,7 @@ import { useCart } from '../context/CartContext';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
+import { useAppToast } from '../hooks/useAppToast';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -140,10 +140,10 @@ const CartRow: React.FC<{
 
           {/* Price block — line total primary, unit "was" subordinate */}
           <View style={styles.cartPriceBlock}>
-            <Text style={styles.cartLineTotal}>${lineTotal.toFixed(2)}</Text>
+            <Text style={styles.cartLineTotal}>Rs {lineTotal.toFixed(0)}</Text>
             {hasDiscount && (
               <Text style={styles.cartUnitWas}>
-                was ${comparePrice.toFixed(2)} ea
+                was Rs {comparePrice.toFixed(0)} ea
               </Text>
             )}
           </View>
@@ -158,19 +158,15 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { setCartCount } = useCart();
   const checkoutTactile = useTactile();
+  const toast = useAppToast();
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
-  const [cartItems, setCartItems] = useState<SavedCartItemInterface[]>([]);
+  const [optimistic, setOptimistic] = useState<SavedCartItemInterface[] | null>(null);
   const [clearing, setClearing] = useState(false);
+  const hasFetched = useRef(false);
   const profileCode = useProfileCode();
 
-  useEffect(() => {
-    if (fetched !== null) {
-      setCartItems(fetched);
-      const total = fetched.reduce((sum, item) => sum + item.Quantity, 0);
-      setCartCount(total);
-    }
-  }, [fetched, setCartCount]);
+  const cartItems = optimistic ?? fetched ?? [];
 
   const fetchCart = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -182,9 +178,21 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     [run, profileCode],
   );
 
+  // Sync cart badge whenever server data arrives
+  useEffect(() => {
+    if (fetched !== null) {
+      hasFetched.current = true;
+      setOptimistic(null);
+      const total = fetched.reduce((sum, item) => sum + item.Quantity, 0);
+      setCartCount(total);
+    }
+  }, [fetched, setCartCount]);
+
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
+      hasFetched.current = false;
+      setOptimistic(null);
       fetchCart(cancelled);
       return () => { cancelled.current = true; };
     }, [fetchCart]),
@@ -201,8 +209,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     const delta = quantity - item.Quantity;
     if (delta === 0) return;
 
-    setCartItems(prev =>
-      prev.map(ci =>
+    setOptimistic(prev =>
+      (prev ?? fetched ?? []).map(ci =>
         ci.CartDetailsCode === item.CartDetailsCode ? { ...ci, Quantity: quantity } : ci,
       ),
     );
@@ -213,10 +221,12 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     } catch {
       fetchCart();
     }
-  }, [setCartCount, fetchCart]);
+  }, [setCartCount, fetchCart, fetched]);
 
   const handleRemoveItem = useCallback(async (item: SavedCartItemInterface) => {
-    setCartItems(prev => prev.filter(ci => ci.CartDetailsCode !== item.CartDetailsCode));
+    setOptimistic(prev =>
+      (prev ?? fetched ?? []).filter(ci => ci.CartDetailsCode !== item.CartDetailsCode),
+    );
     setCartCount((prev: number) => Math.max(0, prev - item.Quantity));
 
     try {
@@ -224,7 +234,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     } catch {
       fetchCart();
     }
-  }, [setCartCount, fetchCart]);
+  }, [setCartCount, fetchCart, fetched]);
 
   const handleCheckout = useCallback(() => {
     navigation.navigate('Address', { cartItems });
@@ -236,10 +246,10 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       for (const item of cartItems) {
         await postDeleteCartItem(item.CartDetailsCode);
       }
-      setCartItems([]);
+      setOptimistic([]);
       setCartCount(0);
     } catch {
-      Alert.alert('Error', 'Failed to clear cart. Please try again.');
+      toast.error({ title: 'Error', description: 'Failed to clear cart. Please try again.' });
       fetchCart();
     } finally {
       setClearing(false);
@@ -247,6 +257,24 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   }, [cartItems, setCartCount, fetchCart]);
 
   const renderBody = () => {
+    if (!hasFetched.current && !isError) {
+      return (
+        <View style={[styles.fillWrap, { paddingHorizontal: Space.screenH, paddingTop: Space[4] }]}>
+          {[0, 1, 2].map(i => (
+            <View key={i} style={styles.skeletonRow}>
+              <View style={styles.skeletonImg} />
+              <View style={styles.skeletonContent}>
+                <View style={[styles.skeletonLine, { width: '40%' }]} />
+                <View style={[styles.skeletonLine, { width: '70%', marginTop: Space[2] }]} />
+                <View style={[styles.skeletonLine, { width: '55%', marginTop: Space[1] }]} />
+                <View style={[styles.skeletonLine, { width: '30%', marginTop: Space[4] }]} />
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
     if (isError) {
       return (
         <View style={styles.fillWrap}>
@@ -261,7 +289,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       );
     }
 
-    if (cartItems.length === 0 && !loading) {
+    if (cartItems.length === 0 && !loading && hasFetched.current) {
       return (
         <View style={styles.fillWrap}>
           <EmptyState
@@ -317,7 +345,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
                 {itemCount} {itemCount === 1 ? 'item' : 'items'}
               </Text>
             </Text>
-            <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+            <Text style={styles.summaryValue}>Rs {subtotal.toFixed(0)}</Text>
           </View>
 
           <View style={styles.summaryRow}>
@@ -329,7 +357,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 
           <View style={styles.summaryTotalRow}>
             <Text style={styles.summaryTotalLabel}>Total</Text>
-            <Text style={styles.summaryTotalValue}>${subtotal.toFixed(2)}</Text>
+            <Text style={styles.summaryTotalValue}>Rs {subtotal.toFixed(0)}</Text>
           </View>
 
           {/* Checkout CTA */}
@@ -402,7 +430,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   root: {
     flex:            1,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.surface,
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
@@ -448,10 +476,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Fill wrappers (error / empty) ──────────────────────────────────────────
+  // ── Fill wrappers (error / empty / skeleton) ──────────────────────────────
   fillWrap: {
     flex:            1,
     backgroundColor: Colors.surface,
+  },
+  skeletonRow: {
+    flexDirection:   'row',
+    gap:             Space[3],
+    paddingVertical: Space[4],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  skeletonImg: {
+    width:           80,
+    height:          100,
+    borderRadius:    Radius.md,
+    backgroundColor: Colors.surfaceDeep,
+  },
+  skeletonContent: {
+    flex: 1,
+    paddingTop: Space[1],
+  },
+  skeletonLine: {
+    height:          10,
+    borderRadius:    Radius.xs,
+    backgroundColor: Colors.surfaceDeep,
   },
 
   // Empty state text link (subordinate to EmptyState component)

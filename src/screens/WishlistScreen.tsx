@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,11 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useProfileCode } from '../hooks/useProfileCode';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
+import { selectProduct } from '../api/product';
 import type { WishlistItemInterface } from '../api/interfaces';
 import { EmptyState, BottomNavBar, Price, DarkHeader } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { Colors, Space, Radius } from '../theme';
+import { Colors, Space } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -34,22 +35,30 @@ type WishlistScreenProps = {
   navigation: NavigationProp;
 };
 
-// Image dimensions — 4:5 portrait, matching the canonical card ratio
+type ProductDetail = { imageUri: string; itemId: number };
+
 const IMG_W = 80;
 const IMG_H = 100;
 
 // ── Single wishlist row ───────────────────────────────────────────────────────
 const WishlistRow: React.FC<{
   item: WishlistItemInterface;
+  detail: ProductDetail | null;
   onRemove: (code: number) => void;
-  onPress: (inventoryId: number) => void;
+  onPress: (itemId: number) => void;
   delay: number;
   isLast: boolean;
-}> = ({ item, onRemove, onPress, delay, isLast }) => {
+}> = ({ item, detail, onRemove, onPress, delay, isLast }) => {
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
+  const imgOpacity = useRef(new Animated.Value(0)).current;
   const hasDiscount = item.ComparePrice > item.Price;
+  const isOutOfStock = item.IsInStock === 0;
+
+  const onImageLoad = useCallback(() => {
+    Animated.timing(imgOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [imgOpacity]);
 
   return (
     <Animated.View style={entrance}>
@@ -58,10 +67,28 @@ const WishlistRow: React.FC<{
           {...handlers}
           style={styles.row}
           activeOpacity={1}
-          onPress={() => { haptic.light(); onPress(item.InventoryID); }}
+          onPress={() => { haptic.light(); onPress(detail?.itemId ?? item.InventoryID); }}
         >
-          {/* Portrait image — API does not return image URL, show placeholder */}
-          <View style={{ width: IMG_W, height: IMG_H, borderRadius: Radius.sm, backgroundColor: Colors.surfaceDeep }} />
+          {/* Product image — fade in when loaded, brand initial fallback */}
+          <View style={styles.imgWrap}>
+            {detail?.imageUri ? (
+              <Animated.Image
+                source={{ uri: detail.imageUri }}
+                style={[styles.img, { opacity: imgOpacity }]}
+                resizeMode="cover"
+                onLoad={onImageLoad}
+              />
+            ) : (
+              <Text style={styles.imgPlaceholderLetter}>
+                {(item.BrandName ?? item.Name).charAt(0).toUpperCase()}
+              </Text>
+            )}
+            {isOutOfStock && (
+              <View style={styles.outOfStockOverlay}>
+                <Text style={styles.outOfStockText}>Sold out</Text>
+              </View>
+            )}
+          </View>
 
           {/* Content */}
           <View style={styles.content}>
@@ -81,7 +108,7 @@ const WishlistRow: React.FC<{
             </View>
           </View>
 
-          {/* Remove — plain × glyph, no circle background (CartScreen pattern) */}
+          {/* Remove */}
           <TouchableOpacity
             style={styles.removeBtn}
             onPress={() => { haptic.light(); onRemove(item.WishlistCode); }}
@@ -92,7 +119,6 @@ const WishlistRow: React.FC<{
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Hairline divider — not shown after last item */}
       {!isLast && <View style={styles.divider} />}
     </Animated.View>
   );
@@ -103,11 +129,30 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
-  const [items, setItems] = useState<WishlistItemInterface[]>([]);
+  const [items, setItems]                               = useState<WishlistItemInterface[]>([]);
+  const [detailMap, setDetailMap]                       = useState<Record<number, ProductDetail>>({});
   const profileCode = useProfileCode();
 
   useEffect(() => {
-    if (fetched !== null) setItems(fetched);
+    if (!fetched?.length) return;
+    setItems(fetched);
+    // Fetch product details for all wishlist items in parallel
+    Promise.all(
+      fetched.map(item =>
+        selectProduct(String(item.InventoryID))
+          .then(res => {
+            const product = Array.isArray(res?.result) ? res.result[0] : null;
+            if (!product) return null;
+            const imageUri = product.Images?.split(';')[0]?.trim() ?? '';
+            return { inventoryId: item.InventoryID, imageUri, itemId: Number(product.Item_Id) };
+          })
+          .catch(() => null),
+      ),
+    ).then(results => {
+      const map: Record<number, ProductDetail> = {};
+      results.forEach(r => { if (r) map[r.inventoryId] = { imageUri: r.imageUri, itemId: r.itemId }; });
+      setDetailMap(map);
+    });
   }, [fetched]);
 
   const fetchWishlist = useCallback(
@@ -137,8 +182,9 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const renderItem = ({ item, index }: ListRenderItemInfo<WishlistItemInterface>) => (
     <WishlistRow
       item={item}
+      detail={detailMap[item.InventoryID] ?? null}
       onRemove={handleRemove}
-      onPress={(id) => navigation.navigate('Product', { product: String(id) })}
+      onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
       delay={Math.min(index * 55, 320)}
       isLast={index === items.length - 1}
     />
@@ -274,6 +320,40 @@ const styles = StyleSheet.create({
   },
   priceRow: {
     marginTop: 2,
+  },
+
+  // ── Image ─────────────────────────────────────────────────────────────────────
+  imgWrap: {
+    width:           IMG_W,
+    height:          IMG_H,
+    borderRadius:    8,
+    backgroundColor: Colors.surfaceDeep,
+    alignItems:      'center',
+    justifyContent:  'center',
+    flexShrink:      0,
+    overflow:        'hidden',
+  },
+  img: {
+    width:  '100%',
+    height: '100%',
+  },
+  imgPlaceholderLetter: {
+    fontFamily:    FontFamily.serifItalic,
+    fontSize:      32,
+    color:         Colors.ink3,
+    lineHeight:    36,
+  },
+  outOfStockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(248,247,244,0.72)',
+    alignItems:      'center',
+    justifyContent:  'flex-end',
+    paddingBottom:   Space[2],
+  },
+  outOfStockText: {
+    ...Type.label,
+    color:         Colors.ink3,
+    letterSpacing: 0.4,
   },
 
   // ── Remove — plain × glyph (CartScreen frozen pattern) ───────────────────────

@@ -12,6 +12,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { loginCustomer } from '../api/auth';
+import { getSavedCartItems } from '../api/cart';
+import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -141,6 +143,7 @@ const Login: React.FC = () => {
   const { height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Home'>>();
   const haptic = useHaptic();
+  const { setCartCount } = useCart();
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [username, setUsername]     = useState('');
@@ -237,6 +240,16 @@ const Login: React.FC = () => {
         }),
         AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(userData)),
       ]);
+      // Seed cart badge immediately so the count is correct from first screen
+      if (userData.CustomerProfileCode) {
+        getSavedCartItems(userData.CustomerProfileCode)
+          .then((res: any) => {
+            if (res?.statusCode === 1) {
+              setCartCount((res.result ?? []).length);
+            }
+          })
+          .catch(() => {});
+      }
       setLoading(false);
       navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     } catch (error: any) {

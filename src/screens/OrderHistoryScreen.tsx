@@ -88,7 +88,7 @@ const OrderRow: React.FC<{
               </View>
               {/* Amount — right-aligned serif */}
               <View style={styles.amountBlock}>
-                <Text style={styles.amount}>${item.Amount.toFixed(2)}</Text>
+                <Text style={styles.amount}>Rs {item.Amount.toFixed(0)}</Text>
                 <Icon name="chevron-forward" size={13} color={Colors.ink5} />
               </View>
             </View>

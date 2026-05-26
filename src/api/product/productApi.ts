@@ -10,7 +10,7 @@ export const getAllProducts = async () => {
     subCategories: [],
     searchQuery: '%',
     priceRange: { from: null, to: null },
-    discount: '%',
+    discount: null,
     pagination: { pageNumber: 1, pageSize: 10 },
   });
   return response.data?.result?.Products ?? [];

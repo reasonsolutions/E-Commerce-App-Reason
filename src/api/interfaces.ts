@@ -42,6 +42,15 @@ export interface postLoginInterface {
     "Password": string
 }
 
+export interface postUpdateCustomerInterface {
+    CustomerProfileCode: number;
+    CustomerName: string;
+    EmailID: string;
+    MobileNumber: string;
+    CountryCode: number;
+    Password: string;
+}
+
 export interface postCreateDeliveryAddressInterface {
     CustomerName: string;
     MobileNumber: string;
@@ -332,11 +341,20 @@ export interface SavedCartItemInterface {
     PriceDetails: {
         Price: number;
         ComparePrice: number;
+        Taxes: any[];
     };
 }
 
 
-// ─── Place order (new /placeOrder endpoint) ───────────────────────────────────
+// ─── Place order (/api/ecomm/placeOrder) ──────────────────────────────────────
+
+export interface PlaceOrderTax {
+  TaxId:   number;
+  TaxName: string;
+  TaxType: number;
+  TaxRate: number;
+  Reason:  string;
+}
 
 export interface PlaceOrderItemDetail {
   InventoryId:        number;
@@ -349,6 +367,7 @@ export interface PlaceOrderItemDetail {
   Discount:           number;
   VAT:                number;
   OrderStatus:        number;
+  Taxes?:             PlaceOrderTax[];
 }
 
 export interface PlaceOrderDetail {
@@ -356,13 +375,39 @@ export interface PlaceOrderDetail {
   ItemDetails:    PlaceOrderItemDetail[];
 }
 
+export interface PlaceOrderPaymentCard {
+  Number:             string;
+  AuthorizationCode:  string;
+  CardAmount:         number;
+  CardProcessingCode: string;
+}
+
+export interface PlaceOrderCashOnDelivery {
+  ExpectedAmount:      number;
+  CurrencyCode:        string;
+  CollectionReference: string;
+}
+
+export interface PlaceOrderModeOfPayment {
+  Cards?:          PlaceOrderPaymentCard;
+  CashOnDelivery?: PlaceOrderCashOnDelivery;
+}
+
+export interface PlaceOrderPaymentDetails {
+  PaymentModes:    number;
+  Remark:          string;
+  ModeOfPayments:  PlaceOrderModeOfPayment[];
+}
+
 export interface PlaceOrderInterface {
-  CustomerProfileCode:      number;
-  OrderDeliveryAddressCode: number;
-  CartMasterCode:           number;
-  TotalAmount:              number;
-  CouponCode?:              string;
-  OrderDetails:             PlaceOrderDetail[];
+  CustomerProfileCode:         number;
+  OrderDeliveryAddressCode:    number;
+  CartMasterCode:              number;
+  TotalAmountBeforeDiscount:   number;
+  TotalAmountAfterDiscount:    number;
+  CouponCode?:                 string;
+  OrderDetails:                PlaceOrderDetail[];
+  PaymentDetails:              PlaceOrderPaymentDetails;
 }
 
 // ─── Wishlist (confirmed real endpoints) ─────────────────────────────────────

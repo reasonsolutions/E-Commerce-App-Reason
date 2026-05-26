@@ -11,7 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Toaster } from 'sonner-native';
+import { ToastOverlay } from './src/components/ui';
 
 import { GluestackUIProvider } from './src/lib/gluestack/provider';
 import { CartProvider, useCart } from './src/context/CartContext';
@@ -55,7 +55,7 @@ function App(): React.JSX.Element {
               <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
               <AppNavigator />
             </BottomSheetModalProvider>
-            <Toaster position="top-center" />
+            <ToastOverlay />
           </CartProvider>
         </GluestackUIProvider>
       </SafeAreaProvider>

@@ -170,16 +170,18 @@ src/api/product/
 import { getProductsByCategory } from '../api/product';
 ```
 
-### MOCK_MODE
+### Real API status (verified per domain index.ts)
 
-`src/config/env.ts` exports `MOCK_MODE = __DEV__`. Each domain `index.ts` reads this:
+| Domain | Status | Notes |
+|---|---|---|
+| `product` | Real | Hardcodes `false` for MOCK_MODE |
+| `auth` | Real | All functions including `postUpdateCustomer` |
+| `cart` | Real | All functions |
+| `address` | Real | All functions |
+| `wishlist` | Real | All functions |
+| `order` | Mixed | `placeOrder` + `postPlacedMultipleOrder` = real; `postOrderHistory` + `postCnfOrderDetail` = mock (pending backend response verification) |
 
-```typescript
-import { MOCK_MODE } from '../../config/env';
-const api = MOCK_MODE ? mock : real;
-```
-
-**Exception:** The product domain currently hardcodes `false` (real API integrated). Other domains use the global `MOCK_MODE`. Change only the domain index when integrating a new real API.
+**Do not assume any domain is on mock without reading its `index.ts` first.**
 
 ### Axios instance
 
@@ -451,12 +453,15 @@ await AsyncStorage.getItem(STORAGE_KEYS.userData);
 
 ## Frozen Screens
 
-These five screens define the visual standard. Do not modify.
+These screens define the visual standard. Do not modify without explicit instruction.
 
 **Login · HomeScreen · ProductScreen · CartScreen · OrderSuccessScreen**
 
-Pending screens (Phase 3 candidates, currently use StyleSheet.create):
-ResultScreen → WishlistScreen → OrderHistoryScreen → ProfileScreen → AddressScreen → OrderDetailScreen
+Completed screens (redesigned to match frozen standard):
+**ProfileScreen · AddressScreen**
+
+Pending screens (Phase 3 candidates):
+ResultScreen → WishlistScreen → OrderHistoryScreen → OrderDetailScreen
 
 When redesigning a Phase 3 screen, match the register of the frozen screens exactly — see visual standards below.
 
@@ -503,13 +508,13 @@ Do not fix these as side effects of unrelated tasks.
 
 | Item | Notes |
 |---|---|
-| Cold-start cart badge zero | `cartCount` starts at 0; only populated after CartScreen is visited. Fix: fetch cart count post-login. |
-| `useSession` adoption | AddressScreen, OrderHistoryScreen, OrderDetailScreen, WishlistScreen, CartScreen still read `STORAGE_KEYS.userData` directly. Migrate per screen during Phase 3. ProfileScreen already migrated. |
+| `placeOrder` blocked | `placeOrder` API requires `OrganisationID` in `OrderDetails` but no product/cart API returns it. Backend must add `OrganisationID` to `getSaveCartItems` response. |
+| `postUpdateCustomer` password | `Password` field is required but overwrites the stored password — cannot update profile without setting a new password. Backend discussing fix. |
+| Order history / detail on mock | `postOrderHistory` + `postCnfOrderDetail` still use mock in `order/index.ts`. Switch to real once backend response payload is confirmed. |
+| `useSession` adoption | AddressScreen, OrderHistoryScreen, OrderDetailScreen, WishlistScreen, CartScreen still read `STORAGE_KEYS.userData` directly. ProfileScreen already migrated. |
 | Auth token injection | `axiosInstance` request interceptor has a TODO for injecting `Authorization` header. |
 | API response types | `axiosInstance` responses are untyped (`any`). Incremental hardening deferred. |
-| Quantity mutation single-unit | `quantityIncrement`/`quantityDecrement` adjust by one unit per call. |
 | Navigation prop typing | Most screens use `any`-typed navigation props. Should use `StackNavigationProp` generics. |
-| Wishlist backend | Real endpoints not yet integrated. Mock returns empty-result envelopes. |
 
 ---
 

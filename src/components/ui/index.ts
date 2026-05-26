@@ -17,6 +17,7 @@ export { DarkHeader } from './DarkHeader';
 export { FadeImage } from './FadeImage';
 export { AppToast } from './Toast';
 export type { ToastVariant } from './Toast';
+export { ToastOverlay } from './ToastOverlay';
 export { PrimaryButton } from './PrimaryButton';
 export { TextLinkButton } from './TextLinkButton';
 export { ProductIdentity } from './ProductIdentity';

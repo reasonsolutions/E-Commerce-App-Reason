@@ -17,7 +17,7 @@ import { getProductsByCategory, getProductsByBrand, getAllProducts, getCategorie
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
 import { ProductByCategoryProductDetails, CategoryInterface } from '../api/interfaces';
-import { Skeleton, Price, EmptyState, DarkHeader, FilterSheet } from '../components/ui';
+import { Skeleton, Price, EmptyState, DarkHeader, FilterSheet, SearchBar } from '../components/ui';
 import type { SortKey } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
@@ -130,9 +130,9 @@ const HeroCard: React.FC<{
             ) : null}
             <Text style={styles.heroCardName} numberOfLines={1}>{product.Name}</Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.heroCardPrice}>${product.Price.toFixed(2)}</Text>
+              <Text style={styles.heroCardPrice}>Rs {product.Price.toFixed(0)}</Text>
               {hasDiscount && (
-                <Text style={styles.heroCardWas}>${product.ComparePrice.toFixed(2)}</Text>
+                <Text style={styles.heroCardWas}>Rs {product.ComparePrice.toFixed(0)}</Text>
               )}
             </View>
           </View>
@@ -269,7 +269,7 @@ const SpanCard: React.FC<{
               <Text style={styles.spanBrand}>{product.Brand_Name.toUpperCase()}</Text>
             ) : null}
             <Text style={styles.spanName} numberOfLines={1}>{product.Name}</Text>
-            <Text style={styles.spanPrice}>${product.Price.toFixed(2)}</Text>
+            <Text style={styles.spanPrice}>Rs {product.Price.toFixed(0)}</Text>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -338,6 +338,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const [sheetCategories, setSheetCategories]   = useState<CategoryInterface[]>([]);
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [localQuery, setLocalQuery]   = useState(searchQueryParam ?? '');
 
   // Draft state — lives in sheet until Apply is tapped
   const [draftCategories, setDraftCategories] = useState<number[]>([]);
@@ -626,6 +627,19 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           rightSlot={filterButton}
         />
       </Animated.View>
+
+      <View style={styles.searchBand}>
+        <SearchBar
+          value={localQuery}
+          onChangeText={setLocalQuery}
+          placeholder="Search products, brands…"
+          onSubmit={() => {
+            const q = localQuery.trim();
+            if (!q) return;
+            navigation.navigate('Result', { searchQuery: q, categoryName: `"${q}"` });
+          }}
+        />
+      </View>
 
       <ScrollView
         style={styles.scroll}

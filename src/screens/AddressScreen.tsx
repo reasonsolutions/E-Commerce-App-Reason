@@ -18,8 +18,8 @@ import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { getDeliveryAddresses, postCreateDeliveryAddress } from '../api/address';
-import { postPlacedMultipleOrder } from '../api/order';
-import { postPlacedMultipleOrderInterface, SavedCartItemInterface } from '../api/interfaces';
+import { placeOrder } from '../api/order';
+import { PlaceOrderInterface, SavedCartItemInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -266,33 +266,72 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       return;
     }
 
+    const total = cartItems.reduce((sum: number, item: SavedCartItemInterface) => sum + item.Price * item.Quantity, 0);
+
+    // Extract OrganisationID from image path: "MER_{OrgID}/Products/..."
+    const getOrgId = (images: string): string => {
+      const match = images?.split(';')[0]?.match(/^MER_([^/]+)\//);
+      return match ? match[1] : 'NULL';
+    };
+
+    // Group items by their OrganisationID
+    const orgMap = new Map<string, SavedCartItemInterface[]>();
+    for (const item of cartItems) {
+      const orgId = getOrgId(item.Images);
+      if (!orgMap.has(orgId)) orgMap.set(orgId, []);
+      orgMap.get(orgId)!.push(item);
+    }
+
+    const orderDetails = Array.from(orgMap.entries()).map(([orgId, items]) => ({
+      OrganisationID: orgId,
+      ItemDetails: items.map((item: SavedCartItemInterface) => ({
+        InventoryId:        item.InventoryId,
+        Quantity:           item.Quantity,
+        Amount:             item.Price * item.Quantity,
+        DeliveryCharges:    0,
+        DeliveryChargesVAT: 0,
+        ItemCharges:        0,
+        ItemChargesVAT:     0,
+        Discount:           0,
+        VAT:                0,
+        OrderStatus:        1,
+      })),
+    }));
+
+    const payload: PlaceOrderInterface = {
+      CustomerProfileCode:       profileCode,
+      OrderDeliveryAddressCode:  selectedAddressCode,
+      CartMasterCode:            cartItems[0].CartMasterCode,
+      TotalAmountBeforeDiscount: total,
+      TotalAmountAfterDiscount:  total,
+      OrderDetails:              orderDetails,
+      PaymentDetails: {
+        PaymentModes:   1,
+        Remark:         'Cash on delivery',
+        ModeOfPayments: [
+          {
+            CashOnDelivery: {
+              ExpectedAmount:      total,
+              CurrencyCode:        'MUR',
+              CollectionReference: `COD-${cartItems[0].CartMasterCode}`,
+            },
+          },
+        ],
+      },
+    };
+
     setSubmitting(true);
     try {
-      const transformedArray = cartItems.map((item: SavedCartItemInterface) => ({
-        Inventory_Id:      item.InventoryId,
-        Quantity:          item.Quantity,
-        Amount:            item.Price * item.Quantity,
-        DeliveryCharges:   0,
-        DeliveryChargesVAT: 0,
-        ItemCharges:       0,
-        ItemChargesVAT:    0,
-        Discount:          0,
-        VAT:               0,
-        OrderStatus:       1,
-      }));
+      const response = await placeOrder(payload);
+      console.log('[placeOrder] response:', JSON.stringify(response, null, 2));
 
-      const payload: postPlacedMultipleOrderInterface = {
-        CustomerProfileCode:     profileCode,
-        OrderDeliveryAddressCode: selectedAddressCode,
-        BranchCode:              'NULL',
-        CountryCode:             'NULL',
-        CartMasterCode:          cartItems[0].CartMasterCode,
-        OrderDetails:            transformedArray,
-      };
-
-      const response = await postPlacedMultipleOrder(payload);
-      navigation.navigate('OrderSuccess', { orderNumber: response.result.OrderNumber });
-    } catch {
+      if (response?.statusCode !== 1) {
+        setOrderError(response?.userMessage || 'Could not place your order. Please try again.');
+        return;
+      }
+      navigation.navigate('OrderSuccess', { orderNumber: response.result?.OrderNumber ?? '' });
+    } catch (err: any) {
+      console.log('[placeOrder] error:', err);
       setOrderError('Could not place your order. Please try again.');
     } finally {
       setSubmitting(false);

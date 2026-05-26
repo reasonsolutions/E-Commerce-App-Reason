@@ -84,7 +84,7 @@ const RegisterScreen: React.FC = () => {
         CustomerName:  name.trim(),
         EmailID:       email.trim(),
         MobileNumber:  Number(mobile.trim()),
-        CountryCode:   91,
+        CountryCode:   230,
         LoginPassword: password,
         Address:       '',
         StreetName:    '',
@@ -104,7 +104,7 @@ const RegisterScreen: React.FC = () => {
         CustomerName:  name.trim(),
         EmailID:       email.trim(),
         MobileNumber:  mobile.trim(),
-        CountryCode:   91,
+        CountryCode:   230,
         Password:      password,
       });
     } catch (error: any) {

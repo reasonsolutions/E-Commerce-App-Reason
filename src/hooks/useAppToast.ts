@@ -1,16 +1,16 @@
-import { toast as sonnerToast } from 'sonner-native';
+import { toastEmitter } from '../utils/toastEmitter';
 
 type ShowOptions = { title: string; description?: string };
 
 export function useAppToast() {
   return {
     success: ({ title, description }: ShowOptions) =>
-      sonnerToast.success(title, { description }),
+      toastEmitter.emit('success', title, description),
     error: ({ title, description }: ShowOptions) =>
-      sonnerToast.error(title, { description }),
+      toastEmitter.emit('error', title, description),
     warning: ({ title, description }: ShowOptions) =>
-      sonnerToast.warning(title, { description }),
+      toastEmitter.emit('warning', title, description),
     info: ({ title, description }: ShowOptions) =>
-      sonnerToast(title, { description }),
+      toastEmitter.emit('info', title, description),
   };
 }

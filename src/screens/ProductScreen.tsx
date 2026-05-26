@@ -3,7 +3,6 @@ import {
   StatusBar,
   Animated,
   Dimensions,
-  Alert,
 } from 'react-native';
 import {
   Box,
@@ -42,6 +41,7 @@ import { useAsyncState } from '../hooks/useAsyncState';
 import { useCart } from '../context/CartContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useProfileCode } from '../hooks/useProfileCode';
+import { useAppToast } from '../hooks/useAppToast';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_H = Math.round(SCREEN_H * 0.58);
@@ -59,6 +59,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { setCartCount } = useCart();
   const haptic = useHaptic();
+  const toast = useAppToast();
 
   const [selectedVariant, setSelectedVariant] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
@@ -96,6 +97,11 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       toValue: 1, duration: Motion.duration.settle, delay: 60,
       easing: Motion.easing.out, useNativeDriver: true,
     }).start();
+    // Pre-select first in-stock variant, or first variant if all are out of stock
+    const variants = data.product?.Variants ?? [];
+    const firstInStock = variants.find(v => v.StockStatus?.Description !== 'out_of_stock');
+    const preselect = firstInStock ?? variants[0];
+    if (preselect) setSelectedVariant(String(preselect.InventoryId));
   }, [data, plateAnim]);
 
   useEffect(() => {
@@ -122,6 +128,11 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
   const handleAddToCart = useCallback(async () => {
     if (!profileCode) return;
+    if (isOutOfStock && !allowBackOrder) {
+      haptic.warning();
+      toast.warning({ title: 'Out of stock', description: 'This variant is currently unavailable.' });
+      return;
+    }
     const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
     const requestbody: PostCartSaveInterface = {
       CustomerProfileCode: profileCode,
@@ -134,7 +145,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       const res = await postSaveCartItems(requestbody);
       if (res?.statusCode !== 1) {
         haptic.warning();
-        Alert.alert("Couldn't add to bag", res?.userMessage ?? 'Something went wrong.');
+        toast.error({ title: "Couldn't add to bag", description: res?.userMessage ?? 'Something went wrong.' });
         return;
       }
       setCartCount((prev: number) => prev + quantity);
@@ -146,7 +157,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       navigation.navigate('Cart');
     } catch {
       haptic.warning();
-      Alert.alert("Couldn't add to bag", 'Check your connection and try again.');
+      toast.error({ title: "Couldn't add to bag", description: 'Check your connection and try again.' });
     } finally {
       setAddingToCart(false);
     }
@@ -164,7 +175,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       const res = await addToWishlist(profileCode, inventoryId).catch(() => null);
       if (res?.statusCode !== 1) {
         haptic.warning();
-        Alert.alert('Wishlist', res?.userMessage ?? 'Something went wrong.');
+        toast.warning({ title: 'Wishlist', description: res?.userMessage ?? 'Something went wrong.' });
         return;
       }
       if (res?.statusCode === 1) {
@@ -186,9 +197,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
   const productDetails = data?.product ?? null;
   const variantDetails = productDetails?.Variants ?? [];
-  const selectedVariantObj = variantDetails.find(v => v.InventoryId === selectedVariant) ?? variantDetails[0] ?? null;
+  const selectedVariantObj = variantDetails.find(v => String(v.InventoryId) === selectedVariant) ?? variantDetails[0] ?? null;
   const variantOptions: VariantOption[] = variantDetails.map(v => ({
-    id: v.InventoryId,
+    id: String(v.InventoryId),
     label: v.Variant,
     outOfStock: v.StockStatus?.Description === 'out_of_stock',
   }));
@@ -196,6 +207,8 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const imageThumbs    = productDetails?.Images ? productDetails.Images.split(';').filter(Boolean) : [];
   const activePrice        = selectedVariantObj?.PriceDetails?.Price ?? 0;
   const activeComparePrice = selectedVariantObj?.PriceDetails?.ComparePrice ?? 0;
+  const isOutOfStock   = selectedVariantObj?.StockStatus?.Description === 'out_of_stock';
+  const allowBackOrder = (selectedVariantObj as any)?.BackOrder?.AllowBackOrder === true;
   const hasDiscount    = activeComparePrice > activePrice;
   const discountPct    = hasDiscount
     ? Math.round(((activeComparePrice - activePrice) / activeComparePrice) * 100) : 0;
@@ -419,14 +432,17 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               <QuantityStepper value={quantity} onChange={setQuantity} min={1} size="sm" />
             </Box>
             <PrimaryButton
-              label="Add to Bag"
+              label={isOutOfStock && !allowBackOrder ? 'Out of Stock' : 'Add to Bag'}
               loading={addingToCart}
               onPress={handleAddToCart}
+              isDisabled={isOutOfStock && !allowBackOrder}
             />
-            <TextLinkButton
-              label="Buy Now"
-              onPress={handleAddToCart}
-            />
+            {(!isOutOfStock || allowBackOrder) && (
+              <TextLinkButton
+                label="Buy Now"
+                onPress={handleAddToCart}
+              />
+            )}
           </VStack>
         </>
       )}

@@ -17,11 +17,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
-import { heroBanner } from '../data/mockData';
 import CategoryItem from '../components/CategoryItem';
 import ProductCard from '../components/ProductCard';
 import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interfaces';
-import { getAllProducts, getCategories, getBrands } from '../api/product';
+import { getProductsByCategory, getCategories, getBrands } from '../api/product';
+import { fallbackImageUrl } from '../utils/resolveImageUrl';
+import { useProductImage } from '../hooks/useProductImage';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
 import { useFocusEffect } from '@react-navigation/native';
@@ -34,8 +35,8 @@ import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_H   = 300;
-const BRIDGE_H = 80;
+const HERO_H   = Math.round(SCREEN_W * 1.18);
+const BRIDGE_H = 64;
 
 const BRAND_DOMAINS: Record<string, string> = {
   'nike':        'nike.com',
@@ -77,6 +78,131 @@ const BrandTile: React.FC<{ uri: string; name: string; fallbackColor: string }> 
           resizeMode="contain"
           onError={() => setFailed(true)}
         />
+      )}
+    </View>
+  );
+};
+
+
+
+// ── Hero slide — extracted so hooks can be called per item ───────────────────
+const HeroSlide: React.FC<{ item: ProductInterface; onPress: (id: number) => void }> = ({ item, onPress }) => {
+  const { uri, loading } = useProductImage(item.Name, item.BrandName, 'portrait');
+  const imgOpacity = useRef(new Animated.Value(0)).current;
+
+  const onImageLoad = useCallback(() => {
+    Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  }, [imgOpacity]);
+
+  const hasDiscount = item.MaxComparePrice > item.MinPrice;
+  const discountPct = hasDiscount
+    ? Math.round(((item.MaxComparePrice - item.MinPrice) / item.MaxComparePrice) * 100)
+    : 0;
+
+  return (
+    <TouchableOpacity style={styles.heroSlide} activeOpacity={0.97} onPress={() => onPress(item.ItemID)}>
+      {/* Shimmer background while loading */}
+      {loading && <Skeleton height={HERO_H} radius={0} style={StyleSheet.absoluteFillObject} />}
+      {/* Fade in once URI is ready */}
+      {uri ? (
+        <Animated.Image
+          source={{ uri }}
+          style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+          resizeMode="cover"
+          onLoad={onImageLoad}
+        />
+      ) : null}
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.92)']}
+        locations={[0.25, 0.52, 0.78, 1]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+      {hasDiscount && (
+        <View style={styles.heroSlideBadge}>
+          <Text style={styles.heroSlideBadgeText}>−{discountPct}%</Text>
+        </View>
+      )}
+      <View style={styles.heroSlideFooter}>
+        {item.BrandName ? (
+          <Text style={styles.heroSlideBrand}>{item.BrandName.toUpperCase()}</Text>
+        ) : null}
+        <Text style={styles.heroSlideName} numberOfLines={2}>{item.Name}</Text>
+        <View style={styles.heroSlidePriceRow}>
+          {item.MinPrice > 0 && <Text style={styles.heroSlidePrice}>Rs {item.MinPrice.toFixed(0)}</Text>}
+          {hasDiscount && <Text style={styles.heroSlidePriceWas}>Rs {item.MaxComparePrice.toFixed(0)}</Text>}
+        </View>
+        <View style={styles.heroSlideShopRow}>
+          <Text style={styles.heroSlideShopText}>Shop now</Text>
+          <Icon name="arrow-forward" size={13} color="rgba(255,255,255,0.75)" />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// ── Hero carousel ────────────────────────────────────────────────────────────
+const HeroCarousel: React.FC<{
+  products: ProductInterface[] | null;
+  onPress: (itemId: number) => void;
+}> = ({ products, onPress }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+  const autoTimer   = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const slides = products ?? [];
+
+  const startAutoAdvance = useCallback(() => {
+    if (autoTimer.current) clearInterval(autoTimer.current);
+    if (slides.length < 2) return;
+    autoTimer.current = setInterval(() => {
+      setActiveIndex(prev => {
+        const next = (prev + 1) % slides.length;
+        flatListRef.current?.scrollToIndex({ index: next, animated: true });
+        return next;
+      });
+    }, 3500);
+  }, [slides.length]);
+
+  useEffect(() => {
+    startAutoAdvance();
+    return () => { if (autoTimer.current) clearInterval(autoTimer.current); };
+  }, [startAutoAdvance]);
+
+  if (!products) {
+    return <Skeleton height={HERO_H} radius={0} />;
+  }
+
+  if (slides.length === 0) {
+    return <View style={[styles.heroBg, { height: HERO_H }]} />;
+  }
+
+  return (
+    <View style={styles.heroBg}>
+      <FlatList
+        ref={flatListRef}
+        data={slides}
+        keyExtractor={(item) => String(item.ItemID)}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onMomentumScrollBegin={() => {
+          if (autoTimer.current) clearInterval(autoTimer.current);
+        }}
+        onMomentumScrollEnd={(e) => {
+          const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+          setActiveIndex(idx);
+          startAutoAdvance();
+        }}
+        renderItem={({ item }) => <HeroSlide item={item} onPress={onPress} />}
+      />
+      {slides.length > 1 && (
+        <View style={styles.heroDots}>
+          {slides.map((_, i) => (
+            <View key={i} style={[styles.heroDot, i === activeIndex && styles.heroDotActive]} />
+          ))}
+        </View>
       )}
     </View>
   );
@@ -153,7 +279,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [suggestions, setSuggestions]         = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const heroImgOpacity = useRef(new Animated.Value(0)).current;
 
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text);
@@ -223,7 +348,38 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     useCallback(() => {
       const cancelled = { current: false };
       runCategories(() => getCategories().then((d) => d.result), cancelled);
-      runProducts(() => getAllProducts(), cancelled);
+      runProducts(async () => {
+        const catRes = await getCategories().then((d) => d.result as CategoryInterface[]);
+        if (!catRes?.length) return [];
+        const ids = catRes.map((c) => c.CategoryId);
+        const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
+        const merged = results.flat();
+        const seen = new Set<number>();
+        const deduped: ProductInterface[] = [];
+        for (const p of merged) {
+          if (!seen.has(p.Item_Id)) {
+            seen.add(p.Item_Id);
+            deduped.push({
+              ItemID:          p.Item_Id,
+              Name:            p.Name,
+              Description:     p.Description,
+              SubcategoryID:   String(p.SubCategory_Id),
+              Images:          p.Images,
+              CreatedDate:     p.Date_Created,
+              BrandID:         String(p.Brand_Id),
+              BrandName:       p.Brand_Name,
+              SCName:          p.SCName,
+              CategoryID:      String(p.Category_Id),
+              CategoryName:    p.CategoryName,
+              CategoryImage:   p.CategoryImage,
+              MinPrice:        p.Price ?? 0,
+              MaxComparePrice: p.ComparePrice ?? 0,
+              Variants:        [],
+            });
+          }
+        }
+        return deduped;
+      }, cancelled);
       runBrands(
         () => getBrands().then((d) => {
           const list: GetBrandItem[] = d?.result ?? [];
@@ -246,12 +402,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const shelfProducts = flashDealProducts?.length
     ? flashDealProducts
     : (deduplicatedProducts?.slice(1) ?? null);
-
-  const handleHeroImageLoad = useCallback(() => {
-    Animated.timing(heroImgOpacity, {
-      toValue: 1, duration: 900, useNativeDriver: true,
-    }).start();
-  }, [heroImgOpacity]);
 
   const renderProduct = useCallback(
     ({ item, index }: { item: ProductInterface; index: number }) => (
@@ -338,47 +488,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
       >
 
-        {/* ── Hero ──────────────────────────────────────────────────────── */}
+        {/* ── Hero carousel ─────────────────────────────────────────────── */}
         <Animated.View style={heroAnim}>
-          <View style={styles.heroBg}>
-            <View style={styles.heroInner}>
-              {/* Text column */}
-              <View style={styles.heroTextCol}>
-                <Text style={styles.heroEyebrow}>NEW SEASON</Text>
-                <Text style={styles.heroTitle} numberOfLines={3}>
-                  {heroBanner.title}
-                </Text>
-                {/* Underline-text CTA — editorial, not pill */}
-                <TouchableOpacity
-                  style={styles.heroCTA}
-                  activeOpacity={0.7}
-                  onPress={() => navigation.navigate('Result', { flashDeals: true, categoryName: 'New In' })}
-                >
-                  <Text style={styles.heroCTAText}>Shop the edit</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Image column — bleeds to right edge */}
-              <View style={styles.heroImgCol}>
-                <Animated.Image
-                  source={{ uri: heroBanner.images[0] }}
-                  style={[styles.heroImg, { opacity: heroImgOpacity }]}
-                  resizeMode="cover"
-                  onLoad={handleHeroImageLoad}
-                />
-                {/* Left-edge veil blends image into dark bg */}
-                <LinearGradient
-                  colors={[Colors.ink1, 'transparent']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0.32, y: 0 }}
-                  style={StyleSheet.absoluteFillObject}
-                  pointerEvents="none"
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Tonal bridge: ink → surface */}
+          <HeroCarousel
+            products={deduplicatedProducts?.slice(0, 5) ?? null}
+            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+          />
           <LinearGradient
             colors={[Colors.ink1, Colors.surface]}
             style={styles.tonalBridge}
@@ -448,7 +563,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               onPress={() => navigation.navigate('Product', { product: featuredProduct.ItemID })}
             >
               <Image
-                source={{ uri: featuredProduct.Images?.split(';')[0] || '' }}
+                source={{ uri: fallbackImageUrl(featuredProduct.ItemID + 100, 600, 520) }}
                 style={styles.featImage}
                 resizeMode="cover"
               />
@@ -476,9 +591,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     {featuredProduct.Name}
                   </Text>
                   <View style={styles.featPriceRow}>
-                    <Text style={styles.featPrice}>${featuredProduct.MinPrice.toFixed(2)}</Text>
+                    <Text style={styles.featPrice}>Rs {featuredProduct.MinPrice.toFixed(0)}</Text>
                     {featuredProduct.MaxComparePrice > featuredProduct.MinPrice && (
-                      <Text style={styles.featWas}>${featuredProduct.MaxComparePrice.toFixed(2)}</Text>
+                      <Text style={styles.featWas}>Rs {featuredProduct.MaxComparePrice.toFixed(0)}</Text>
                     )}
                   </View>
                 </View>
@@ -514,18 +629,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {shelfProducts !== null ? (
-            <FlatList
-              data={shelfProducts}
-              renderItem={renderProduct}
-              keyExtractor={(item: ProductInterface) => String(item.ItemID)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.shelfRail}
-              snapToInterval={180 + Space[4]}
-              decelerationRate="fast"
-            />
-          ) : (
+          {shelfProducts === null ? (
             <SkeletonRow gap={Space[4]} style={styles.shelfRail}>
               {[0, 1, 2].map((i) => (
                 <View key={i} style={{ width: 180 }}>
@@ -536,6 +640,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </View>
               ))}
             </SkeletonRow>
+          ) : shelfProducts.length === 0 ? (
+            <View style={styles.shelfEmpty}>
+              <Text style={styles.shelfEmptyText}>No deals right now.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={shelfProducts}
+              renderItem={renderProduct}
+              keyExtractor={(item: ProductInterface) => String(item.ItemID)}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.shelfRail}
+              snapToInterval={180 + Space[4]}
+              decelerationRate="fast"
+            />
           )}
         </Animated.View>
 
@@ -561,7 +680,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             {/* Right image column */}
             <View style={styles.editImgCol}>
               <Image
-                source={{ uri: heroBanner.images[1] ?? heroBanner.images[0] }}
+                source={{ uri: fallbackImageUrl((deduplicatedProducts?.[1]?.ItemID ?? deduplicatedProducts?.[0]?.ItemID ?? 99) + 200, 300, 440) }}
                 style={styles.editImg}
                 resizeMode="cover"
               />
@@ -695,51 +814,102 @@ const styles = StyleSheet.create({
     height:          HERO_H,
     overflow:        'hidden',
   },
-  heroInner: {
-    flex:      1,
-    flexDirection: 'row',
+  // ── Carousel slide ────────────────────────────────────────────────────────────
+  heroSlide: {
+    width:           SCREEN_W,
+    height:          HERO_H,
+    backgroundColor: Colors.surfaceDeep,
+    overflow:        'hidden',
   },
-  heroTextCol: {
-    flex:            1,
-    paddingLeft:     Space.screenH,
-    paddingTop:      Space[6],
-    paddingRight:    Space[2],
-    justifyContent:  'center',
-    gap:             Space[4],
+  heroSlideBadge: {
+    position:          'absolute',
+    top:               Space[4],
+    left:              Space.screenH,
+    backgroundColor:   Colors.accentTint,
+    borderRadius:      Radius.xs,
+    paddingVertical:   3,
+    paddingHorizontal: Space[2],
+    borderWidth:       0.5,
+    borderColor:       Colors.accent,
   },
-  heroEyebrow: {
+  heroSlideBadgeText: {
     ...Type.label,
-    color:         'rgba(255,255,255,0.32)',
-    letterSpacing: 2.0,
+    color:         Colors.accent,
+    letterSpacing: 0.4,
   },
-  // Serif italic display title — cinematic, not bold sans
-  heroTitle: {
+  heroSlideFooter: {
+    position:          'absolute',
+    bottom:            0,
+    left:              0,
+    right:             0,
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
+  },
+  heroSlideBrand: {
+    ...Type.label,
+    color:         'rgba(255,255,255,0.55)',
+    letterSpacing: 1.8,
+    marginBottom:  Space[1],
+  },
+  heroSlideName: {
     fontFamily:    FontFamily.serifItalic,
-    fontSize:      38,
+    fontSize:      32,
     fontWeight:    '400',
     color:         '#FFFFFF',
-    letterSpacing: -1.2,
-    lineHeight:    40,
+    letterSpacing: -0.8,
+    lineHeight:    38,
   },
-  // Underline text CTA — editorial restraint, not an outlined pill
-  heroCTA: {
-    alignSelf: 'flex-start',
+  heroSlidePriceRow: {
+    flexDirection: 'row',
+    alignItems:    'baseline',
+    gap:           Space[2],
+    marginTop:     4,
   },
-  heroCTAText: {
-    ...Type.bodyStrong,
-    color:             'rgba(255,255,255,0.80)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.35)',
-    paddingBottom:     2,
+  heroSlidePrice: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      20,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
+    letterSpacing: -0.4,
   },
-  heroImgCol: {
-    width:    SCREEN_W * 0.44,
-    height:   HERO_H,
-    position: 'relative',
+  heroSlidePriceWas: {
+    fontFamily:         FontFamily.sans,
+    fontSize:           13,
+    color:              'rgba(255,255,255,0.45)',
+    textDecorationLine: 'line-through',
   },
-  heroImg: {
-    width:  '100%',
-    height: '100%',
+  heroSlideShopRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Space[1],
+    marginTop:     Space[3],
+  },
+  heroSlideShopText: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      13,
+    fontWeight:    '500',
+    color:         'rgba(255,255,255,0.75)',
+    letterSpacing: 0.2,
+  },
+  // ── Dot indicators ────────────────────────────────────────────────────────────
+  heroDots: {
+    position:       'absolute',
+    bottom:         Space[3],
+    left:           0,
+    right:          0,
+    flexDirection:  'row',
+    justifyContent: 'center',
+    gap:            Space[1] + 2,
+  },
+  heroDot: {
+    width:           5,
+    height:          5,
+    borderRadius:    3,
+    backgroundColor: 'rgba(255,255,255,0.30)',
+  },
+  heroDotActive: {
+    width:           16,
+    backgroundColor: '#FFFFFF',
   },
   tonalBridge: {
     height:    BRIDGE_H,
@@ -884,6 +1054,14 @@ const styles = StyleSheet.create({
     paddingBottom:     Space[2],
     gap:               Space[4],
     alignItems:        'flex-start',   // was 'center' — caused top-misaligned mixed heights
+  },
+  shelfEmpty: {
+    paddingHorizontal: Space.screenH,
+    paddingVertical:   Space[6],
+  },
+  shelfEmptyText: {
+    ...Type.caption,
+    color: Colors.ink4,
   },
 
   // ── Brands rail ─────────────────────────────────────────────────────────────

@@ -8,6 +8,8 @@ import {
   GestureResponderEvent,
 } from 'react-native';
 import { ProductInterface } from '../api/interfaces';
+import { useProductImage } from '../hooks/useProductImage';
+import { Skeleton } from './ui';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -24,6 +26,7 @@ interface ProductCardProps {
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = false }) => {
   const imgOpacity = useRef(new Animated.Value(0)).current;
+  const { uri: imgSrc, loading: imgLoading } = useProductImage(product.Name, product.BrandName);
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -43,8 +46,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = fals
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.86}>
       {/* surfaceDeep bg so transparent product images don't dissolve */}
       <View style={[styles.imgWrap, { height: imgH }]}>
+        {imgLoading && <Skeleton height={imgH} radius={Radius.md} style={StyleSheet.absoluteFillObject} />}
         <Animated.Image
-          source={{ uri: product.Images?.split(';')[0] || '' }}
+          source={{ uri: imgSrc }}
           style={[styles.img, { opacity: imgOpacity }]}
           resizeMode="cover"
           onLoad={onLoad}
@@ -64,9 +68,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = fals
         ) : null}
         <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
         <View style={styles.priceRow}>
-          <Text style={styles.price}>${product.MinPrice.toFixed(2)}</Text>
+          <Text style={styles.price}>Rs {product.MinPrice.toFixed(0)}</Text>
           {hasDiscount && (
-            <Text style={styles.was}>${product.MaxComparePrice.toFixed(2)}</Text>
+            <Text style={styles.was}>Rs {product.MaxComparePrice.toFixed(0)}</Text>
           )}
         </View>
       </View>
