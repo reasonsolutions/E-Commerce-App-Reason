@@ -510,7 +510,7 @@ Do not fix these as side effects of unrelated tasks.
 |---|---|
 | `placeOrder` blocked | `placeOrder` API requires `OrganisationID` in `OrderDetails` but no product/cart API returns it. Backend must add `OrganisationID` to `getSaveCartItems` response. |
 | `postUpdateCustomer` password | `Password` field is required but overwrites the stored password — cannot update profile without setting a new password. Backend discussing fix. |
-| Order history / detail on mock | `postOrderHistory` + `postCnfOrderDetail` still use mock in `order/index.ts`. Switch to real once backend response payload is confirmed. |
+| Order detail on mock | `postCnfOrderDetail` still uses mock in `order/index.ts`. Switch to real once `getOrderStatus` endpoint is confirmed working. |
 | `useSession` adoption | AddressScreen, OrderHistoryScreen, OrderDetailScreen, WishlistScreen, CartScreen still read `STORAGE_KEYS.userData` directly. ProfileScreen already migrated. |
 | Auth token injection | `axiosInstance` request interceptor has a TODO for injecting `Authorization` header. |
 | API response types | `axiosInstance` responses are untyped (`any`). Incremental hardening deferred. |

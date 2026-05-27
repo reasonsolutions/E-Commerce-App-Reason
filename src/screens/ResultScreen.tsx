@@ -7,13 +7,16 @@ import {
   TouchableOpacity,
   Animated,
   StatusBar,
+  ActivityIndicator,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import { getProductsByCategory, getProductsByBrand, getAllProducts, getCategories } from '../api/product';
+import { getCategories, getBrands } from '../api/product';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
 import { ProductByCategoryProductDetails, CategoryInterface } from '../api/interfaces';
@@ -323,7 +326,12 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     flashDeals: isFlashDeals = false,
   } = route.params as { categoryId?: string; brandId?: number; searchQuery?: string; categoryName?: string; flashDeals?: boolean };
 
-  const { data: products, loading, isError, error, run } = useAsyncState<ProductByCategoryProductDetails[]>([]);
+  const { loading, isError, error, run } = useAsyncState<ProductByCategoryProductDetails[]>([]);
+  const [allProducts, setAllProducts] = useState<ProductByCategoryProductDetails[]>([]);
+  const [pageNumber, setPageNumber]   = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore]         = useState(true);
+  const PAGE_SIZE = 20;
 
   const headerAnim = useEntrance(40, false, 12);
   const heroAnim   = useEntrance(160, false, 12);
@@ -336,6 +344,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const [filterDiscount, setFilterDiscount]     = useState(false);
   const [sortKey, setSortKey]                   = useState<SortKey>('default');
   const [sheetCategories, setSheetCategories]   = useState<CategoryInterface[]>([]);
+  const [sheetBrands, setSheetBrands]           = useState<{ id: number; name: string }[]>([]);
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [localQuery, setLocalQuery]   = useState(searchQueryParam ?? '');
@@ -354,26 +363,10 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     (filterPriceMin || filterPriceMax ? 1 : 0) +
     (filterDiscount ? 1 : 0);
 
-  // ── Derived brand list from selected categories (or all if none selected) ──
-  const allBrandsFromSheet = useMemo(() => {
-    const source = draftCategories.length > 0
-      ? sheetCategories.filter(c => draftCategories.includes(c.CategoryId))
-      : sheetCategories;
-    const seen = new Set<number>();
-    const result: { id: number; name: string }[] = [];
-    source.forEach(cat => {
-      cat.Brands.forEach(b => {
-        const id = Number(b.Brand_Id);
-        if (!seen.has(id)) {
-          seen.add(id);
-          result.push({ id, name: b.Brand_Name });
-        }
-      });
-    });
-    return result;
-  }, [sheetCategories, draftCategories]);
+  // ── Brands for filter sheet — direct from getBrands API ──────────────────
+  const allBrandsFromSheet = sheetBrands;
 
-  // ── Fetch categories once on mount ────────────────────────────────────────
+  // ── Fetch categories + brands once on mount ───────────────────────────────
   useEffect(() => {
     let active = true;
     getCategories().then(res => {
@@ -381,6 +374,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       if (res?.statusCode === 1 && Array.isArray(res.result)) {
         setSheetCategories(res.result as CategoryInterface[]);
       }
+    }).catch(() => {});
+    getBrands().then(res => {
+      if (!active) return;
+      const list = res?.result ?? [];
+      setSheetBrands(list.map((b: any) => ({ id: Number(b.BrandId ?? b.Brand_Id), name: b.BrandName ?? b.Brand_Name ?? '' })));
     }).catch(() => {});
     return () => { active = false; };
   }, []);
@@ -396,130 +394,108 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     setIsSheetOpen(true);
   }, [filterCategories, filterBrands, filterPriceMin, filterPriceMax, filterDiscount, sortKey]);
 
-  // ── Fetch products ─────────────────────────────────────────────────────────
-  const fetchProducts = useCallback(
-    (
-      opts?: {
-        cats?: number[];
-        brands?: number[];
-        priceMin?: string;
-        priceMax?: string;
-        discount?: boolean;
-        cancelled?: { current: boolean };
+  // ── Shared mapper: allProducts API response → ProductByCategoryProductDetails
+  const mapProducts = (raw: any[]): ProductByCategoryProductDetails[] =>
+    raw.map(p => ({
+      Item_Id:        p.ItemID,
+      Name:           p.Name,
+      Price:          p.MinPrice,
+      ComparePrice:   p.MaxComparePrice,
+      Description:    p.Description,
+      SubCategory_Id: Number(p.SubcategoryID),
+      Images:         p.Images,
+      Date_Created:   p.CreatedDate,
+      Brand_Id:       Number(p.BrandID),
+      ApprovedBy:     null,
+      ApprovedOn:     null,
+      VendorID:       0,
+      Brand_Name:     p.BrandName,
+      Category_Id:    Number(p.CategoryID),
+      CategoryName:   p.CategoryName,
+      CategoryImage:  p.CategoryImage,
+      SCName:         p.SCName,
+      Inventory_Id:   p.Variants?.[0] ? Number(p.Variants[0].InventoryID) : 0,
+      Variant:        p.Variants?.[0]?.Variant ?? '',
+      Count:          p.Variants?.[0]?.Stock ?? 0,
+      Date_Updated:   p.CreatedDate,
+    }));
+
+  // ── Build allProducts payload from current filter + route state ───────────
+  const buildPayload = useCallback((
+    page: number,
+    opts?: { cats?: number[]; brands?: number[]; priceMin?: string; priceMax?: string; discount?: boolean },
+  ) => {
+    const cats     = opts?.cats     ?? filterCategories;
+    const brands   = opts?.brands   ?? filterBrands;
+    const priceMin = opts?.priceMin ?? filterPriceMin;
+    const priceMax = opts?.priceMax ?? filterPriceMax;
+    const discount = opts?.discount ?? filterDiscount;
+
+    const effectiveBrands = brands.length > 0
+      ? brands
+      : brandId != null ? [Number(brandId)] : [];
+    const effectiveCategories = cats.length > 0
+      ? cats
+      : categoryId != null ? [Number(categoryId)] : [];
+
+    return {
+      brands:        effectiveBrands,
+      categories:    effectiveCategories,
+      subCategories: [],
+      searchQuery:   searchQueryParam ?? '%',
+      priceRange: {
+        from: priceMin !== '' ? Number(priceMin) : null,
+        to:   priceMax !== '' ? Number(priceMax) : null,
       },
-    ) => {
-      const cats     = opts?.cats     ?? filterCategories;
-      const brands   = opts?.brands   ?? filterBrands;
-      const priceMin = opts?.priceMin ?? filterPriceMin;
-      const priceMax = opts?.priceMax ?? filterPriceMax;
-      const discount = opts?.discount ?? filterDiscount;
-      const cancelled = opts?.cancelled;
+      discount: (discount || isFlashDeals) ? 1 : null,
+      pagination: { pageNumber: page, pageSize: PAGE_SIZE },
+    };
+  }, [filterCategories, filterBrands, filterPriceMin, filterPriceMax, filterDiscount, brandId, categoryId, searchQueryParam, isFlashDeals]);
 
-      const hasFilters =
-        cats.length > 0 ||
-        brands.length > 0 ||
-        priceMin !== '' ||
-        priceMax !== '' ||
-        discount;
-
+  // ── Initial / filter-reset fetch (page 1, replaces list) ─────────────────
+  const fetchProducts = useCallback(
+    (opts?: { cats?: number[]; brands?: number[]; priceMin?: string; priceMax?: string; discount?: boolean; cancelled?: { current: boolean } }) => {
+      setPageNumber(1);
+      setHasMore(true);
+      setAllProducts([]);
       return run(async () => {
-        if (hasFilters) {
-          // Always include the route brandId so brand-page filters stay scoped to that brand
-          const effectiveBrands = brands.length > 0
-            ? brands
-            : brandId != null ? [Number(brandId)] : [];
-          const response = await axiosInstance.post(productEndpoints.allProducts, {
-            brands:        effectiveBrands,
-            categories:    cats,
-            subCategories: [],
-            searchQuery:   searchQueryParam ?? '',
-            priceRange: {
-              from: priceMin !== '' ? Number(priceMin) : null,
-              to:   priceMax !== '' ? Number(priceMax) : null,
-            },
-            discount: discount ? '%' : null,
-            pagination: { pageNumber: 1, pageSize: 50 },
-          });
-          const mapped: ProductByCategoryProductDetails[] = (response.data?.result?.Products ?? []).map((p: any) => ({
-            Item_Id:        p.ItemID,
-            Name:           p.Name,
-            Price:          p.MinPrice,
-            ComparePrice:   p.MaxComparePrice,
-            Description:    p.Description,
-            SubCategory_Id: Number(p.SubcategoryID),
-            Images:         p.Images,
-            Date_Created:   p.CreatedDate,
-            Brand_Id:       Number(p.BrandID),
-            ApprovedBy:     null,
-            ApprovedOn:     null,
-            VendorID:       0,
-            Brand_Name:     p.BrandName,
-            Category_Id:    Number(p.CategoryID),
-            CategoryName:   p.CategoryName,
-            CategoryImage:  p.CategoryImage,
-            SCName:         p.SCName,
-            Inventory_Id:   p.Variants?.[0] ? Number(p.Variants[0].InventoryID) : 0,
-            Variant:        p.Variants?.[0]?.Variant ?? '',
-            Count:          p.Variants?.[0]?.Stock ?? 0,
-            Date_Updated:   p.CreatedDate,
-          }));
-          return deduplicateProducts(mapped);
-        }
-
-        if (isFlashDeals) {
-          const data = await getAllProducts();
-          if (data?.statusCode === 1) {
-            const discounted = (data.result || []).filter(
-              (p: any) => p.ComparePrice > p.Price,
-            ) as unknown as ProductByCategoryProductDetails[];
-            return deduplicateProducts(discounted);
-          }
-          return [];
-        } else if (searchQueryParam) {
-          const response = await axiosInstance.post(productEndpoints.allProducts, {
-            brands:        [],
-            categories:    [],
-            subCategories: [],
-            searchQuery:   searchQueryParam,
-            priceRange:    { from: null, to: null },
-            discount:      '%',
-            pagination:    { pageNumber: 1, pageSize: 20 },
-          });
-          const mapped: ProductByCategoryProductDetails[] = (response.data?.result?.Products ?? []).map((p: any) => ({
-            Item_Id:        p.ItemID,
-            Name:           p.Name,
-            Price:          p.MinPrice,
-            ComparePrice:   p.MaxComparePrice,
-            Description:    p.Description,
-            SubCategory_Id: Number(p.SubcategoryID),
-            Images:         p.Images,
-            Date_Created:   p.CreatedDate,
-            Brand_Id:       Number(p.BrandID),
-            ApprovedBy:     null,
-            ApprovedOn:     null,
-            VendorID:       0,
-            Brand_Name:     p.BrandName,
-            Category_Id:    Number(p.CategoryID),
-            CategoryName:   p.CategoryName,
-            CategoryImage:  p.CategoryImage,
-            SCName:         p.SCName,
-            Inventory_Id:   p.Variants?.[0] ? Number(p.Variants[0].InventoryID) : 0,
-            Variant:        p.Variants?.[0]?.Variant ?? '',
-            Count:          p.Variants?.[0]?.Stock ?? 0,
-            Date_Updated:   p.CreatedDate,
-          }));
-          return deduplicateProducts(mapped);
-        } else if (brandId != null) {
-          const fetched = await getProductsByBrand(brandId);
-          return deduplicateProducts(fetched);
-        } else {
-          const fetched = await getProductsByCategory(categoryId ?? '');
-          return deduplicateProducts(fetched);
-        }
-      }, cancelled);
+        const payload = buildPayload(1, opts);
+        const response = await axiosInstance.post(productEndpoints.allProducts, payload);
+        const page = deduplicateProducts(mapProducts(response.data?.result?.Products ?? []));
+        if (page.length < PAGE_SIZE) setHasMore(false);
+        setAllProducts(page);
+        return page;
+      }, opts?.cancelled);
     },
-    [run, categoryId, brandId, searchQueryParam, isFlashDeals, filterCategories, filterBrands, filterPriceMin, filterPriceMax, filterDiscount],
+    [run, buildPayload],
   );
+
+  // ── Load next page — appends to list ─────────────────────────────────────
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || loading) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = pageNumber + 1;
+      const payload = buildPayload(nextPage);
+      const response = await axiosInstance.post(productEndpoints.allProducts, payload);
+      const page = deduplicateProducts(mapProducts(response.data?.result?.Products ?? []));
+      if (page.length < PAGE_SIZE) setHasMore(false);
+      if (page.length > 0) {
+        setAllProducts(prev => deduplicateProducts([...prev, ...page]));
+        setPageNumber(nextPage);
+      }
+    } catch {}
+    setLoadingMore(false);
+  }, [loadingMore, hasMore, loading, pageNumber, buildPayload]);
+
+  // ── Scroll-near-bottom detection ──────────────────────────────────────────
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    if (distanceFromBottom < 400 && !loadingMore && hasMore && !loading) {
+      loadMore();
+    }
+  }, [loadMore, loadingMore, hasMore, loading]);
 
   useEffect(() => {
     const cancelled = { current: false };
@@ -566,10 +542,10 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     setDraftBrands(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }, [haptic]);
 
-  // ── Rendered product list (sort applied client-side) ──────────────────────
+  // ── Rendered product list (sort applied client-side, driven by allProducts) ─
   const deduplicated = useMemo(
-    () => applySort(products ?? [], sortKey),
-    [products, sortKey],
+    () => applySort(allProducts, sortKey),
+    [allProducts, sortKey],
   );
   const heroProduct  = deduplicated[0] ?? null;
   const gridProducts = deduplicated.slice(1);
@@ -620,7 +596,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
       <Animated.View style={[styles.headerWrap, headerAnim]}>
         <DarkHeader
-          eyebrow="COLLECTION"
+          eyebrow={searchQueryParam ? 'SEARCH' : categoryName === 'All Products' ? 'BROWSE' : 'COLLECTION'}
           title={categoryName}
           onBack={() => navigation.goBack()}
           paddingTop={insets.top + Space[2]}
@@ -648,6 +624,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           styles.scrollContent,
           { paddingBottom: insets.bottom + Space[10] },
         ]}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         {loading ? (
           <ResultSkeleton />
@@ -717,6 +695,18 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
               );
             })}
           </>
+        )}
+
+        {loadingMore && (
+          <ActivityIndicator
+            size="small"
+            color={Colors.ink3}
+            style={{ marginVertical: Space[6] }}
+          />
+        )}
+
+        {!hasMore && allProducts.length > 0 && !loading && (
+          <Text style={styles.endOfResults}>You've seen it all</Text>
         )}
       </ScrollView>
 

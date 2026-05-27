@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { postOrderHistory } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useFocusEffect } from '@react-navigation/native';
-import { EmptyState, StatusBadge, BottomNavBar, DarkHeader, FadeImage } from '../components/ui';
+import { EmptyState, StatusBadge, BottomNavBar, DarkHeader, FadeImage, Skeleton } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -119,7 +119,8 @@ const OrderRow: React.FC<{
 const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const { data: orders, loading, isError, error, run } = useAsyncState<OrderHistoryItemInterface[]>([]);
+  const { data: orders, status, loading, isError, error, run } = useAsyncState<OrderHistoryItemInterface[]>([]);
+  const hasFetched = useRef(false);
 
   const fetchOrders = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -134,11 +135,18 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   useFocusEffect(
     useCallback(() => {
+      hasFetched.current = false;
       const cancelled = { current: false };
       fetchOrders(cancelled);
       return () => { cancelled.current = true; };
     }, [fetchOrders]),
   );
+
+  React.useEffect(() => {
+    if (status === 'success' || status === 'error') {
+      hasFetched.current = true;
+    }
+  }, [status]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -176,6 +184,29 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   );
 
   const renderBody = () => {
+    if (!hasFetched.current && !isError) {
+      return (
+        <View style={styles.skeletonWrap}>
+          {[0, 1, 2, 3].map(i => (
+            <View key={i}>
+              <View style={styles.skeletonRow}>
+                <Skeleton width={IMG_W} height={IMG_H} radius={Radius.sm} />
+                <View style={styles.skeletonContent}>
+                  <Skeleton height={9}  width="35%" style={{ marginBottom: Space[2] }} />
+                  <Skeleton height={14} width="80%" style={{ marginBottom: Space[1] }} />
+                  <Skeleton height={12} width="55%" />
+                  <View style={styles.skeletonBottom}>
+                    <Skeleton height={10} width="40%" />
+                    <Skeleton height={18} width="22%" radius={Radius.pill} />
+                  </View>
+                </View>
+              </View>
+              {i < 3 && <View style={styles.divider} />}
+            </View>
+          ))}
+        </View>
+      );
+    }
     if (isError) {
       return (
         <ErrorState
@@ -186,7 +217,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         />
       );
     }
-    if (orderCount === 0 && !loading) {
+    if (orderCount === 0 && hasFetched.current) {
       return renderEmpty();
     }
     return (
@@ -323,6 +354,30 @@ const styles = StyleSheet.create({
     fontSize:      10,
     color:         Colors.ink4,
     letterSpacing: 0.2,
+  },
+
+  // ── Skeleton ──────────────────────────────────────────────────────────────────
+  skeletonWrap: {
+    flex:              1,
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[5],
+  },
+  skeletonRow: {
+    flexDirection:  'row',
+    alignItems:     'flex-start',
+    paddingVertical: Space[4],
+    gap:             Space[4],
+  },
+  skeletonContent: {
+    flex: 1,
+    gap:  Space[2],
+    paddingTop: Space[1],
+  },
+  skeletonBottom: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginTop:      Space[2],
   },
 
   // ── Empty state CTA — text link ───────────────────────────────────────────────

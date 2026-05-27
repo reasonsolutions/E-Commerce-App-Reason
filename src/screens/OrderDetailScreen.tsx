@@ -172,7 +172,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const status   = order ? orderStatusLabel(order.OrderStatus) : undefined;
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
-  if (!order || !delivery) {
+  if (!order) {
     return (
       <View style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
@@ -275,13 +275,15 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           )}
         </Animated.View>
 
-        {/* ── Delivery section ── */}
-        <Animated.View style={[styles.section, deliveryAnim]}>
-          <Text style={styles.sectionEyebrow}>DELIVERY</Text>
-          <DetailRow label="NAME"    value={delivery.CustomerName} />
-          <DetailRow label="MOBILE"  value={String(delivery.MobileNumber)} />
-          <DetailRow label="ADDRESS" value={[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).join(', ')} isLast />
-        </Animated.View>
+        {/* ── Delivery section — hidden until getOrderStatus is wired ── */}
+        {delivery ? (
+          <Animated.View style={[styles.section, deliveryAnim]}>
+            <Text style={styles.sectionEyebrow}>DELIVERY</Text>
+            <DetailRow label="NAME"    value={delivery.CustomerName} />
+            <DetailRow label="MOBILE"  value={String(delivery.MobileNumber)} />
+            <DetailRow label="ADDRESS" value={[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).join(', ')} isLast />
+          </Animated.View>
+        ) : null}
       </ScrollView>
     </View>
   );

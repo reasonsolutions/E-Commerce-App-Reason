@@ -18,11 +18,12 @@ import { selectProduct } from '../api/product';
 import type { WishlistItemInterface } from '../api/interfaces';
 import { EmptyState, BottomNavBar, Price, DarkHeader } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { Colors, Space } from '../theme';
+import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
+import { Motion } from '../theme/motion';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 
@@ -57,7 +58,7 @@ const WishlistRow: React.FC<{
   const isOutOfStock = item.IsInStock === 0;
 
   const onImageLoad = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    Animated.timing(imgOpacity, { toValue: 1, duration: Motion.duration.settle, useNativeDriver: true }).start();
   }, [imgOpacity]);
 
   return (
@@ -128,12 +129,16 @@ const WishlistRow: React.FC<{
 const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
-  const { data: fetched, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
+  const { data: fetched, status, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
   const [items, setItems]                               = useState<WishlistItemInterface[]>([]);
   const [detailMap, setDetailMap]                       = useState<Record<number, ProductDetail>>({});
+  const hasFetched = useRef(false);
   const profileCode = useProfileCode();
 
   useEffect(() => {
+    if (status === 'success' || status === 'error') {
+      hasFetched.current = true;
+    }
     if (!fetched?.length) return;
     setItems(fetched);
     // Fetch product details for all wishlist items in parallel
@@ -153,7 +158,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       results.forEach(r => { if (r) map[r.inventoryId] = { imageUri: r.imageUri, itemId: r.itemId }; });
       setDetailMap(map);
     });
-  }, [fetched]);
+  }, [fetched, status]);
 
   const fetchWishlist = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -168,6 +173,8 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
+      hasFetched.current = false;
+      setItems([]);
       fetchWishlist(cancelled);
       return () => { cancelled.current = true; };
     }, [fetchWishlist]),
@@ -223,6 +230,27 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       );
     }
 
+    if (!hasFetched.current && !isError) {
+      return (
+        <View style={[styles.stateWrap, { paddingHorizontal: Space.screenH, paddingTop: Space[4] }]}>
+          {[0, 1, 2, 3].map(i => (
+            <View key={i}>
+              <View style={styles.skeletonRow}>
+                <View style={styles.skeletonImg} />
+                <View style={styles.skeletonContent}>
+                  <View style={[styles.skeletonLine, { width: '35%' }]} />
+                  <View style={[styles.skeletonLine, { width: '65%', marginTop: Space[2] }]} />
+                  <View style={[styles.skeletonLine, { width: '45%', marginTop: Space[1] }]} />
+                  <View style={[styles.skeletonLine, { width: '25%', marginTop: Space[4] }]} />
+                </View>
+              </View>
+              {i < 3 && <View style={styles.divider} />}
+            </View>
+          ))}
+        </View>
+      );
+    }
+
     return (
       <FlatList
         data={items}
@@ -233,7 +261,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
           items.length === 0 && styles.listContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={loading ? null : renderEmpty}
+        ListEmptyComponent={hasFetched.current && !loading ? renderEmpty : null}
         style={styles.list}
       />
     );
@@ -366,6 +394,29 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     color:      Colors.ink4,
     lineHeight: 20,
+  },
+
+  // ── Skeleton ──────────────────────────────────────────────────────────────────
+  skeletonRow: {
+    flexDirection:   'row',
+    gap:             Space[4],
+    paddingVertical: Space[4],
+  },
+  skeletonImg: {
+    width:           IMG_W,
+    height:          IMG_H,
+    borderRadius:    Radius.md,
+    backgroundColor: Colors.surfaceDeep,
+    flexShrink:      0,
+  },
+  skeletonContent: {
+    flex:       1,
+    paddingTop: Space[1],
+  },
+  skeletonLine: {
+    height:          10,
+    borderRadius:    Radius.xs,
+    backgroundColor: Colors.surfaceDeep,
   },
 
   // ── Empty state CTA — text link, no Button component ─────────────────────────

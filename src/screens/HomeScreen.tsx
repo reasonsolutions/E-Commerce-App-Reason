@@ -663,10 +663,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <TouchableOpacity
             style={styles.editCard}
             activeOpacity={0.88}
-            onPress={() =>
-              categories?.[0] &&
-              navigation.navigate('Result', { categoryId: categories[0].CategoryId })
-            }
+            onPress={() => navigation.navigate('Result', { categoryName: 'All Products' })}
           >
             {/* Left text column */}
             <View style={styles.editLeft}>

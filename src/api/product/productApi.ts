@@ -46,7 +46,7 @@ export const getProductsByCategory = async (
     subCategories: [],
     searchQuery: '%',
     priceRange: { from: null, to: null },
-    discount: '%',
+    discount: null,
     pagination: { pageNumber, pageSize },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];
@@ -87,7 +87,7 @@ export const getProductsByBrand = async (
     subCategories: [],
     searchQuery: '%',
     priceRange: { from: null, to: null },
-    discount: '%',
+    discount: null,
     pagination: { pageNumber, pageSize },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];

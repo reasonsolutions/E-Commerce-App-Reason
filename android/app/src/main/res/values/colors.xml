@@ -1,3 +1,4 @@
 <resources>
     <color name="app_background">#F5F2EE</color>
+    <color name="nav_bar_background">#FCFCFA</color>
 </resources>

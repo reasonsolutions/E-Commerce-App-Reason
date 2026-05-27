@@ -402,9 +402,11 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           <View style={styles.headerCenter}>
             <Text style={styles.headerEyebrow}>YOUR BAG</Text>
             <Text style={styles.headerTitle}>
-              {cartItems.length === 0
-                ? 'Empty'
-                : `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
+              {!hasFetched.current
+                ? 'Your Bag'
+                : cartItems.length === 0
+                  ? 'Empty'
+                  : `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
             </Text>
           </View>
 

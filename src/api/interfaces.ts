@@ -450,7 +450,7 @@ export interface postOrderHistoryDetailsInterface {
     Brand_Name: string
 }
 
-export type OrderStatusCode = 1 | 2 | 3 | 4;
+export type OrderStatusCode = number;
 
 export interface OrderHistoryItemInterface {
     Inventory_Id:  number;

@@ -297,4 +297,10 @@ export const styles = StyleSheet.create({
   chipTextSelected: {
     color: '#FFFFFF',
   },
+  endOfResults: {
+    ...Type.caption,
+    color:     Colors.ink4,
+    textAlign: 'center',
+    marginVertical: Space[6],
+  },
 });

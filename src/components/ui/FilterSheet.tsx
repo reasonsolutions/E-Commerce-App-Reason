@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -89,6 +89,13 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (visible) {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    }
+  }, [visible]);
 
   return (
     <Modal
@@ -117,6 +124,7 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
           </View>
 
           <ScrollView
+            ref={scrollRef}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.sheetContent}

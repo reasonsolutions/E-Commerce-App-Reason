@@ -2,8 +2,7 @@ import * as real from './orderApi';
 import * as mock from './mockOrderApi';
 import type { OrderHistoryItemInterface, OrderDetailResponseInterface } from '../interfaces';
 
-// placeOrder always uses real API; history/detail remain on mock until those
-// endpoints are verified
+// placeOrder + postOrderHistory use real API; postCnfOrderDetail remains on mock
 const order = mock;
 const orderReal = real;
 
@@ -13,7 +12,7 @@ export const postPlacedMultipleOrder = orderReal.postPlacedMultipleOrder;
 export async function postOrderHistory(
   customerProfileCode: number,
 ): Promise<OrderHistoryItemInterface[]> {
-  const raw = await order.postOrderHistory(customerProfileCode);
+  const raw = await orderReal.postOrderHistory(customerProfileCode);
   return raw.result?.OrdHistoryDetails ?? [];
 }
 
