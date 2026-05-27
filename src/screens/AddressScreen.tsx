@@ -237,7 +237,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         setAddError('Failed to save address. Please try again.');
       }
     } catch {
-      setAddError('Something went wrong. Please try again.');
+      setAddError("Couldn't save your address. Tap retry to try again.");
     } finally {
       setSubmitting(false);
     }
@@ -347,8 +347,8 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       {fetchError ? (
         <View style={styles.fetchErrorWrap}>
           <ErrorState
-            title="Couldn't load addresses"
-            message={fetchErrorMsg ?? 'Something went wrong.'}
+            title="Couldn't load your addresses."
+            message={fetchErrorMsg ?? 'Tap retry to try again.'}
             onRetry={() => fetchAddresses()}
             retryLoading={fetchLoading}
           />

@@ -377,7 +377,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
         {fetchError ? (
           <ErrorState
             title="Couldn't load addresses"
-            message={fetchErrorMsg ?? 'Something went wrong.'}
+            message={fetchErrorMsg ?? 'Tap retry to try again.'}
             onRetry={() => fetchAddresses()}
             retryLoading={fetchLoading}
           />

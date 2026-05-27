@@ -36,7 +36,7 @@ export const postSaveCartItems = async (data: PostCartSaveInterface) => {
           Images:          product.Images,
           Name:            product.Name,
           Price:           variant?.PriceDetails.Price ?? product.MinPrice,
-          PriceDetails:    { Price: variant?.PriceDetails.Price ?? product.MinPrice, ComparePrice: variant?.PriceDetails.ComparePrice ?? product.MaxComparePrice },
+          PriceDetails:    { Price: variant?.PriceDetails.Price ?? product.MinPrice, ComparePrice: variant?.PriceDetails.ComparePrice ?? product.MaxComparePrice, Taxes: [] },
           Count:           variant?.Stock ?? 0,
           Variant:         variant?.Variant ?? '',
           BrandName:       product.BrandName,

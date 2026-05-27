@@ -279,8 +279,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       return (
         <View style={styles.fillWrap}>
           <ErrorState
-            title="Couldn't load your bag"
-            message={error ?? 'An unexpected error occurred.'}
+            title="Couldn't load your bag."
+            message={error ?? 'Tap retry to try again.'}
             onRetry={() => fetchCart()}
             retryLoading={loading}
             icon={<Icon name="bag-outline" size={32} color={Colors.ink3} />}

@@ -119,7 +119,7 @@ const OrderRow: React.FC<{
 const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const { data: orders, status, loading, isError, error, run } = useAsyncState<OrderHistoryItemInterface[]>([]);
+  const { data: orders, loading, isError, error, run } = useAsyncState<OrderHistoryItemInterface[]>([]);
   const hasFetched = useRef(false);
 
   const fetchOrders = useCallback(
@@ -128,7 +128,9 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
         if (!userData) return [];
         const user = JSON.parse(userData);
-        return postOrderHistory(user.CustomerProfileCode);
+        const result = await postOrderHistory(user.CustomerProfileCode);
+        hasFetched.current = true;
+        return result;
       }, cancelled),
     [run],
   );
@@ -141,12 +143,6 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
       return () => { cancelled.current = true; };
     }, [fetchOrders]),
   );
-
-  React.useEffect(() => {
-    if (status === 'success' || status === 'error') {
-      hasFetched.current = true;
-    }
-  }, [status]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -210,8 +206,8 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     if (isError) {
       return (
         <ErrorState
-          title="Couldn't load orders"
-          message={error ?? 'Something went wrong.'}
+          title="Couldn't load your orders."
+          message={error ?? 'Tap retry to try again.'}
           onRetry={() => fetchOrders()}
           retryLoading={loading}
         />

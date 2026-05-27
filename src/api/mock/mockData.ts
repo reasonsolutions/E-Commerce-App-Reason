@@ -8,7 +8,7 @@ import {
   WishlistItemInterface,
   DeliveryAddressInterface,
   LoggedInCustomerInterface,
-  OrderDetailItemInterface,
+  OrderDetailItemExtendedInterface,
   postOrderHistoryDetailsInterface,
 } from '../interfaces';
 
@@ -267,7 +267,7 @@ export const mockCartItems: SavedCartItemInterface[] = [
     Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/17264162/2023/3/14/b0b4f604-db5c-411e-95ef-a53731d1bd171678775868510-Crocs-Unisex-Off-White-Sliders-8121678775868171-1.jpg;',
     Name: 'Unisex Off White Sliders',
     Price: 1247,
-    PriceDetails: { Price: 1247, ComparePrice: 1347 },
+    PriceDetails: { Price: 1247, ComparePrice: 1347, Taxes: [] },
     Count: 196,
     Variant: '10',
     BrandName: 'Crocs',
@@ -281,7 +281,7 @@ export const mockCartItems: SavedCartItemInterface[] = [
     Images: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/fe12ac0f-c417-429f-9c91-085e283c332f/AIR+JORDAN+40+PF.png;',
     Name: "Air Jordan 40 PF 'Blue Suede'",
     Price: 5000,
-    PriceDetails: { Price: 5000, ComparePrice: 6000 },
+    PriceDetails: { Price: 5000, ComparePrice: 6000, Taxes: [] },
     Count: 100,
     Variant: 'UK 5.5',
     BrandName: 'Nike',
@@ -295,7 +295,7 @@ export const mockCartItems: SavedCartItemInterface[] = [
     Images: 'https://assets.myntassets.com/h_720,q_90,w_540/v1/assets/images/2137201/2025/4/14/4b95c457-97cf-4f02-84bf-7ef89ac36d481744628244363-Lakme-Matte-Sunscreen-SPF-50-PA-Niacinamide-with-UVAB-Protec-3.jpg;',
     Name: 'Matte Sunscreen SPF 50 PA+++',
     Price: 250,
-    PriceDetails: { Price: 250, ComparePrice: 349 },
+    PriceDetails: { Price: 250, ComparePrice: 349, Taxes: [] },
     Count: 50,
     Variant: '40-50 ML',
     BrandName: 'Lakme',
@@ -455,7 +455,7 @@ export const mockOrderHistory: (postOrderHistoryDetailsInterface & { OrderNumber
 
 // ─── Order detail (for postCnfOrderDetail) ────────────────────────────────────
 
-export const mockOrderDetail: { OrderDetails: OrderDetailItemInterface[]; DeliveryDetail: DeliveryAddressInterface[] } = {
+export const mockOrderDetail: { OrderDetails: OrderDetailItemExtendedInterface[]; DeliveryDetail: DeliveryAddressInterface[] } = {
   OrderDetails: [
     {
       Inventory_Id: 65,
@@ -466,6 +466,8 @@ export const mockOrderDetail: { OrderDetails: OrderDetailItemInterface[]; Delive
       Quantity: 1,
       Amount: 5000,
       OrderStatus: 1,
+      OrderNumber: 'MOCK-001',
+      OrderedDate: '2025-11-05T10:00:00.000',
       CreatedDate: '2025-11-05T10:00:00.000',
       Brand_Id: 1,
       Brand_Name: 'Nike',

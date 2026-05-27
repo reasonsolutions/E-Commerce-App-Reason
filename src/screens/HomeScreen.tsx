@@ -296,7 +296,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           subCategories: [],
           searchQuery: text.trim(),
           priceRange: { from: null, to: null },
-          discount: '%',
+          discount: null,
           pagination: { pageNumber: 1, pageSize: 6 },
         });
         const names: string[] = Array.from(
@@ -397,7 +397,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const featuredProduct = deduplicatedProducts?.[0] ?? null;
   const flashDealProducts = deduplicatedProducts
-    ? deduplicatedProducts.filter((p, i) => i > 0 && p.MaxComparePrice > p.MinPrice)
+    ? deduplicatedProducts.filter((p, i) =>
+        i > 0 && p.MaxComparePrice > 0 && p.MinPrice > 0 && p.MaxComparePrice !== p.MinPrice,
+      )
     : null;
   const shelfProducts = flashDealProducts?.length
     ? flashDealProducts
@@ -623,7 +625,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Text style={styles.shelfTitle}>Flash Deals</Text>
             <TouchableOpacity
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              onPress={() => navigation.navigate('Result', { flashDeals: true, categoryName: 'Flash Deals' })}
+              onPress={() => navigation.navigate('Result', { categoryName: 'Flash Deals' })}
             >
               <Text style={styles.seeAll}>See all</Text>
             </TouchableOpacity>

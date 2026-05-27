@@ -130,6 +130,7 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
             contentContainerStyle={styles.sheetContent}
           >
             {/* Sort */}
+
             <Text style={styles.sectionLabel}>SORT</Text>
             <View style={styles.chipRow}>
               {SORT_OPTIONS.map(opt => (
@@ -220,17 +221,18 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
               />
             </View>
 
-            {/* Apply */}
-            <View style={styles.applyWrap}>
-              <TouchableOpacity
-                onPress={() => { haptic.success(); onApply(); }}
-                activeOpacity={0.85}
-                style={styles.applyBtn}
-              >
-                <Text style={styles.applyBtnText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
           </ScrollView>
+
+          {/* Apply — pinned outside scroll, always visible */}
+          <View style={styles.applyWrap}>
+            <TouchableOpacity
+              onPress={() => { haptic.success(); onApply(); }}
+              activeOpacity={0.85}
+              style={styles.applyBtn}
+            >
+              <Text style={styles.applyBtnText}>Apply</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -283,7 +285,7 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[3],
-    paddingBottom:     Space[12],
+    paddingBottom:     Space[4],
   },
   sectionLabel: {
     ...Type.label,
@@ -353,7 +355,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.rule,
   },
   applyWrap: {
-    marginTop: Space[6],
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[3],
+    paddingBottom:     Space[2],
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
   },
   applyBtn: {
     backgroundColor: Colors.ink1,

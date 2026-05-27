@@ -156,8 +156,8 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         {Header}
         <View style={styles.stateWrap}>
           <ErrorState
-            title="Couldn't load order"
-            message={error ?? 'Something went wrong.'}
+            title="Couldn't load this order."
+            message={error ?? 'Tap retry to try again.'}
             onRetry={() => fetchOrderDetails()}
             retryLoading={loading}
           />

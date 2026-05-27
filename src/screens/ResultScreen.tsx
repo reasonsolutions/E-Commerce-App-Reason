@@ -1,4 +1,10 @@
-import React, { useRef, useCallback, useState, useEffect, useMemo } from 'react';
+import React, {
+  useRef,
+  useCallback,
+  useState,
+  useEffect,
+  useMemo,
+} from 'react';
 import {
   View,
   Text,
@@ -19,8 +25,18 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import { getCategories, getBrands } from '../api/product';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
-import { ProductByCategoryProductDetails, CategoryInterface } from '../api/interfaces';
-import { Skeleton, Price, EmptyState, DarkHeader, FilterSheet, SearchBar } from '../components/ui';
+import {
+  ProductByCategoryProductDetails,
+  CategoryInterface,
+} from '../api/interfaces';
+import {
+  Skeleton,
+  Price,
+  EmptyState,
+  DarkHeader,
+  FilterSheet,
+  SearchBar,
+} from '../components/ui';
 import type { SortKey } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
@@ -29,7 +45,13 @@ import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
-import { styles, COL_W, GRID_IMG_H, SPAN_IMG_H, HERO_IMG_H } from './ResultScreen.styles';
+import {
+  styles,
+  COL_W,
+  GRID_IMG_H,
+  SPAN_IMG_H,
+  HERO_IMG_H,
+} from './ResultScreen.styles';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
@@ -82,29 +104,34 @@ const HeroCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onPress: () => void;
 }> = ({ product, onPress }) => {
-  const haptic    = useHaptic();
+  const haptic = useHaptic();
   const { animatedStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.carry,
-      easing:          Motion.easing.inOut,
+      toValue: 1,
+      duration: Motion.duration.carry,
+      easing: Motion.easing.inOut,
       useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
   const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    ? Math.round(
+        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
+      )
     : 0;
 
   return (
     <Animated.View style={[styles.heroCard, animatedStyle]}>
       <TouchableOpacity
         {...handlers}
-        onPress={() => { haptic.light(); onPress(); }}
+        onPress={() => {
+          haptic.light();
+          onPress();
+        }}
         activeOpacity={1}
       >
         <View style={styles.heroImgWrap}>
@@ -116,7 +143,12 @@ const HeroCard: React.FC<{
           />
         </View>
         <LinearGradient
-          colors={['transparent', 'transparent', 'rgba(8,8,8,0.38)', 'rgba(8,8,8,0.78)']}
+          colors={[
+            'transparent',
+            'transparent',
+            'rgba(8,8,8,0.38)',
+            'rgba(8,8,8,0.78)',
+          ]}
           locations={[0, 0.35, 0.65, 1]}
           style={[StyleSheet.absoluteFillObject, { height: HERO_IMG_H }]}
           pointerEvents="none"
@@ -129,13 +161,21 @@ const HeroCard: React.FC<{
         <View style={styles.heroFooter}>
           <View style={styles.heroFooterLeft}>
             {product.Brand_Name ? (
-              <Text style={styles.heroCardBrand}>{product.Brand_Name.toUpperCase()}</Text>
+              <Text style={styles.heroCardBrand}>
+                {product.Brand_Name.toUpperCase()}
+              </Text>
             ) : null}
-            <Text style={styles.heroCardName} numberOfLines={1}>{product.Name}</Text>
+            <Text style={styles.heroCardName} numberOfLines={1}>
+              {product.Name}
+            </Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.heroCardPrice}>Rs {product.Price.toFixed(0)}</Text>
+              <Text style={styles.heroCardPrice}>
+                Rs {product.Price.toFixed(0)}
+              </Text>
               {hasDiscount && (
-                <Text style={styles.heroCardWas}>Rs {product.ComparePrice.toFixed(0)}</Text>
+                <Text style={styles.heroCardWas}>
+                  Rs {product.ComparePrice.toFixed(0)}
+                </Text>
               )}
             </View>
           </View>
@@ -155,23 +195,27 @@ const GridTile: React.FC<{
   onPress: () => void;
   delay: number;
 }> = ({ product, onPress, delay }) => {
-  const haptic    = useHaptic();
-  const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, 12) };
+  const haptic = useHaptic();
+  const { animatedStyle: entranceStyle } = {
+    animatedStyle: useEntrance(delay, false, 12),
+  };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.settle,
-      easing:          Motion.easing.out,
+      toValue: 1,
+      duration: Motion.duration.settle,
+      easing: Motion.easing.out,
       useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
   const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    ? Math.round(
+        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
+      )
     : 0;
 
   return (
@@ -179,7 +223,10 @@ const GridTile: React.FC<{
       <Animated.View style={pressStyle}>
         <TouchableOpacity
           {...handlers}
-          onPress={() => { haptic.light(); onPress(); }}
+          onPress={() => {
+            haptic.light();
+            onPress();
+          }}
           activeOpacity={1}
         >
           <View style={styles.gridImgWrap}>
@@ -201,7 +248,9 @@ const GridTile: React.FC<{
                 {product.Brand_Name.toUpperCase()}
               </Text>
             ) : null}
-            <Text style={styles.gridName} numberOfLines={2}>{product.Name}</Text>
+            <Text style={styles.gridName} numberOfLines={2}>
+              {product.Name}
+            </Text>
             <Price
               value={product.Price}
               was={hasDiscount ? product.ComparePrice : undefined}
@@ -220,23 +269,25 @@ const SpanCard: React.FC<{
   onPress: () => void;
   delay: number;
 }> = ({ product, onPress, delay }) => {
-  const haptic        = useHaptic();
+  const haptic = useHaptic();
   const entranceStyle = useEntrance(delay, false, 12);
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.carry,
-      easing:          Motion.easing.inOut,
+      toValue: 1,
+      duration: Motion.duration.carry,
+      easing: Motion.easing.inOut,
       useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
   const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    ? Math.round(
+        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
+      )
     : 0;
 
   return (
@@ -244,7 +295,10 @@ const SpanCard: React.FC<{
       <Animated.View style={[{ flex: 1 }, pressStyle]}>
         <TouchableOpacity
           {...handlers}
-          onPress={() => { haptic.light(); onPress(); }}
+          onPress={() => {
+            haptic.light();
+            onPress();
+          }}
           activeOpacity={1}
           style={{ flex: 1 }}
         >
@@ -269,9 +323,13 @@ const SpanCard: React.FC<{
           )}
           <View style={styles.spanFooter}>
             {product.Brand_Name ? (
-              <Text style={styles.spanBrand}>{product.Brand_Name.toUpperCase()}</Text>
+              <Text style={styles.spanBrand}>
+                {product.Brand_Name.toUpperCase()}
+              </Text>
             ) : null}
-            <Text style={styles.spanName} numberOfLines={1}>{product.Name}</Text>
+            <Text style={styles.spanName} numberOfLines={1}>
+              {product.Name}
+            </Text>
             <Text style={styles.spanPrice}>Rs {product.Price.toFixed(0)}</Text>
           </View>
         </TouchableOpacity>
@@ -283,16 +341,30 @@ const SpanCard: React.FC<{
 // ── Skeleton — matches loaded layout shape ────────────────────────────────────
 const ResultSkeleton: React.FC = () => (
   <View style={styles.skeletonWrap}>
-    <Skeleton height={HERO_IMG_H} radius={Radius.md} style={{ marginBottom: Space[6] }} />
+    <Skeleton
+      height={HERO_IMG_H}
+      radius={Radius.md}
+      style={{ marginBottom: Space[6] }}
+    />
     <View style={styles.gridRow}>
       <View style={{ width: COL_W }}>
-        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton
+          height={GRID_IMG_H}
+          width={COL_W}
+          radius={Radius.md}
+          style={{ marginBottom: Space[2] }}
+        />
         <Skeleton height={9} width="45%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={13} width="80%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={12} width="35%" />
       </View>
       <View style={{ width: COL_W }}>
-        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton
+          height={GRID_IMG_H}
+          width={COL_W}
+          radius={Radius.md}
+          style={{ marginBottom: Space[2] }}
+        />
         <Skeleton height={9} width="55%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={13} width="70%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={12} width="40%" />
@@ -300,12 +372,22 @@ const ResultSkeleton: React.FC = () => (
     </View>
     <View style={[styles.gridRow, { marginTop: Space[5] }]}>
       <View style={{ width: COL_W }}>
-        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton
+          height={GRID_IMG_H}
+          width={COL_W}
+          radius={Radius.md}
+          style={{ marginBottom: Space[2] }}
+        />
         <Skeleton height={9} width="38%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={13} width="85%" />
       </View>
       <View style={{ width: COL_W }}>
-        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton
+          height={GRID_IMG_H}
+          width={COL_W}
+          radius={Radius.md}
+          style={{ marginBottom: Space[2] }}
+        />
         <Skeleton height={9} width="50%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={13} width="65%" />
       </View>
@@ -313,10 +395,14 @@ const ResultSkeleton: React.FC = () => (
   </View>
 );
 
+// ── Module-level cache — fetched once per app session ────────────────────────
+let _cachedCategories: CategoryInterface[] = [];
+let _cachedBrands: { id: number; name: string }[] = [];
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const route  = useRoute();
+  const route = useRoute();
   const haptic = useHaptic();
   const {
     categoryId,
@@ -324,38 +410,50 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     searchQuery: searchQueryParam,
     categoryName = 'Browse',
     flashDeals: isFlashDeals = false,
-  } = route.params as { categoryId?: string; brandId?: number; searchQuery?: string; categoryName?: string; flashDeals?: boolean };
+  } = route.params as {
+    categoryId?: string;
+    brandId?: number;
+    searchQuery?: string;
+    categoryName?: string;
+    flashDeals?: boolean;
+  };
 
-  const { loading, isError, error, run } = useAsyncState<ProductByCategoryProductDetails[]>([]);
-  const [allProducts, setAllProducts] = useState<ProductByCategoryProductDetails[]>([]);
-  const [pageNumber, setPageNumber]   = useState(1);
+  const { loading, isError, error, run } = useAsyncState<
+    ProductByCategoryProductDetails[]
+  >([]);
+  const [allProducts, setAllProducts] = useState<
+    ProductByCategoryProductDetails[]
+  >([]);
+  const [pageNumber, setPageNumber] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore]         = useState(true);
+  const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 20;
 
   const headerAnim = useEntrance(40, false, 12);
-  const heroAnim   = useEntrance(160, false, 12);
+  const heroAnim = useEntrance(160, false, 12);
 
   // ── Filter / sort state ────────────────────────────────────────────────────
   const [filterCategories, setFilterCategories] = useState<number[]>([]);
-  const [filterBrands, setFilterBrands]         = useState<number[]>([]);
-  const [filterPriceMin, setFilterPriceMin]     = useState('');
-  const [filterPriceMax, setFilterPriceMax]     = useState('');
-  const [filterDiscount, setFilterDiscount]     = useState(false);
-  const [sortKey, setSortKey]                   = useState<SortKey>('default');
-  const [sheetCategories, setSheetCategories]   = useState<CategoryInterface[]>([]);
-  const [sheetBrands, setSheetBrands]           = useState<{ id: number; name: string }[]>([]);
+  const [filterBrands, setFilterBrands] = useState<number[]>([]);
+  const [filterPriceMin, setFilterPriceMin] = useState('');
+  const [filterPriceMax, setFilterPriceMax] = useState('');
+  const [filterDiscount, setFilterDiscount] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('default');
+  const [sheetCategories, setSheetCategories] =
+    useState<CategoryInterface[]>(_cachedCategories);
+  const [sheetBrands, setSheetBrands] =
+    useState<{ id: number; name: string }[]>(_cachedBrands);
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [localQuery, setLocalQuery]   = useState(searchQueryParam ?? '');
+  const [localQuery, setLocalQuery] = useState(searchQueryParam ?? '');
 
   // Draft state — lives in sheet until Apply is tapped
   const [draftCategories, setDraftCategories] = useState<number[]>([]);
-  const [draftBrands, setDraftBrands]         = useState<number[]>([]);
-  const [draftPriceMin, setDraftPriceMin]     = useState('');
-  const [draftPriceMax, setDraftPriceMax]     = useState('');
-  const [draftDiscount, setDraftDiscount]     = useState(false);
-  const [draftSortKey, setDraftSortKey]       = useState<SortKey>('default');
+  const [draftBrands, setDraftBrands] = useState<number[]>([]);
+  const [draftPriceMin, setDraftPriceMin] = useState('');
+  const [draftPriceMax, setDraftPriceMax] = useState('');
+  const [draftDiscount, setDraftDiscount] = useState(false);
+  const [draftSortKey, setDraftSortKey] = useState<SortKey>('default');
 
   const activeFilterCount =
     filterCategories.length +
@@ -366,21 +464,36 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   // ── Brands for filter sheet — direct from getBrands API ──────────────────
   const allBrandsFromSheet = sheetBrands;
 
-  // ── Fetch categories + brands once on mount ───────────────────────────────
+  // ── Fetch categories + brands once per session — skip if already cached ──
   useEffect(() => {
     let active = true;
-    getCategories().then(res => {
-      if (!active) return;
-      if (res?.statusCode === 1 && Array.isArray(res.result)) {
-        setSheetCategories(res.result as CategoryInterface[]);
-      }
-    }).catch(() => {});
-    getBrands().then(res => {
-      if (!active) return;
-      const list = res?.result ?? [];
-      setSheetBrands(list.map((b: any) => ({ id: Number(b.BrandId ?? b.Brand_Id), name: b.BrandName ?? b.Brand_Name ?? '' })));
-    }).catch(() => {});
-    return () => { active = false; };
+    if (!_cachedCategories.length) {
+      getCategories()
+        .then(res => {
+          if (!active) return;
+          if (res?.statusCode === 1 && Array.isArray(res.result)) {
+            _cachedCategories = res.result as CategoryInterface[];
+            setSheetCategories(_cachedCategories);
+          }
+        })
+        .catch(() => {});
+    }
+    if (!_cachedBrands.length) {
+      getBrands()
+        .then(res => {
+          if (!active) return;
+          const list = res?.result ?? [];
+          _cachedBrands = list.map((b: any) => ({
+            id: Number(b.BrandId ?? b.Brand_Id),
+            name: b.BrandName ?? b.Brand_Name ?? '',
+          }));
+          setSheetBrands(_cachedBrands);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
   }, []);
 
   // ── Open sheet — sync draft from committed state ───────────────────────────
@@ -392,76 +505,113 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     setDraftDiscount(filterDiscount);
     setDraftSortKey(sortKey);
     setIsSheetOpen(true);
-  }, [filterCategories, filterBrands, filterPriceMin, filterPriceMax, filterDiscount, sortKey]);
+  }, [
+    filterCategories,
+    filterBrands,
+    filterPriceMin,
+    filterPriceMax,
+    filterDiscount,
+    sortKey,
+  ]);
 
   // ── Shared mapper: allProducts API response → ProductByCategoryProductDetails
   const mapProducts = (raw: any[]): ProductByCategoryProductDetails[] =>
     raw.map(p => ({
-      Item_Id:        p.ItemID,
-      Name:           p.Name,
-      Price:          p.MinPrice,
-      ComparePrice:   p.MaxComparePrice,
-      Description:    p.Description,
+      Item_Id: p.ItemID,
+      Name: p.Name,
+      Price: p.MinPrice,
+      ComparePrice: p.MaxComparePrice,
+      Description: p.Description,
       SubCategory_Id: Number(p.SubcategoryID),
-      Images:         p.Images,
-      Date_Created:   p.CreatedDate,
-      Brand_Id:       Number(p.BrandID),
-      ApprovedBy:     null,
-      ApprovedOn:     null,
-      VendorID:       0,
-      Brand_Name:     p.BrandName,
-      Category_Id:    Number(p.CategoryID),
-      CategoryName:   p.CategoryName,
-      CategoryImage:  p.CategoryImage,
-      SCName:         p.SCName,
-      Inventory_Id:   p.Variants?.[0] ? Number(p.Variants[0].InventoryID) : 0,
-      Variant:        p.Variants?.[0]?.Variant ?? '',
-      Count:          p.Variants?.[0]?.Stock ?? 0,
-      Date_Updated:   p.CreatedDate,
+      Images: p.Images,
+      Date_Created: p.CreatedDate,
+      Brand_Id: Number(p.BrandID),
+      ApprovedBy: null,
+      ApprovedOn: null,
+      VendorID: 0,
+      Brand_Name: p.BrandName,
+      Category_Id: Number(p.CategoryID),
+      CategoryName: p.CategoryName,
+      CategoryImage: p.CategoryImage,
+      SCName: p.SCName,
+      Inventory_Id: p.Variants?.[0] ? Number(p.Variants[0].InventoryID) : 0,
+      Variant: p.Variants?.[0]?.Variant ?? '',
+      Count: p.Variants?.[0]?.Stock ?? 0,
+      Date_Updated: p.CreatedDate,
     }));
 
   // ── Build allProducts payload from current filter + route state ───────────
-  const buildPayload = useCallback((
-    page: number,
-    opts?: { cats?: number[]; brands?: number[]; priceMin?: string; priceMax?: string; discount?: boolean },
-  ) => {
-    const cats     = opts?.cats     ?? filterCategories;
-    const brands   = opts?.brands   ?? filterBrands;
-    const priceMin = opts?.priceMin ?? filterPriceMin;
-    const priceMax = opts?.priceMax ?? filterPriceMax;
-    const discount = opts?.discount ?? filterDiscount;
-
-    const effectiveBrands = brands.length > 0
-      ? brands
-      : brandId != null ? [Number(brandId)] : [];
-    const effectiveCategories = cats.length > 0
-      ? cats
-      : categoryId != null ? [Number(categoryId)] : [];
-
-    return {
-      brands:        effectiveBrands,
-      categories:    effectiveCategories,
-      subCategories: [],
-      searchQuery:   searchQueryParam ?? '%',
-      priceRange: {
-        from: priceMin !== '' ? Number(priceMin) : null,
-        to:   priceMax !== '' ? Number(priceMax) : null,
+  const buildPayload = useCallback(
+    (
+      page: number,
+      opts?: {
+        cats?: number[];
+        brands?: number[];
+        priceMin?: string;
+        priceMax?: string;
+        discount?: boolean;
       },
-      discount: (discount || isFlashDeals) ? 1 : null,
-      pagination: { pageNumber: page, pageSize: PAGE_SIZE },
-    };
-  }, [filterCategories, filterBrands, filterPriceMin, filterPriceMax, filterDiscount, brandId, categoryId, searchQueryParam, isFlashDeals]);
+    ) => {
+      const cats = opts?.cats ?? filterCategories;
+      const brands = opts?.brands ?? filterBrands;
+      const priceMin = opts?.priceMin ?? filterPriceMin;
+      const priceMax = opts?.priceMax ?? filterPriceMax;
+      const discount = opts?.discount ?? filterDiscount;
+
+      const effectiveBrands =
+        brands.length > 0 ? brands : brandId != null ? [Number(brandId)] : [];
+      const effectiveCategories =
+        cats.length > 0 ? cats : categoryId != null ? [Number(categoryId)] : [];
+
+      return {
+        brands: effectiveBrands,
+        categories: effectiveCategories,
+        subCategories: [],
+        searchQuery: searchQueryParam ?? '%',
+        priceRange: {
+          from: priceMin !== '' ? Number(priceMin) : null,
+          to: priceMax !== '' ? Number(priceMax) : null,
+        },
+        discount: discount || isFlashDeals ? 1 : null,
+        pagination: { pageNumber: page, pageSize: PAGE_SIZE },
+      };
+      // isFlashDeals intentionally included — buildPayload must re-close when route params change
+    },
+    [
+      filterCategories,
+      filterBrands,
+      filterPriceMin,
+      filterPriceMax,
+      filterDiscount,
+      brandId,
+      categoryId,
+      searchQueryParam,
+      isFlashDeals,
+    ],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Initial / filter-reset fetch (page 1, replaces list) ─────────────────
   const fetchProducts = useCallback(
-    (opts?: { cats?: number[]; brands?: number[]; priceMin?: string; priceMax?: string; discount?: boolean; cancelled?: { current: boolean } }) => {
+    (opts?: {
+      cats?: number[];
+      brands?: number[];
+      priceMin?: string;
+      priceMax?: string;
+      discount?: boolean;
+      cancelled?: { current: boolean };
+    }) => {
       setPageNumber(1);
       setHasMore(true);
       setAllProducts([]);
       return run(async () => {
         const payload = buildPayload(1, opts);
-        const response = await axiosInstance.post(productEndpoints.allProducts, payload);
-        const page = deduplicateProducts(mapProducts(response.data?.result?.Products ?? []));
+        const response = await axiosInstance.post(
+          productEndpoints.allProducts,
+          payload,
+        );
+        const page = deduplicateProducts(
+          mapProducts(response.data?.result?.Products ?? []),
+        );
         if (page.length < PAGE_SIZE) setHasMore(false);
         setAllProducts(page);
         return page;
@@ -477,8 +627,13 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     try {
       const nextPage = pageNumber + 1;
       const payload = buildPayload(nextPage);
-      const response = await axiosInstance.post(productEndpoints.allProducts, payload);
-      const page = deduplicateProducts(mapProducts(response.data?.result?.Products ?? []));
+      const response = await axiosInstance.post(
+        productEndpoints.allProducts,
+        payload,
+      );
+      const page = deduplicateProducts(
+        mapProducts(response.data?.result?.Products ?? []),
+      );
       if (page.length < PAGE_SIZE) setHasMore(false);
       if (page.length > 0) {
         setAllProducts(prev => deduplicateProducts([...prev, ...page]));
@@ -489,19 +644,25 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   }, [loadingMore, hasMore, loading, pageNumber, buildPayload]);
 
   // ── Scroll-near-bottom detection ──────────────────────────────────────────
-  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    if (distanceFromBottom < 400 && !loadingMore && hasMore && !loading) {
-      loadMore();
-    }
-  }, [loadMore, loadingMore, hasMore, loading]);
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+      const distanceFromBottom =
+        contentSize.height - contentOffset.y - layoutMeasurement.height;
+      if (distanceFromBottom < 400 && !loadingMore && hasMore && !loading) {
+        loadMore();
+      }
+    },
+    [loadMore, loadingMore, hasMore, loading],
+  );
 
   useEffect(() => {
     const cancelled = { current: false };
     fetchProducts({ cancelled });
-    return () => { cancelled.current = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled.current = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Apply handler (called from sheet) ─────────────────────────────────────
@@ -514,13 +675,21 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     setFilterDiscount(draftDiscount);
     setSortKey(draftSortKey);
     fetchProducts({
-      cats:     draftCategories,
-      brands:   draftBrands,
+      cats: draftCategories,
+      brands: draftBrands,
       priceMin: draftPriceMin,
       priceMax: draftPriceMax,
       discount: draftDiscount,
     });
-  }, [draftCategories, draftBrands, draftPriceMin, draftPriceMax, draftDiscount, draftSortKey, fetchProducts]);
+  }, [
+    draftCategories,
+    draftBrands,
+    draftPriceMin,
+    draftPriceMax,
+    draftDiscount,
+    draftSortKey,
+    fetchProducts,
+  ]);
 
   // ── Clear all draft state ──────────────────────────────────────────────────
   const handleClearAll = useCallback(() => {
@@ -532,26 +701,42 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     setDraftSortKey('default');
   }, []);
 
-  const toggleDraftCategory = useCallback((id: number) => {
-    haptic.light();
-    setDraftCategories(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }, [haptic]);
+  const toggleDraftCategory = useCallback(
+    (id: number) => {
+      haptic.light();
+      setDraftCategories(prev =>
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+      );
+    },
+    [haptic],
+  );
 
-  const toggleDraftBrand = useCallback((id: number) => {
-    haptic.light();
-    setDraftBrands(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }, [haptic]);
+  const toggleDraftBrand = useCallback(
+    (id: number) => {
+      haptic.light();
+      setDraftBrands(prev =>
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+      );
+    },
+    [haptic],
+  );
 
   // ── Rendered product list (sort applied client-side, driven by allProducts) ─
   const deduplicated = useMemo(
     () => applySort(allProducts, sortKey),
     [allProducts, sortKey],
   );
-  const heroProduct  = deduplicated[0] ?? null;
+  const heroProduct = deduplicated[0] ?? null;
   const gridProducts = deduplicated.slice(1);
 
   const rows: Array<
-    | { type: 'pair'; left: ProductByCategoryProductDetails; right?: ProductByCategoryProductDetails; leftIdx: number; rightIdx?: number }
+    | {
+        type: 'pair';
+        left: ProductByCategoryProductDetails;
+        right?: ProductByCategoryProductDetails;
+        leftIdx: number;
+        rightIdx?: number;
+      }
     | { type: 'span'; product: ProductByCategoryProductDetails; idx: number }
   > = [];
 
@@ -564,9 +749,15 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       pairIdx = 0;
       continue;
     }
-    const left  = gridProducts[i];
+    const left = gridProducts[i];
     const right = gridProducts[i + 1];
-    rows.push({ type: 'pair', left, right, leftIdx: i, rightIdx: right ? i + 1 : undefined });
+    rows.push({
+      type: 'pair',
+      left,
+      right,
+      leftIdx: i,
+      rightIdx: right ? i + 1 : undefined,
+    });
     i += right ? 2 : 1;
     pairIdx++;
   }
@@ -578,12 +769,24 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
   const filterButton = (
     <TouchableOpacity
-      onPress={() => { haptic.light(); openSheet(); }}
+      onPress={() => {
+        haptic.light();
+        openSheet();
+      }}
       activeOpacity={0.75}
       style={styles.filterPill}
     >
-      <Icon name="options-outline" size={13} color={activeFilterCount > 0 ? Colors.accent : 'rgba(255,255,255,0.70)'} />
-      <Text style={[styles.filterPillText, activeFilterCount > 0 && styles.filterPillTextActive]}>
+      <Icon
+        name="options-outline"
+        size={13}
+        color={activeFilterCount > 0 ? Colors.accent : 'rgba(255,255,255,0.70)'}
+      />
+      <Text
+        style={[
+          styles.filterPillText,
+          activeFilterCount > 0 && styles.filterPillTextActive,
+        ]}
+      >
         Filter
       </Text>
       {activeFilterCount > 0 && <View style={styles.filterDot} />}
@@ -592,11 +795,21 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={Colors.ink1}
+        translucent
+      />
 
       <Animated.View style={[styles.headerWrap, headerAnim]}>
         <DarkHeader
-          eyebrow={searchQueryParam ? 'SEARCH' : categoryName === 'All Products' ? 'BROWSE' : 'COLLECTION'}
+          eyebrow={
+            searchQueryParam
+              ? 'SEARCH'
+              : categoryName === 'All Products'
+              ? 'BROWSE'
+              : 'COLLECTION'
+          }
           title={categoryName}
           onBack={() => navigation.goBack()}
           paddingTop={insets.top + Space[2]}
@@ -612,7 +825,10 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           onSubmit={() => {
             const q = localQuery.trim();
             if (!q) return;
-            navigation.navigate('Result', { searchQuery: q, categoryName: `"${q}"` });
+            navigation.navigate('Result', {
+              searchQuery: q,
+              categoryName: `"${q}"`,
+            });
           }}
         />
       </View>
@@ -632,8 +848,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         ) : isError ? (
           <View style={styles.stateWrap}>
             <ErrorState
-              title="Couldn't load products"
-              message={error ?? 'Something went wrong.'}
+              title="Couldn't load products."
+              message={error ?? 'Tap retry to try again.'}
               onRetry={() => fetchProducts()}
               retryLoading={loading}
             />
@@ -672,7 +888,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                 );
               }
 
-              const leftDelay  = Math.min(180 + rowIndex * 35, 400);
+              const leftDelay = Math.min(180 + rowIndex * 35, 400);
               const rightDelay = Math.min(180 + rowIndex * 35 + 55, 440);
 
               return (

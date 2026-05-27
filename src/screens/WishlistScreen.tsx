@@ -129,19 +129,15 @@ const WishlistRow: React.FC<{
 const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
-  const { data: fetched, status, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
+  const { data: fetched, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
   const [items, setItems]                               = useState<WishlistItemInterface[]>([]);
   const [detailMap, setDetailMap]                       = useState<Record<number, ProductDetail>>({});
   const hasFetched = useRef(false);
   const profileCode = useProfileCode();
 
   useEffect(() => {
-    if (status === 'success' || status === 'error') {
-      hasFetched.current = true;
-    }
-    if (!fetched?.length) return;
-    setItems(fetched);
-    // Fetch product details for all wishlist items in parallel
+    if (!fetched) return;
+    if (fetched.length > 0) setItems(fetched);
     Promise.all(
       fetched.map(item =>
         selectProduct(String(item.InventoryID))
@@ -158,14 +154,16 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       results.forEach(r => { if (r) map[r.inventoryId] = { imageUri: r.imageUri, itemId: r.itemId }; });
       setDetailMap(map);
     });
-  }, [fetched, status]);
+  }, [fetched]);
 
   const fetchWishlist = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
         if (!profileCode) return [];
         const response = await getWishlist(profileCode);
-        return response.statusCode === 1 ? (response.result || []) : [];
+        const result = response.statusCode === 1 ? (response.result || []) : [];
+        hasFetched.current = true;
+        return result;
       }, cancelled),
     [run, profileCode],
   );
@@ -221,8 +219,8 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       return (
         <View style={styles.stateWrap}>
           <ErrorState
-            title="Couldn't load wishlist"
-            message={error ?? 'Something went wrong.'}
+            title="Couldn't load your wishlist."
+            message={error ?? 'Tap retry to try again.'}
             onRetry={() => fetchWishlist()}
             retryLoading={loading}
           />
