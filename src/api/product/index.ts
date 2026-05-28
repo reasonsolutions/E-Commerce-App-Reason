@@ -14,3 +14,4 @@ export const getProductsBySubCategory = product.getProductsBySubCategory;
 export const selectProduct            = product.selectProduct;
 export const searchProducts           = product.searchProducts;
 export const getProductByItemId       = product.getProductByItemId;
+export { getOrgIdForInventory } from './productApi';

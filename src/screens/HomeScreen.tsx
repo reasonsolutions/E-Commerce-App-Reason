@@ -374,6 +374,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               CategoryImage:   p.CategoryImage,
               MinPrice:        p.Price ?? 0,
               MaxComparePrice: p.ComparePrice ?? 0,
+              OrganisationId:  '',
               Variants:        [],
             });
           }

@@ -3,6 +3,21 @@ import { productEndpoints } from '../endpoints';
 import type { ProductInterface } from '../interfaces';
 import { ProductByCategoryProductDetails } from '../interfaces';
 
+// InventoryID → OrganisationId — populated on every product fetch, used at checkout
+const _orgByInventory: Map<number, string> = new Map();
+
+export const getOrgIdForInventory = (inventoryId: number): string =>
+  _orgByInventory.get(inventoryId) ?? '';
+
+function cacheOrgIds(products: ProductInterface[]): void {
+  for (const p of products) {
+    if (!p.OrganisationId) continue;
+    for (const v of p.Variants ?? []) {
+      _orgByInventory.set(Number(v.InventoryID), p.OrganisationId);
+    }
+  }
+}
+
 export const getAllProducts = async () => {
   const response = await axiosInstance.post(productEndpoints.allProducts, {
     brands: [],
@@ -13,7 +28,9 @@ export const getAllProducts = async () => {
     discount: null,
     pagination: { pageNumber: 1, pageSize: 10 },
   });
-  return response.data?.result?.Products ?? [];
+  const products: ProductInterface[] = response.data?.result?.Products ?? [];
+  cacheOrgIds(products);
+  return products;
 };
 
 export const getBrands = async () => {
@@ -50,6 +67,7 @@ export const getProductsByCategory = async (
     pagination: { pageNumber, pageSize },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];
+  cacheOrgIds(products);
 
   return products.map(p => ({
     Item_Id:        p.ItemID,
@@ -91,6 +109,7 @@ export const getProductsByBrand = async (
     pagination: { pageNumber, pageSize },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];
+  cacheOrgIds(products);
 
   return products.map(p => ({
     Item_Id:        p.ItemID,

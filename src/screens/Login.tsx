@@ -17,6 +17,7 @@ import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { setTokenCache } from '../api/axiosInstance';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import LinearGradient from 'react-native-linear-gradient';
@@ -240,6 +241,7 @@ const Login: React.FC = () => {
         }),
         AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(userData)),
       ]);
+      setTokenCache(AccessToken);
       // Seed cart badge immediately so the count is correct from first screen
       if (userData.CustomerProfileCode) {
         getSavedCartItems(userData.CustomerProfileCode)

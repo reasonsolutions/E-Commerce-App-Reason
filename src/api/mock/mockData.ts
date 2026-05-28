@@ -88,6 +88,7 @@ export const mockProducts: ProductInterface[] = [
     CreatedDate: '2024-07-01T00:00:00', BrandID: '1', BrandName: 'Nike',
     SCName: 'Shoes', CategoryID: '1', CategoryName: 'Footwear',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146432/shoes_xu0vfr.png',
+    OrganisationId: '',
     Variants: [{ InventoryID: '3', Variant: '14', Stock: 189, SKU: 'SKU-1-14', PriceDetails: { Price: 7495, ComparePrice: 8495 } }],
   },
   {
@@ -98,6 +99,7 @@ export const mockProducts: ProductInterface[] = [
     CreatedDate: '2024-07-01T00:00:00', BrandID: '5', BrandName: 'Casio',
     SCName: 'Watches', CategoryID: '2', CategoryName: 'Watches',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146431/watch_ztlcto.png',
+    OrganisationId: '',
     Variants: [{ InventoryID: '8', Variant: 'Units', Stock: 158, SKU: 'SKU-9-Units', PriceDetails: { Price: 1600, ComparePrice: 1700 } }],
   },
   {
@@ -108,6 +110,7 @@ export const mockProducts: ProductInterface[] = [
     CreatedDate: '2024-08-02T00:00:00', BrandID: '7', BrandName: 'Allen Solly',
     SCName: 'Cotton Pent', CategoryID: '4', CategoryName: 'Pants',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146429/jeans_zmbaiy.png',
+    OrganisationId: '',
     Variants: [{ InventoryID: '9', Variant: '37', Stock: 186, SKU: 'SKU-11-37', PriceDetails: { Price: 6599, ComparePrice: 7435 } }],
   },
   {
@@ -118,6 +121,7 @@ export const mockProducts: ProductInterface[] = [
     CreatedDate: '2024-08-02T16:38:54.51', BrandID: '6', BrandName: 'Van Heusen',
     SCName: 'Shoulder Bag', CategoryID: '3', CategoryName: 'Bag',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146429/bags_x9w0pz.png',
+    OrganisationId: '',
     Variants: [{ InventoryID: '20', Variant: 'ONESIZE', Stock: 191, SKU: 'SKU-15-ONESIZE', PriceDetails: { Price: 1124, ComparePrice: 2499 } }],
   },
   {
@@ -128,6 +132,7 @@ export const mockProducts: ProductInterface[] = [
     CreatedDate: '2024-09-18T07:30:07.96', BrandID: '8', BrandName: 'ARROW',
     SCName: 'T-Shirt', CategoryID: '5', CategoryName: 'Clothes',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146428/shirt_mjjvxn.png',
+    OrganisationId: '',
     Variants: [{ InventoryID: '23', Variant: 'S', Stock: 10, SKU: 'SKU-17-S', PriceDetails: { Price: 1499, ComparePrice: 1599 } }],
   },
   {
@@ -138,6 +143,7 @@ export const mockProducts: ProductInterface[] = [
     CreatedDate: '2025-09-18T10:17:51.99', BrandID: '11', BrandName: 'Lakme',
     SCName: 'Sunscreen', CategoryID: '7', CategoryName: 'Skin Care',
     CategoryImage: 'https://png.pngtree.com/png-clipart/20221015/original/pngtree-skincare-logo-png-image_8689417.png',
+    OrganisationId: '',
     Variants: [{ InventoryID: '59', Variant: '40-50 ML', Stock: 50, SKU: 'SKU-28-ML', PriceDetails: { Price: 250, ComparePrice: 349 } }],
   },
   {
@@ -148,6 +154,7 @@ export const mockProducts: ProductInterface[] = [
     CreatedDate: '2025-09-22T11:33:42.193', BrandID: '1', BrandName: 'Nike',
     SCName: 'Shoes', CategoryID: '1', CategoryName: 'Footwear',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146432/shoes_xu0vfr.png',
+    OrganisationId: '',
     Variants: [{ InventoryID: '65', Variant: 'UK 5.5', Stock: 100, SKU: 'SKU-31-UK5.5', PriceDetails: { Price: 5000, ComparePrice: 6000 } }],
   },
   {
@@ -158,6 +165,7 @@ export const mockProducts: ProductInterface[] = [
     CreatedDate: '2024-11-15T09:53:47.697', BrandID: '1', BrandName: 'Nike',
     SCName: 'Shoulder Bag', CategoryID: '1', CategoryName: 'Footwear',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146432/shoes_xu0vfr.png',
+    OrganisationId: '',
     Variants: [{ InventoryID: '41', Variant: 'OneSize', Stock: 2, SKU: 'SKU-22-OneSize', PriceDetails: { Price: 1116, ComparePrice: 1599 } }],
   },
 ];

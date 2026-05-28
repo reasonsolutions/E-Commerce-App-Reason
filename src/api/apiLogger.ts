@@ -38,15 +38,19 @@ function maskSensitive(obj: unknown): unknown {
 }
 
 function truncate(value: unknown): string {
-  const str = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  const str =
+    typeof value === 'string' ? value : JSON.stringify(value, null, 2);
   if (!str || str.length <= MAX_PAYLOAD_LENGTH) return str ?? '';
-  return str.slice(0, MAX_PAYLOAD_LENGTH) + `\n… [truncated ${str.length - MAX_PAYLOAD_LENGTH} chars]`;
+  return (
+    str.slice(0, MAX_PAYLOAD_LENGTH) +
+    `\n… [truncated ${str.length - MAX_PAYLOAD_LENGTH} chars]`
+  );
 }
 
 function shortUrl(url: string | undefined): string {
   if (!url) return 'unknown';
   const match = url.match(/^https?:\/\/[^/]+(\/.*)?$/);
-  return match ? (match[1] || '/') : url;
+  return match ? match[1] || '/' : url;
 }
 
 // ── Request logger ────────────────────────────────────────────────────────────
@@ -60,11 +64,11 @@ export function logRequest(config: TimedAxiosRequestConfig): void {
   const method = (config.method ?? 'GET').toUpperCase();
   const url = config.url ?? 'unknown';
   const body = config.data
-    ? maskSensitive(typeof config.data === 'string' ? JSON.parse(config.data) : config.data)
+    ? maskSensitive(
+        typeof config.data === 'string' ? JSON.parse(config.data) : config.data,
+      )
     : undefined;
-  const params = config.params
-    ? maskSensitive(config.params)
-    : undefined;
+  const params = config.params ? maskSensitive(config.params) : undefined;
 
   const payloadStr = body
     ? truncate(body)
@@ -73,6 +77,13 @@ export function logRequest(config: TimedAxiosRequestConfig): void {
     : undefined;
 
   _pending.set(id, { method, url: shortUrl(url), payload: payloadStr });
+
+  console.log(
+    `\n─────────────────────────────────────────\n` +
+      `🚀  ${method} ${shortUrl(url)}\n` +
+      (payloadStr ? `📤  Payload  : ${payloadStr}\n` : '') +
+      `─────────────────────────────────────────`,
+  );
 }
 
 // ── Response logger ───────────────────────────────────────────────────────────
@@ -87,16 +98,18 @@ export function logResponse(response: AxiosResponse): void {
 
   const method = pending?.method ?? (config.method ?? 'GET').toUpperCase();
   const url = pending?.url ?? shortUrl(config.url);
-  const duration = config._startTime ? `${Date.now() - config._startTime}ms` : '–';
+  const duration = config._startTime
+    ? `${Date.now() - config._startTime}ms`
+    : '–';
   const status = response.status;
 
   console.log(
     `\n─────────────────────────────────────────\n` +
-    `🚀  ${method} ${url}\n` +
-    (pending?.payload ? `📤  Payload  : ${pending.payload}\n` : '') +
-    `✅  Status   : ${status} · ${duration}\n` +
-    `📥  Response : ${truncate(response.data)}\n` +
-    `─────────────────────────────────────────`,
+      `  ${method} ${url}\n` +
+      (pending?.payload ? `  Payload  : ${pending.payload}\n` : '') +
+      ` Status   : ${status} · ${duration}\n` +
+      ` Response : ${truncate(response.data)}\n` +
+      `─────────────────────────────────────────`,
   );
 }
 
@@ -114,15 +127,19 @@ export function logError(error: unknown): void {
   const method = pending?.method ?? config?.method?.toUpperCase() ?? 'REQUEST';
   const url = pending?.url ?? shortUrl(config?.url);
   const status = err?.response?.status ?? 'NO_RESPONSE';
-  const duration = config?._startTime ? `${Date.now() - config._startTime}ms` : '–';
+  const duration = config?._startTime
+    ? `${Date.now() - config._startTime}ms`
+    : '–';
 
   console.log(
     `\n─────────────────────────────────────────\n` +
-    `🚀  ${method} ${url}\n` +
-    (pending?.payload ? `📤  Payload  : ${pending.payload}\n` : '') +
-    `❌  Status   : ${status} · ${duration}\n` +
-    `💬  Message  : ${err?.message ?? 'unknown error'}\n` +
-    (err?.response?.data ? `📥  Response : ${truncate(err.response.data)}\n` : '') +
-    `─────────────────────────────────────────`,
+      `  ${method} ${url}\n` +
+      (pending?.payload ? ` Payload  : ${pending.payload}\n` : '') +
+      `  Status   : ${status} · ${duration}\n` +
+      `  Message  : ${err?.message ?? 'unknown error'}\n` +
+      (err?.response?.data
+        ? ` Response : ${truncate(err.response.data)}\n`
+        : '') +
+      `─────────────────────────────────────────`,
   );
 }

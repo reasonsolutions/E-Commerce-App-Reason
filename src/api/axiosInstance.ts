@@ -5,6 +5,18 @@ import { classifyError, apiLog } from './apiError';
 import { logRequest, logResponse, logError, TimedAxiosRequestConfig } from './apiLogger';
 import { STORAGE_KEYS } from '../config/storageKeys';
 
+// In-memory token cache — avoids a Keychain read (~100-300ms) on every request.
+// Primed by setTokenCache() after login, cleared by clearTokenCache() on logout.
+let _cachedToken: string | null = null;
+
+export function setTokenCache(token: string): void {
+  _cachedToken = token;
+}
+
+export function clearTokenCache(): void {
+  _cachedToken = null;
+}
+
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -23,9 +35,14 @@ axiosInstance.interceptors.request.use(
       config.url?.includes('postCreateCustomer') ||
       config.url?.includes('postConfirmCustomer');
     if (!isAuthEndpoint) {
-      const credentials = await Keychain.getGenericPassword({ service: STORAGE_KEYS.authToken });
-      if (credentials) {
-        config.headers.Authorization = `Bearer ${credentials.password}`;
+      if (_cachedToken) {
+        config.headers.Authorization = `Bearer ${_cachedToken}`;
+      } else {
+        const credentials = await Keychain.getGenericPassword({ service: STORAGE_KEYS.authToken });
+        if (credentials) {
+          _cachedToken = credentials.password;
+          config.headers.Authorization = `Bearer ${credentials.password}`;
+        }
       }
     }
     return config;

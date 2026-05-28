@@ -22,7 +22,6 @@ import { getSavedCartItems, postDeleteCartItem, updateCartItemQuantity } from '.
 import { useProfileCode } from '../hooks/useProfileCode';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useCart } from '../context/CartContext';
-import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { useAppToast } from '../hooks/useAppToast';
@@ -37,14 +36,22 @@ type CartScreenProps = {
 };
 
 // ── Cart row ──────────────────────────────────────────────────────────────────
-const CartRow: React.FC<{
+const CartRow = React.memo<{
   item: SavedCartItemInterface;
   onUpdateQuantity: (item: SavedCartItemInterface, qty: number) => void;
   onRemove: (item: SavedCartItemInterface) => void;
   delay: number;
-}> = ({ item, onUpdateQuantity, onRemove, delay }) => {
-  const anim       = useEntrance(delay, false, 10);
+}>(({ item, onUpdateQuantity, onRemove, delay }) => {
   const haptic     = useHaptic();
+  const animOpacity    = useRef(new Animated.Value(0)).current;
+  const animTranslateY = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(animOpacity,    { toValue: 1, duration: Motion.duration.settle, delay, useNativeDriver: true }),
+      Animated.timing(animTranslateY, { toValue: 0, duration: Motion.duration.settle, delay, useNativeDriver: true }),
+    ]).start();
+  }, [animOpacity, animTranslateY, delay]);
+  const anim = { opacity: animOpacity, transform: [{ translateY: animTranslateY }] };
   const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const onLoad = useCallback(() => {
@@ -151,7 +158,7 @@ const CartRow: React.FC<{
       </View>
     </Animated.View>
   );
-};
+});
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
@@ -163,7 +170,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
   const [optimistic, setOptimistic] = useState<SavedCartItemInterface[] | null>(null);
   const [clearing, setClearing] = useState(false);
-  const hasFetched = useRef(false);
+  const [hasFetched, setHasFetched] = useState(false);
   const profileCode = useProfileCode();
 
   const cartItems = optimistic ?? fetched ?? [];
@@ -181,7 +188,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   // Sync cart badge whenever server data arrives
   useEffect(() => {
     if (fetched !== null) {
-      hasFetched.current = true;
+      setHasFetched(true);
       setOptimistic(null);
       const total = fetched.reduce((sum, item) => sum + item.Quantity, 0);
       setCartCount(total);
@@ -191,16 +198,32 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
-      hasFetched.current = false;
+      setHasFetched(false);
       setOptimistic(null);
       fetchCart(cancelled);
       return () => { cancelled.current = true; };
     }, [fetchCart]),
   );
 
-  const headerAnim  = useEntrance(40, false, 12);
-  const summaryDelay = Math.min(140 + cartItems.length * 50, 480);
-  const summaryAnim  = useEntrance(summaryDelay, false, 10);
+  const headerOpacity    = useRef(new Animated.Value(0)).current;
+  const headerTranslateY = useRef(new Animated.Value(12)).current;
+  const summaryOpacity    = useRef(new Animated.Value(0)).current;
+  const summaryTranslateY = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(headerOpacity,    { toValue: 1, duration: Motion.duration.settle, delay: 20, useNativeDriver: true }),
+      Animated.timing(headerTranslateY, { toValue: 0, duration: Motion.duration.settle, delay: 20, useNativeDriver: true }),
+    ]).start();
+  }, [headerOpacity, headerTranslateY]);
+  useEffect(() => {
+    if (!hasFetched) return;
+    Animated.parallel([
+      Animated.timing(summaryOpacity,    { toValue: 1, duration: Motion.duration.settle, delay: 40, useNativeDriver: true }),
+      Animated.timing(summaryTranslateY, { toValue: 0, duration: Motion.duration.settle, delay: 40, useNativeDriver: true }),
+    ]).start();
+  }, [hasFetched, summaryOpacity, summaryTranslateY]);
+  const headerAnim  = { opacity: headerOpacity,  transform: [{ translateY: headerTranslateY }] };
+  const summaryAnim = { opacity: summaryOpacity, transform: [{ translateY: summaryTranslateY }] };
 
   const subtotal  = cartItems.reduce((sum, item) => sum + item.Price * item.Quantity, 0);
   const itemCount = cartItems.reduce((sum, item) => sum + item.Quantity, 0);
@@ -257,7 +280,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   }, [cartItems, setCartCount, fetchCart]);
 
   const renderBody = () => {
-    if (!hasFetched.current && !isError) {
+    if (!hasFetched && !isError) {
       return (
         <View style={[styles.fillWrap, { paddingHorizontal: Space.screenH, paddingTop: Space[4] }]}>
           {[0, 1, 2].map(i => (
@@ -289,7 +312,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       );
     }
 
-    if (cartItems.length === 0 && !loading && hasFetched.current) {
+    if (cartItems.length === 0 && !loading && hasFetched) {
       return (
         <View style={styles.fillWrap}>
           <EmptyState
@@ -402,7 +425,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           <View style={styles.headerCenter}>
             <Text style={styles.headerEyebrow}>YOUR BAG</Text>
             <Text style={styles.headerTitle}>
-              {!hasFetched.current
+              {!hasFetched
                 ? 'Your Bag'
                 : cartItems.length === 0
                   ? 'Empty'

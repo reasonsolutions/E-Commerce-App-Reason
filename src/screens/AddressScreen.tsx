@@ -19,6 +19,7 @@ import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { getDeliveryAddresses, postCreateDeliveryAddress } from '../api/address';
 import { placeOrder } from '../api/order';
+import { getOrgIdForInventory } from '../api/product';
 import { PlaceOrderInterface, SavedCartItemInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -268,16 +269,10 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
 
     const total = cartItems.reduce((sum: number, item: SavedCartItemInterface) => sum + item.Price * item.Quantity, 0);
 
-    // Extract OrganisationID from image path: "MER_{OrgID}/Products/..."
-    const getOrgId = (images: string): string => {
-      const match = images?.split(';')[0]?.match(/^MER_([^/]+)\//);
-      return match ? match[1] : 'NULL';
-    };
-
-    // Group items by their OrganisationID
+    // Group items by OrganisationId — use field from cart API, fall back to product cache
     const orgMap = new Map<string, SavedCartItemInterface[]>();
     for (const item of cartItems) {
-      const orgId = getOrgId(item.Images);
+      const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId) || 'NULL';
       if (!orgMap.has(orgId)) orgMap.set(orgId, []);
       orgMap.get(orgId)!.push(item);
     }
@@ -295,6 +290,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         Discount:           0,
         VAT:                0,
         OrderStatus:        1,
+        Taxes:              [],
       })),
     }));
 

@@ -1,6 +1,7 @@
 import * as Keychain from 'react-native-keychain';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { clearTokenCache } from '../api/axiosInstance';
 
 function base64Decode(str: string): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
@@ -45,6 +46,7 @@ export async function getInitialRoute(): Promise<'Home' | 'Login'> {
 }
 
 export async function clearSession(): Promise<void> {
+  clearTokenCache();
   await Promise.all([
     Keychain.resetGenericPassword({ service: STORAGE_KEYS.authToken }),
     AsyncStorage.removeItem(STORAGE_KEYS.userData),
