@@ -237,7 +237,7 @@ const Login: React.FC = () => {
       await Promise.all([
         Keychain.setGenericPassword('token', AccessToken, {
           service: STORAGE_KEYS.authToken,
-          securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
+          securityLevel: Keychain.SECURITY_LEVEL.ANY,
         }),
         AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(userData)),
       ]);
