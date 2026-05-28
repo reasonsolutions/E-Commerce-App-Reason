@@ -36,26 +36,26 @@ type WishlistScreenProps = {
   navigation: NavigationProp;
 };
 
-type ProductDetail = { imageUri: string; itemId: number };
-
 const IMG_W = 80;
 const IMG_H = 100;
 
 // ── Single wishlist row ───────────────────────────────────────────────────────
 const WishlistRow: React.FC<{
   item: WishlistItemInterface;
-  detail: ProductDetail | null;
   onRemove: (code: number) => void;
-  onPress: (itemId: number) => void;
+  onPress: (inventoryId: number) => void;
   delay: number;
   isLast: boolean;
-}> = ({ item, detail, onRemove, onPress, delay, isLast }) => {
+}> = ({ item, onRemove, onPress, delay, isLast }) => {
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
-  const hasDiscount = item.ComparePrice > item.Price;
+  const price       = item.PriceDetails?.Price ?? 0;
+  const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
+  const hasDiscount  = comparePrice > price;
   const isOutOfStock = item.IsInStock === 0;
+  const imageUri     = item.Images?.[0] ?? '';
 
   const onImageLoad = useCallback(() => {
     Animated.timing(imgOpacity, { toValue: 1, duration: Motion.duration.settle, useNativeDriver: true }).start();
@@ -68,13 +68,13 @@ const WishlistRow: React.FC<{
           {...handlers}
           style={styles.row}
           activeOpacity={1}
-          onPress={() => { haptic.light(); onPress(detail?.itemId ?? item.InventoryID); }}
+          onPress={() => { haptic.light(); onPress(item.InventoryID); }}
         >
           {/* Product image — fade in when loaded, brand initial fallback */}
           <View style={styles.imgWrap}>
-            {detail?.imageUri ? (
+            {imageUri ? (
               <Animated.Image
-                source={{ uri: detail.imageUri }}
+                source={{ uri: imageUri }}
                 style={[styles.img, { opacity: imgOpacity }]}
                 resizeMode="cover"
                 onLoad={onImageLoad}
@@ -102,8 +102,8 @@ const WishlistRow: React.FC<{
             ) : null}
             <View style={styles.priceRow}>
               <Price
-                value={item.Price}
-                was={hasDiscount ? item.ComparePrice : undefined}
+                value={price}
+                was={hasDiscount ? comparePrice : undefined}
                 size="base"
               />
             </View>
@@ -131,28 +131,27 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
   const [items, setItems]                               = useState<WishlistItemInterface[]>([]);
-  const [detailMap, setDetailMap]                       = useState<Record<number, ProductDetail>>({});
+  const [itemIdMap, setItemIdMap]                       = useState<Record<number, number>>({});
   const hasFetched = useRef(false);
   const profileCode = useProfileCode();
 
   useEffect(() => {
     if (!fetched) return;
     if (fetched.length > 0) setItems(fetched);
+    // Resolve InventoryID → ItemId for navigation (backend doesn't return ItemId yet)
     Promise.all(
       fetched.map(item =>
         selectProduct(String(item.InventoryID))
           .then(res => {
             const product = Array.isArray(res?.result) ? res.result[0] : null;
-            if (!product) return null;
-            const imageUri = product.Images?.split(';')[0]?.trim() ?? '';
-            return { inventoryId: item.InventoryID, imageUri, itemId: Number(product.Item_Id) };
+            return product ? { inventoryId: item.InventoryID, itemId: Number(product.Item_Id) } : null;
           })
           .catch(() => null),
       ),
     ).then(results => {
-      const map: Record<number, ProductDetail> = {};
-      results.forEach(r => { if (r) map[r.inventoryId] = { imageUri: r.imageUri, itemId: r.itemId }; });
-      setDetailMap(map);
+      const map: Record<number, number> = {};
+      results.forEach(r => { if (r) map[r.inventoryId] = r.itemId; });
+      setItemIdMap(map);
     });
   }, [fetched]);
 
@@ -187,9 +186,11 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const renderItem = ({ item, index }: ListRenderItemInfo<WishlistItemInterface>) => (
     <WishlistRow
       item={item}
-      detail={detailMap[item.InventoryID] ?? null}
       onRemove={handleRemove}
-      onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
+      onPress={(inventoryId) => {
+        const itemId = itemIdMap[inventoryId];
+        if (itemId) navigation.navigate('Product', { product: String(itemId) });
+      }}
       delay={Math.min(index * 55, 320)}
       isLast={index === items.length - 1}
     />

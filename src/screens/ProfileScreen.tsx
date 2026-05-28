@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -153,7 +154,6 @@ const EditProfileModal: React.FC<{
   const [name,     setName]     = useState(session.CustomerName  ?? '');
   const [email,    setEmail]    = useState(session.EmailID       ?? '');
   const [mobile,   setMobile]   = useState(session.MobileNumber !== undefined ? String(session.MobileNumber) : '');
-  const [password, setPassword] = useState('');
   const [saving,   setSaving]   = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -163,7 +163,6 @@ const EditProfileModal: React.FC<{
       setName(session.CustomerName ?? '');
       setEmail(session.EmailID ?? '');
       setMobile(session.MobileNumber !== undefined ? String(session.MobileNumber) : '');
-      setPassword('');
       setSaveError(null);
     }
   }, [visible, session]);
@@ -176,11 +175,6 @@ const EditProfileModal: React.FC<{
       setSaveError('Name, email and mobile are required.');
       return;
     }
-    if (!password.trim()) {
-      setSaveError('Enter your current password to save changes.');
-      return;
-    }
-
     setSaving(true);
     try {
       const res = await postUpdateCustomer({
@@ -189,7 +183,6 @@ const EditProfileModal: React.FC<{
         EmailID:             email.trim(),
         MobileNumber:        mobile.trim(),
         CountryCode:         230,
-        Password:            password || '',
       });
 
       if (res?.statusCode !== 1) {
@@ -212,7 +205,7 @@ const EditProfileModal: React.FC<{
       setSaveError(err?.message ?? 'Something went wrong.');
       setSaving(false);
     }
-  }, [saving, name, email, mobile, password, session, haptic, onSaved]);
+  }, [saving, name, email, mobile, session, haptic, onSaved]);
 
   return (
     <Modal
@@ -269,19 +262,10 @@ const EditProfileModal: React.FC<{
               value={mobile}
               onChangeText={setMobile}
               keyboardType="phone-pad"
-              returnKeyType="next"
-              activeColor={Colors.ink1}
-            />
-            <FloatingLabelInput
-              label="Current Password"
-              value={password}
-              onChangeText={setPassword}
-              showToggle
               returnKeyType="done"
               onSubmitEditing={handleSave}
               activeColor={Colors.ink1}
             />
-
             <View style={editStyles.ctaWrap}>
               <PrimaryButton
                 label={saving ? '···' : 'Save changes'}
@@ -343,13 +327,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const [primaryAddress, setPrimaryAddress] = useState<DeliveryAddress | null>(null);
   const [editVisible, setEditVisible]   = useState(false);
 
-  // Load session from AsyncStorage (no hook — we need to refresh it after edits)
-  useEffect(() => {
+  // Re-read session on every focus so in-app edits and external changes are reflected
+  useFocusEffect(useCallback(() => {
     AsyncStorage.getItem(STORAGE_KEYS.userData).then(raw => {
       if (!raw) return;
       try { setSession(JSON.parse(raw)); } catch {}
     });
-  }, []);
+  }, []));
 
   useEffect(() => {
     if (!session?.CustomerProfileCode) return;

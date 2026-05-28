@@ -48,7 +48,6 @@ export interface postUpdateCustomerInterface {
     EmailID: string;
     MobileNumber: string;
     CountryCode: number;
-    Password: string;
 }
 
 export interface postCreateDeliveryAddressInterface {
@@ -144,6 +143,7 @@ export interface ProductInterface {
     CategoryImage: string;
     MinPrice: number;
     MaxComparePrice: number;
+    OrganisationId: string;
     Variants: ProductVariant[];
 }
 
@@ -337,6 +337,7 @@ export interface SavedCartItemInterface {
     Count: number;
     Variant: string;
     BrandName: string;
+    OrganisationId?: string;
     Price: number;
     PriceDetails: {
         Price: number;
@@ -402,7 +403,7 @@ export interface PlaceOrderPaymentDetails {
 export interface PlaceOrderInterface {
   CustomerProfileCode:         number;
   OrderDeliveryAddressCode:    number;
-  CartMasterCode:              number;
+  CartMasterCode?:             number;
   TotalAmountBeforeDiscount:   number;
   TotalAmountAfterDiscount:    number;
   CouponCode?:                 string;
@@ -420,10 +421,16 @@ export interface WishlistItemInterface {
   Name:                 string;
   AddedOn:              string;
   StockCount:           number;
-  Price:                number;
-  ComparePrice:         number;
   SKU:                  string;
+  ORGANISATIONID:       string;
+  OrganisationName:     string;
   IsInStock:            number;
+  Images:               string[];
+  PriceDetails: {
+    Price:        number;
+    ComparePrice: number;
+    Taxes:        any[];
+  };
 }
 
 export interface PostAddToWishlistInterface {
