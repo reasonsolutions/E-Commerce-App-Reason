@@ -9,7 +9,6 @@ import React, { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ToastOverlay } from './src/components/ui';
 
@@ -50,11 +49,9 @@ function App(): React.JSX.Element {
       <SafeAreaProvider>
         <GluestackUIProvider>
           <CartProvider>
-            <BottomSheetModalProvider>
-              <CartHydrator />
-              <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-              <AppNavigator />
-            </BottomSheetModalProvider>
+            <CartHydrator />
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <AppNavigator />
             <ToastOverlay />
           </CartProvider>
         </GluestackUIProvider>
