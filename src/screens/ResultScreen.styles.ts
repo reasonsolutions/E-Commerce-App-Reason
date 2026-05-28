@@ -303,4 +303,34 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: Space[6],
   },
+  recentWrap: {
+    backgroundColor:   Colors.surface,
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[4],
+    paddingBottom:     Space[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  recentLabel: {
+    ...Type.label,
+    color:        Colors.ink4,
+    marginBottom: Space[2],
+  },
+  recentChips: {
+    flexDirection: 'row',
+    flexWrap:      'wrap',
+    gap:           Space[2],
+  },
+  recentChip: {
+    paddingVertical:   Space[2],
+    paddingHorizontal: Space[3],
+    borderRadius:      Radius.pill,
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderColor:       Colors.rule,
+    backgroundColor:   Colors.surfaceSoft,
+  },
+  recentChipText: {
+    ...Type.caption,
+    color: Colors.ink2,
+  },
 });

@@ -12,6 +12,8 @@ export const STORAGE_KEYS = {
   userData: 'userData',
   /** Keychain service key for JWT access token. */
   authToken: 'authToken',
+  /** Recent search terms — JSON array of strings, max 8 entries. */
+  recentSearches: 'recentSearches',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

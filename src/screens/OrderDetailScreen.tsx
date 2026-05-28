@@ -246,7 +246,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
               <Text style={styles.variant}>{order.Variant}</Text>
             ) : null}
             <View style={styles.amountRow}>
-              <Text style={styles.amount}>Rs {order.Amount.toFixed(0)}</Text>
+              <Text style={styles.amount}>Rs {(order.Amount ?? 0).toFixed(0)}</Text>
               {order.Quantity > 1 ? (
                 <Text style={styles.qty}>× {order.Quantity}</Text>
               ) : null}

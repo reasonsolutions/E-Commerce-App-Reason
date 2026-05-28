@@ -18,13 +18,14 @@ export const postOrderHistory = async (customerprofilecode: number) => {
   const payload: OrderHistoryRequest = { CustomerProfileCode: customerprofilecode };
   const response = await axiosInstance.post(orderEndpoints.getOrderHistory, payload);
   const raw = response.data;
-  // Map real API field names to our interface
   if (raw?.result?.OrdHistoryDetails) {
     raw.result.OrdHistoryDetails = raw.result.OrdHistoryDetails.map((item: any) => ({
       ...item,
-      Inventory_Id: item.Inventory_Id ?? item.InventoryID,
-      Item_Id:      item.Item_Id      ?? item.ItemID,
-      Brand_Id:     item.Brand_Id     ?? item.BrandID,
+      Inventory_Id: item.InventoryID,
+      Item_Id:      item.ItemID,
+      Brand_Id:     item.BrandID,
+      Brand_Name:   item.BrandName,
+      Amount:       item.Price ?? 0,
     }));
   }
   return raw;

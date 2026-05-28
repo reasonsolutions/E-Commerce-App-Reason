@@ -278,7 +278,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [searchQuery, setSearchQuery]         = useState('');
   const [suggestions, setSuggestions]         = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchFocused, setSearchFocused]     = useState(false);
+  const [recentSearches, setRecentSearches]   = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEYS.recentSearches).then(raw => {
+      if (raw) try { setRecentSearches(JSON.parse(raw)); } catch {}
+    });
+  }, []);
 
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text);
@@ -315,12 +323,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }, 300);
   }, []);
 
-  const commitSearch = useCallback((query: string) => {
+  const commitSearch = useCallback(async (query: string) => {
     const q = query.trim();
     if (!q) return;
     setShowSuggestions(false);
+    setSearchFocused(false);
+    const updated = [q, ...recentSearches.filter(s => s !== q)].slice(0, 8);
+    setRecentSearches(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.recentSearches, JSON.stringify(updated));
     navigation.navigate('Result', { searchQuery: q, categoryName: `"${q}"` });
-  }, [navigation]);
+  }, [navigation, recentSearches]);
 
   const {
     data: categories,
@@ -462,7 +474,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             onChangeText={handleSearchChange}
             placeholder="Search products, brands…"
             onSubmit={() => commitSearch(searchQuery)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 180)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => { setShowSuggestions(false); setSearchFocused(false); }, 180)}
           />
         </View>
         {showSuggestions && suggestions.length > 0 && (
@@ -478,6 +491,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 activeOpacity={0.7}
               >
                 <Icon name="search-outline" size={14} color={Colors.ink4} />
+                <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {searchFocused && searchQuery.trim() === '' && recentSearches.length > 0 && (
+          <View style={styles.suggestionBox}>
+            <Text style={styles.recentLabel}>RECENT</Text>
+            {recentSearches.map((s, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[styles.suggestionRow, i < recentSearches.length - 1 && styles.suggestionDivider]}
+                onPress={() => {
+                  setSearchQuery(s);
+                  commitSearch(s);
+                }}
+                activeOpacity={0.7}
+              >
+                <Icon name="time-outline" size={14} color={Colors.ink4} />
                 <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
               </TouchableOpacity>
             ))}
@@ -806,6 +838,13 @@ const styles = StyleSheet.create({
     ...Type.body,
     color:   Colors.ink1,
     flex:    1,
+  },
+  recentLabel: {
+    ...Type.label,
+    color:             Colors.ink4,
+    paddingHorizontal: Space[4],
+    paddingTop:        Space[3],
+    paddingBottom:     Space[1],
   },
 
   // ── Hero ────────────────────────────────────────────────────────────────────

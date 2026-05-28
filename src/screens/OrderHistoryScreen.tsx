@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -88,7 +88,7 @@ const OrderRow: React.FC<{
               </View>
               {/* Amount — right-aligned serif */}
               <View style={styles.amountBlock}>
-                <Text style={styles.amount}>Rs {item.Amount.toFixed(0)}</Text>
+                <Text style={styles.amount}>Rs {(item.Amount ?? 0).toFixed(0)}</Text>
                 <Icon name="chevron-forward" size={13} color={Colors.ink5} />
               </View>
             </View>
@@ -120,7 +120,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const { data: orders, loading, isError, error, run } = useAsyncState<OrderHistoryItemInterface[]>([]);
-  const hasFetched = useRef(false);
+  const [hasFetched, setHasFetched] = useState(false);
 
   const fetchOrders = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -129,7 +129,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         if (!userData) return [];
         const user = JSON.parse(userData);
         const result = await postOrderHistory(user.CustomerProfileCode);
-        hasFetched.current = true;
+        setHasFetched(true);
         return result;
       }, cancelled),
     [run],
@@ -137,7 +137,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   useFocusEffect(
     useCallback(() => {
-      hasFetched.current = false;
+      setHasFetched(false);
       const cancelled = { current: false };
       fetchOrders(cancelled);
       return () => { cancelled.current = true; };
@@ -180,7 +180,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   );
 
   const renderBody = () => {
-    if (!hasFetched.current && !isError) {
+    if (!hasFetched && !isError) {
       return (
         <View style={styles.skeletonWrap}>
           {[0, 1, 2, 3].map(i => (
@@ -213,7 +213,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         />
       );
     }
-    if (orderCount === 0 && hasFetched.current) {
+    if (orderCount === 0 && hasFetched) {
       return renderEmpty();
     }
     return (

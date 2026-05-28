@@ -8,6 +8,7 @@ interface SearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
   onSubmit?: () => void;
+  onFocus?: () => void;
   onBlur?: () => void;
   trailing?: React.ReactNode;
   editable?: boolean;
@@ -20,6 +21,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   value,
   onChangeText,
   onSubmit,
+  onFocus,
   onBlur,
   trailing,
   editable = true,
@@ -41,6 +43,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         editable={editable}
         returnKeyType="search"
         onSubmitEditing={onSubmit}
+        onFocus={onFocus}
         onBlur={onBlur}
         accessibilityLabel={placeholder}
         accessibilityRole="search"

@@ -22,6 +22,8 @@ import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/storageKeys';
 import { getCategories, getBrands } from '../api/product';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
@@ -446,6 +448,30 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [localQuery, setLocalQuery] = useState(searchQueryParam ?? '');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEYS.recentSearches).then(raw => {
+      if (raw) try { setRecentSearches(JSON.parse(raw)); } catch {}
+    });
+  }, []);
+
+  const saveRecentSearch = useCallback(async (term: string) => {
+    const updated = [term, ...recentSearches.filter(s => s !== term)].slice(0, 8);
+    setRecentSearches(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.recentSearches, JSON.stringify(updated));
+  }, [recentSearches]);
+
+  // Debounced live search — fires 500ms after user stops typing
+  useEffect(() => {
+    const q = localQuery.trim();
+    if (!q) return;
+    const timer = setTimeout(() => {
+      fetchProducts({ query: q });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localQuery]);
 
   // Draft state — lives in sheet until Apply is tapped
   const [draftCategories, setDraftCategories] = useState<number[]>([]);
@@ -550,6 +576,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         priceMin?: string;
         priceMax?: string;
         discount?: boolean;
+        query?: string;
       },
     ) => {
       const cats = opts?.cats ?? filterCategories;
@@ -567,7 +594,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         brands: effectiveBrands,
         categories: effectiveCategories,
         subCategories: [],
-        searchQuery: searchQueryParam ?? '%',
+        searchQuery: opts?.query ?? searchQueryParam ?? '%',
         priceRange: {
           from: priceMin !== '' ? Number(priceMin) : null,
           to: priceMax !== '' ? Number(priceMax) : null,
@@ -598,6 +625,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       priceMin?: string;
       priceMax?: string;
       discount?: boolean;
+      query?: string;
       cancelled?: { current: boolean };
     }) => {
       setPageNumber(1);
@@ -822,9 +850,12 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           value={localQuery}
           onChangeText={setLocalQuery}
           placeholder="Search products, brands…"
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
           onSubmit={() => {
             const q = localQuery.trim();
             if (!q) return;
+            saveRecentSearch(q);
             navigation.navigate('Result', {
               searchQuery: q,
               categoryName: `"${q}"`,
@@ -832,6 +863,30 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           }}
         />
       </View>
+
+      {searchFocused && localQuery.trim() === '' && recentSearches.length > 0 && (
+        <View style={styles.recentWrap}>
+          <Text style={styles.recentLabel}>RECENT</Text>
+          <View style={styles.recentChips}>
+            {recentSearches.map(term => (
+              <TouchableOpacity
+                key={term}
+                style={styles.recentChip}
+                onPress={() => {
+                  setLocalQuery(term);
+                  saveRecentSearch(term);
+                  navigation.navigate('Result', {
+                    searchQuery: term,
+                    categoryName: `"${term}"`,
+                  });
+                }}
+              >
+                <Text style={styles.recentChipText}>{term}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scroll}
