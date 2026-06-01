@@ -40,7 +40,7 @@ npx jest
 |---|---|
 | Framework | React Native 0.81.4 — bare CLI, no Expo |
 | Language | TypeScript 5.8.3. Do not add TS to existing `.js` files unless explicitly asked. |
-| Navigation | React Navigation v7 Stack — 14 routes, flat, headers hidden. Initial route dynamic via `getInitialRoute()` in `src/utils/auth.ts`. |
+| Navigation | React Navigation v7 Stack — 14 routes, flat, headers hidden. Always starts on `Home`. `navigationRef` in `src/utils/navigationService.ts` for navigation outside React (e.g. 401 handler). |
 | State | Context API + `useState` (local). `useAsyncState` for async. `CartContext.js` for global cart count only. |
 | HTTP | Axios — `src/api/axiosInstance.ts`. Bearer token injected via Keychain-backed in-memory cache. |
 | Styling | `StyleSheet.create()` + design tokens (default). NativeWind v4 primitives available. |
@@ -87,7 +87,7 @@ All responses: `{ statusCode: 1|0, result: {...}, userMessage: string }`. Unwrap
 
 ### Domain mock/real status
 
-Read each domain's `index.ts` before assuming mock or real. Currently: auth/cart/wishlist/address/product = real. Order = mixed (`placeOrder` + `postOrderHistory` real; `postCnfOrderDetail` mock).
+Read each domain's `index.ts` before assuming mock or real. Currently: auth/cart/wishlist/address/product = real. Order = real (all endpoints: `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`).
 
 ---
 
@@ -231,13 +231,33 @@ AsyncStorage.getItem(STORAGE_KEYS.userData); // never bare string literals
 
 **Profile code:**
 ```typescript
-const profileCode = useProfileCode(); // number | null — prefer over reading userData directly
+// In screens that need it for API calls, read directly from AsyncStorage inside the fetch function
+// to avoid race conditions and stale data after account switches:
+const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+const code = raw ? JSON.parse(raw).CustomerProfileCode : null;
+// useProfileCode() hook exists but returns null on first render — avoid for API calls.
 ```
 
 **Toast:**
 ```typescript
 import { toastEmitter } from '../utils/toastEmitter';
 toastEmitter.emit('success', 'Added to cart'); // fire-and-forget, works outside React tree
+```
+
+**Auth guard (protect actions that require login):**
+```typescript
+const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
+// Wrap any action that requires auth:
+guard(() => navigation.navigate('Address', { cartItems }));
+// Render the sheet conditionally:
+{showLoginPrompt && (
+  <LoginPromptSheet
+    context="checkout"   // 'orders' | 'wishlist' | 'profile' | 'checkout' | 'general'
+    onClose={dismissLoginPrompt}
+    onSignIn={() => { dismissLoginPrompt(); navigation.navigate('Login'); }}
+    onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
+  />
+)}
 ```
 
 **Press-scale CTA:**
@@ -255,12 +275,9 @@ const { animatedStyle, handlers } = useTactile();
 
 These define the visual and interaction standard for all Phase 3 work.
 
-**Login · HomeScreen · ProductScreen · CartScreen · OrderSuccessScreen**
+**Login · HomeScreen · ProductScreen · OrderSuccessScreen**
 
-Phase 3 complete: RegisterScreen · OTPVerificationScreen · ProfileScreen · AddressScreen · AddressManagementScreen
-
-Phase 3 pending (match frozen standard exactly):
-**ResultScreen → WishlistScreen → OrderHistoryScreen → OrderDetailScreen**
+Phase 3 complete: RegisterScreen · OTPVerificationScreen · ProfileScreen · AddressScreen · AddressManagementScreen · CartScreen · ResultScreen · WishlistScreen · OrderHistoryScreen · OrderDetailScreen
 
 ---
 
@@ -268,7 +285,11 @@ Phase 3 pending (match frozen standard exactly):
 
 **Cart:** `useCart()` → `{ cartCount, setCartCount }`. Integer only — server-authoritative. Do not add item arrays to CartContext.
 
-**Auth:** JWT in Keychain (`STORAGE_KEYS.authToken`). User data in AsyncStorage (`STORAGE_KEYS.userData`). Session validity checked at startup by `getInitialRoute()`.
+**Auth:** JWT in Keychain (`STORAGE_KEYS.authToken`). User data in AsyncStorage (`STORAGE_KEYS.userData`). App always starts on `Home` — no session check at startup. `isLoggedIn()` in `src/utils/auth.ts` checks Keychain at runtime. Token format is non-standard (not a parseable JWT) — expiry is detected reactively via 401, not by decoding `exp`.
+
+**401 handling:** `axiosInstance.ts` response interceptor catches 401, calls `clearSession()` + `resetToLogin()` (navigates to Home). Auth endpoints (`token/`, `postCreateCustomer`, `postConfirmCustomer`) are excluded from Bearer token injection and are not affected.
+
+**Guest browsing:** Unauthenticated users land on Home and can browse freely. Protected actions (wishlist toggle, checkout, Orders/Wishlist/Profile tabs) are guarded by `useAuthGuard` hook — shows `LoginPromptSheet` instead of navigating. Guest cart stored in AsyncStorage under `STORAGE_KEYS.guestCart` as `GuestCartItem[]`, merged to server cart on login.
 
 **Screen-local:** `useState` + `useAsyncState`. Re-run on focus via `useFocusEffect`.
 
@@ -278,10 +299,13 @@ Phase 3 pending (match frozen standard exactly):
 
 | Item | Notes |
 |---|---|
-| `postCnfOrderDetail` on mock | Switch to real once `getOrderStatus` endpoint confirmed |
+| ~~`postCnfOrderDetail` on mock~~ | Switched to real; `Brand_Name` fallback mapping added |
+| ~~401 session clearing~~ | Done — `axiosInstance` response interceptor calls `clearSession()` + `resetToLogin()` |
 | `postUpdateCustomer` password | Overwrites stored password — backend fix pending |
 | `useSession` adoption | AddressScreen, OrderHistoryScreen, OrderDetailScreen still read AsyncStorage directly |
 | OrganisationID cold-start | `getOrgIdForInventory()` returns empty if user reaches checkout without browsing products |
+| OTP resend | No resend button on OTPVerificationScreen — user has no recovery if OTP expires |
+| Cart badge on logout | Badge count not reset to 0 on logout — shows stale count until next focus |
 | API response types | `axiosInstance` responses untyped (`any`) — incremental hardening deferred |
 | Navigation prop typing | Most screens use `any`-typed nav props — should use `StackNavigationProp` generics |
 

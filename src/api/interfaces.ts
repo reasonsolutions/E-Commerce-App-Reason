@@ -27,14 +27,10 @@ export interface CartQuantityRequest {
 
 export interface createCustomerInterface {
     "CustomerName": string,
-    "Address": string,
-    "StreetName": string,
-    "CityName": string,
-    "ZipCode": number,
-    "CountryCode": number,
-    "MobileNumber": number,
     "EmailID": string,
-    "LoginPassword": string
+    "MobileNumber": number,
+    "CountryCode": number,
+    "Password": string,
 }
 
 export interface postLoginInterface {
@@ -417,6 +413,7 @@ export interface WishlistItemInterface {
   WishlistCode:         number;
   CustomerProfileCode:  number;
   InventoryID:          number;
+  ItemID:               number;
   BrandName:            string;
   Name:                 string;
   AddedOn:              string;

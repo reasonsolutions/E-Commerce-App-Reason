@@ -85,11 +85,7 @@ const RegisterScreen: React.FC = () => {
         EmailID:       email.trim(),
         MobileNumber:  Number(mobile.trim()),
         CountryCode:   230,
-        LoginPassword: password,
-        Address:       '',
-        StreetName:    '',
-        CityName:      '',
-        ZipCode:       0,
+        Password:      password,
       });
 
       if (res.statusCode !== 1) {

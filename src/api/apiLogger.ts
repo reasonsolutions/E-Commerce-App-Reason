@@ -78,10 +78,15 @@ export function logRequest(config: TimedAxiosRequestConfig): void {
 
   _pending.set(id, { method, url: shortUrl(url), payload: payloadStr });
 
+  const headers = config.headers
+    ? maskSensitive(Object.fromEntries(Object.entries(config.headers)))
+    : undefined;
+
   console.log(
     `\n─────────────────────────────────────────\n` +
       `🚀  ${method} ${shortUrl(url)}\n` +
       (payloadStr ? `📤  Payload  : ${payloadStr}\n` : '') +
+      (headers ? `🔑  Headers  : ${truncate(headers)}\n` : '') +
       `─────────────────────────────────────────`,
   );
 }

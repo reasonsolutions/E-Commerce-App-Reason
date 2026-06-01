@@ -42,6 +42,10 @@ import { useCart } from '../context/CartContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useProfileCode } from '../hooks/useProfileCode';
 import { useAppToast } from '../hooks/useAppToast';
+import { useAuthGuard } from '../hooks/useAuthGuard';
+import { LoginPromptSheet } from '../components/ui/LoginPromptSheet';
+import { addToGuestCart } from '../api/cart';
+import { getOrgIdForInventory } from '../api/product';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_H = Math.round(SCREEN_H * 0.58);
@@ -69,6 +73,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
   const [variantSheetOpen, setVariantSheetOpen] = useState<boolean>(false);
+  const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
 
   const plateAnim      = useRef(new Animated.Value(0)).current;
   const heroImgOpacity = useRef(new Animated.Value(0)).current;
@@ -127,28 +132,49 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   }, [heroImgOpacity]);
 
   const handleAddToCart = useCallback(async () => {
-    if (!profileCode) return;
     if (isOutOfStock && !allowBackOrder) {
       haptic.warning();
       toast.warning({ title: 'Out of stock', description: 'This variant is currently unavailable.' });
       return;
     }
     const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
-    const requestbody: PostCartSaveInterface = {
-      CustomerProfileCode: profileCode,
-      InventoryId: selectedVariant ? parseInt(selectedVariant) : parseInt(firstVariantId ?? '0'),
-      Quantity: quantity,
-      IsPurchased: false,
-    };
+    const inventoryId = selectedVariant ? parseInt(selectedVariant) : parseInt(firstVariantId ?? '0');
+
+    setAddingToCart(true);
     try {
-      setAddingToCart(true);
-      const res = await postSaveCartItems(requestbody);
-      if (res?.statusCode !== 1) {
-        haptic.warning();
-        toast.error({ title: "Couldn't add to bag", description: res?.userMessage ?? 'Something went wrong.' });
-        return;
+      if (profileCode) {
+        // Logged-in: save to server cart
+        const requestbody: PostCartSaveInterface = {
+          CustomerProfileCode: profileCode,
+          InventoryId: inventoryId,
+          Quantity: quantity,
+          IsPurchased: false,
+        };
+        const res = await postSaveCartItems(requestbody);
+        if (res?.statusCode !== 1) {
+          haptic.warning();
+          toast.error({ title: "Couldn't add to bag", description: res?.userMessage ?? 'Something went wrong.' });
+          return;
+        }
+        setCartCount((prev: number) => prev + quantity);
+      } else {
+        // Guest: save to local cart
+        const product = data?.product;
+        const variantObj = product?.Variants?.find((v: any) => String(v.InventoryId) === selectedVariant) ?? product?.Variants?.[0];
+        await addToGuestCart({
+          inventoryId,
+          quantity,
+          price:          variantObj?.PriceDetails?.Price ?? 0,
+          comparePrice:   variantObj?.PriceDetails?.ComparePrice ?? 0,
+          name:           product?.Name ?? '',
+          brandName:      product?.BrandName ?? '',
+          variant:        variantObj?.Variant ?? '',
+          image:          product?.Images?.split(';')[0] ?? '',
+          organisationId: getOrgIdForInventory(inventoryId) ?? '',
+        });
+        setCartCount((prev: number) => prev + quantity);
       }
-      setCartCount((prev: number) => prev + quantity);
+
       haptic.success();
       Animated.sequence([
         Animated.spring(badgeScale, { toValue: Motion.badgePopScale, ...Motion.spring.snap }),
@@ -163,32 +189,34 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     }
   }, [profileCode, selectedVariant, data, quantity, haptic, badgeScale, setCartCount, navigation]);
 
-  const handleWishlistToggle = useCallback(async () => {
-    if (!profileCode) return;
-    haptic.light();
-    const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
-    const inventoryId = selectedVariant ? parseInt(selectedVariant) : parseInt(firstVariantId ?? '0');
-    if (wishlisted && wishlistItemCode !== null) {
-      await removeFromWishlist(profileCode, wishlistItemCode).catch(() => {});
-      setWishlisted(false); setWishlistItemCode(null);
-    } else {
-      const res = await addToWishlist(profileCode, inventoryId).catch(() => null);
-      if (res?.statusCode !== 1) {
-        haptic.warning();
-        toast.warning({ title: 'Wishlist', description: res?.userMessage ?? 'Something went wrong.' });
-        return;
+  const handleWishlistToggle = useCallback(() => {
+    guard(async () => {
+      if (!profileCode) return;
+      haptic.light();
+      const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
+      const inventoryId = selectedVariant ? parseInt(selectedVariant) : parseInt(firstVariantId ?? '0');
+      if (wishlisted && wishlistItemCode !== null) {
+        await removeFromWishlist(profileCode, wishlistItemCode).catch(() => {});
+        setWishlisted(false); setWishlistItemCode(null);
+      } else {
+        const res = await addToWishlist(profileCode, inventoryId).catch(() => null);
+        if (res?.statusCode !== 1) {
+          haptic.warning();
+          toast.warning({ title: 'Wishlist', description: res?.userMessage ?? 'Something went wrong.' });
+          return;
+        }
+        if (res?.statusCode === 1) {
+          getWishlist(profileCode).then(wRes => {
+            if (wRes.statusCode === 1) {
+              const match = (wRes.result || []).find((w: any) => w.InventoryID === inventoryId);
+              if (match) setWishlistItemCode(match.WishlistCode);
+            }
+          }).catch(() => {});
+          setWishlisted(true);
+        }
       }
-      if (res?.statusCode === 1) {
-        getWishlist(profileCode).then(wRes => {
-          if (wRes.statusCode === 1) {
-            const match = (wRes.result || []).find((w: any) => w.InventoryID === inventoryId);
-            if (match) setWishlistItemCode(match.WishlistCode);
-          }
-        }).catch(() => {});
-        setWishlisted(true);
-      }
-    }
-  }, [profileCode, wishlisted, wishlistItemCode, haptic, route?.params?.product]);
+    });
+  }, [guard, profileCode, wishlisted, wishlistItemCode, haptic, data, selectedVariant]);
 
   const handleVariantSelect = useCallback((variantId: string) => {
     haptic.light();
@@ -445,6 +473,14 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
             )}
           </VStack>
         </>
+      )}
+
+      {showLoginPrompt && (
+        <LoginPromptSheet
+          onClose={dismissLoginPrompt}
+          onSignIn={() => { dismissLoginPrompt(); navigation.navigate('Login'); }}
+          onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
+        />
       )}
     </Box>
   );

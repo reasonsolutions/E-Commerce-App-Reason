@@ -12,7 +12,12 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { loginCustomer } from '../api/auth';
-import { getSavedCartItems } from '../api/cart';
+import {
+  getSavedCartItems,
+  postSaveCartItems,
+  getGuestCart,
+  clearGuestCart,
+} from '../api/cart';
 import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
@@ -57,13 +62,13 @@ const HeroArt: React.FC<{ heroHeight: number }> = ({ heroHeight }) => (
         not geometry, just a presence of light. */}
     <View
       style={{
-        position:        'absolute',
-        width:           heroHeight * 1.1,
-        height:          heroHeight * 1.1,
-        borderRadius:    heroHeight * 0.55,
+        position: 'absolute',
+        width: heroHeight * 1.1,
+        height: heroHeight * 1.1,
+        borderRadius: heroHeight * 0.55,
         backgroundColor: 'rgba(255,255,255,0.028)',
-        top:             -(heroHeight * 0.22),
-        right:           -(heroHeight * 0.28),
+        top: -(heroHeight * 0.22),
+        right: -(heroHeight * 0.28),
       }}
     />
 
@@ -75,17 +80,13 @@ const HeroArt: React.FC<{ heroHeight: number }> = ({ heroHeight }) => (
         'rgba(30,28,26,0.0)',
       ]}
       start={{ x: 0.85, y: 0.0 }}
-      end={{ x: 0.1,  y: 0.85 }}
+      end={{ x: 0.1, y: 0.85 }}
       style={StyleSheet.absoluteFillObject}
     />
 
     {/* Cool shadow — opposing depth, bottom-left */}
     <LinearGradient
-      colors={[
-        'rgba(8,8,12,0.0)',
-        'rgba(8,8,12,0.28)',
-        'rgba(8,8,12,0.50)',
-      ]}
+      colors={['rgba(8,8,12,0.0)', 'rgba(8,8,12,0.28)', 'rgba(8,8,12,0.50)']}
       start={{ x: 0.6, y: 0.2 }}
       end={{ x: 0.0, y: 1.0 }}
       style={StyleSheet.absoluteFillObject}
@@ -93,35 +94,23 @@ const HeroArt: React.FC<{ heroHeight: number }> = ({ heroHeight }) => (
 
     {/* Top seal — status bar stays deep ink */}
     <LinearGradient
-      colors={[
-        'rgba(0,0,0,0.50)',
-        'rgba(0,0,0,0.15)',
-        'rgba(0,0,0,0.0)',
-      ]}
+      colors={['rgba(0,0,0,0.50)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.0)']}
       start={{ x: 0.5, y: 0.0 }}
-      end={{ x: 0.5, y: 0.30 }}
+      end={{ x: 0.5, y: 0.3 }}
       style={StyleSheet.absoluteFillObject}
     />
 
     {/* Bottom veil — hero floor into form-panel transition */}
     <LinearGradient
-      colors={[
-        'rgba(0,0,0,0.0)',
-        'rgba(0,0,0,0.22)',
-        'rgba(14,12,10,0.48)',
-      ]}
-      start={{ x: 0.5, y: 0.50 }}
+      colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.22)', 'rgba(14,12,10,0.48)']}
+      start={{ x: 0.5, y: 0.5 }}
       end={{ x: 0.5, y: 1.0 }}
       style={StyleSheet.absoluteFillObject}
     />
 
     {/* Left-edge frame — wordmark contrast anchor */}
     <LinearGradient
-      colors={[
-        'rgba(0,0,0,0.28)',
-        'rgba(0,0,0,0.06)',
-        'rgba(0,0,0,0.0)',
-      ]}
+      colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.06)', 'rgba(0,0,0,0.0)']}
       start={{ x: 0.0, y: 0.5 }}
       end={{ x: 0.42, y: 0.5 }}
       style={[
@@ -135,28 +124,29 @@ const HeroArt: React.FC<{ heroHeight: number }> = ({ heroHeight }) => (
 // ── Entrance timing (staggered Settle curve, per spec A8) ───────────────────
 const ENTRANCE_DELAYS = {
   wordmark: 0,
-  tagline:  140,
-  fields:   280,
-  cta:      400,
+  tagline: 140,
+  fields: 280,
+  cta: 400,
 } as const;
 
 const Login: React.FC = () => {
   const { height: screenHeight } = useWindowDimensions();
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Home'>>();
+  const navigation =
+    useNavigation<StackNavigationProp<RootStackParamList, 'Home'>>();
   const haptic = useHaptic();
   const { setCartCount } = useCart();
 
   // ── Form state ──────────────────────────────────────────────────────────────
-  const [username, setUsername]     = useState('');
-  const [password, setPassword]     = useState('');
-  const [loading, setLoading]       = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
 
   // ── Entrance animation values ───────────────────────────────────────────────
   const wordmarkAnim = useRef(new Animated.Value(0)).current;
-  const taglineAnim  = useRef(new Animated.Value(0)).current;
-  const fieldsAnim   = useRef(new Animated.Value(0)).current;
-  const ctaAnim      = useRef(new Animated.Value(0)).current;
+  const taglineAnim = useRef(new Animated.Value(0)).current;
+  const fieldsAnim = useRef(new Animated.Value(0)).current;
+  const ctaAnim = useRef(new Animated.Value(0)).current;
 
   // ── Loading dots ─────────────────────────────────────────────────────────────
   const dot1 = useRef(new Animated.Value(0.3)).current;
@@ -170,18 +160,18 @@ const Login: React.FC = () => {
   useEffect(() => {
     const makeEntrance = (val: Animated.Value, delay: number) =>
       Animated.spring(val, {
-        toValue:  1,
+        toValue: 1,
         delay,
         ...Motion.spring.settle,
       });
 
     Animated.parallel([
       makeEntrance(wordmarkAnim, ENTRANCE_DELAYS.wordmark),
-      makeEntrance(taglineAnim,  ENTRANCE_DELAYS.tagline),
-      makeEntrance(fieldsAnim,   ENTRANCE_DELAYS.fields),
-      makeEntrance(ctaAnim,      ENTRANCE_DELAYS.cta),
+      makeEntrance(taglineAnim, ENTRANCE_DELAYS.tagline),
+      makeEntrance(fieldsAnim, ENTRANCE_DELAYS.fields),
+      makeEntrance(ctaAnim, ENTRANCE_DELAYS.cta),
     ]).start();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Loading dots loop ───────────────────────────────────────────────────────
@@ -192,28 +182,69 @@ const Login: React.FC = () => {
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(val, { toValue: 1,   duration: 300, easing: Motion.easing.out, useNativeDriver: true }),
-          Animated.timing(val, { toValue: 0.3, duration: 300, easing: Motion.easing.out, useNativeDriver: true }),
+          Animated.timing(val, {
+            toValue: 1,
+            duration: 300,
+            easing: Motion.easing.out,
+            useNativeDriver: true,
+          }),
+          Animated.timing(val, {
+            toValue: 0.3,
+            duration: 300,
+            easing: Motion.easing.out,
+            useNativeDriver: true,
+          }),
         ]),
       );
 
     const a1 = pulse(dot1, 0);
     const a2 = pulse(dot2, 150);
     const a3 = pulse(dot3, 300);
-    a1.start(); a2.start(); a3.start();
+    a1.start();
+    a2.start();
+    a3.start();
 
-    return () => { a1.stop(); a2.stop(); a3.stop(); };
+    return () => {
+      a1.stop();
+      a2.stop();
+      a3.stop();
+    };
   }, [loading, dot1, dot2, dot3]);
 
   // ── Shake: 220ms horizontal oscillation ────────────────────────────────────
   const shake = useCallback(() => {
     haptic.warning();
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue:  6, duration: 50, easing: Motion.easing.out, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -6, duration: 55, easing: Motion.easing.out, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue:  4, duration: 50, easing: Motion.easing.out, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -4, duration: 50, easing: Motion.easing.out, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue:  0, duration: 55, easing: Motion.easing.out, useNativeDriver: true }),
+      Animated.timing(shakeAnim, {
+        toValue: 6,
+        duration: 50,
+        easing: Motion.easing.out,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -6,
+        duration: 55,
+        easing: Motion.easing.out,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 4,
+        duration: 50,
+        easing: Motion.easing.out,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -4,
+        duration: 50,
+        easing: Motion.easing.out,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 55,
+        easing: Motion.easing.out,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [haptic, shakeAnim]);
 
@@ -242,21 +273,34 @@ const Login: React.FC = () => {
         AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(userData)),
       ]);
       setTokenCache(AccessToken);
-      // Seed cart badge immediately so the count is correct from first screen
+      // Merge guest cart then seed badge
       if (userData.CustomerProfileCode) {
-        getSavedCartItems(userData.CustomerProfileCode)
-          .then((res: any) => {
-            if (res?.statusCode === 1) {
-              setCartCount((res.result ?? []).length);
-            }
-          })
-          .catch(() => {});
+        const guestItems = await getGuestCart();
+        if (guestItems.length > 0) {
+          await Promise.all(
+            guestItems.map((item: any) =>
+              postSaveCartItems({
+                CustomerProfileCode: userData.CustomerProfileCode,
+                InventoryId: item.inventoryId,
+                Quantity: item.quantity,
+                IsPurchased: false,
+              }).catch(() => {}),
+            ),
+          );
+          await clearGuestCart();
+        }
+        const cartRes = await getSavedCartItems(userData.CustomerProfileCode).catch(() => null);
+        if (cartRes?.statusCode === 1) {
+          setCartCount((cartRes.result ?? []).length);
+        }
       }
       setLoading(false);
       navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     } catch (error: any) {
       setLoading(false);
-      setFieldError(error?.message ?? 'Something went wrong. Please try again.');
+      setFieldError(
+        error?.message ?? 'Something went wrong. Please try again.',
+      );
       shake();
     }
   }, [loading, username, password, navigation, shake]);
@@ -267,25 +311,38 @@ const Login: React.FC = () => {
   // Entrance → translateY + opacity for each block
   const entranceStyle = (anim: Animated.Value, initialY = 14) => ({
     opacity: anim,
-    transform: [{
-      translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [initialY, 0] }),
-    }],
+    transform: [
+      {
+        translateY: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [initialY, 0],
+        }),
+      },
+    ],
   });
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
       {/* ── Dark atelier hero — absolutely positioned, excluded from keyboard resize ── */}
       <View style={[styles.hero, { height: heroHeight }]} pointerEvents="none">
         <HeroArt heroHeight={heroHeight} />
 
-        <Animated.View style={[styles.heroContent, entranceStyle(wordmarkAnim, 20)]}>
+        <Animated.View
+          style={[styles.heroContent, entranceStyle(wordmarkAnim, 20)]}
+        >
           <Text style={styles.wordmark}>shop.</Text>
         </Animated.View>
 
         <Animated.View style={[styles.taglineWrap, entranceStyle(taglineAnim)]}>
-          <Text style={styles.tagline}>Made for the things{'\n'}you'll keep.</Text>
+          <Text style={styles.tagline}>
+            Made for the things{'\n'}you'll keep.
+          </Text>
         </Animated.View>
       </View>
 
@@ -302,7 +359,9 @@ const Login: React.FC = () => {
           bounces={false}
         >
           {/* Fields */}
-          <Animated.View style={[styles.fieldsBlock, entranceStyle(fieldsAnim)]}>
+          <Animated.View
+            style={[styles.fieldsBlock, entranceStyle(fieldsAnim)]}
+          >
             <FloatingLabelInput
               label="Username"
               value={username}
@@ -374,55 +433,54 @@ const Login: React.FC = () => {
 
 const styles = StyleSheet.create({
   root: {
-    flex:            1,
+    flex: 1,
     backgroundColor: Colors.surfaceDeep,
   },
 
   // ── Hero ────────────────────────────────────────────────────────────────────
   hero: {
-    position:          'absolute',
-    top:               0,
-    left:              0,
-    right:             0,
-    backgroundColor:   Colors.ink1,
-    justifyContent:    'flex-end',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.ink1,
+    justifyContent: 'flex-end',
     paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[5],
+    paddingBottom: Space[5],
   },
   heroContent: {
     marginBottom: Space[4],
   },
   wordmark: {
-    fontFamily:    FontFamily.serifItalic,
-    fontSize:      52,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
+    fontFamily: FontFamily.serifItalic,
+    fontSize: 52,
+    fontWeight: '400',
+    color: '#FFFFFF',
     letterSpacing: -1.2,
-    lineHeight:    52 * 1.0,
+    lineHeight: 52 * 1.0,
   },
-  taglineWrap: {
-  },
+  taglineWrap: {},
   tagline: {
-    fontFamily:    FontFamily.serifItalic,
-    fontSize:      20,
-    fontWeight:    '400',
-    color:         'rgba(255,255,255,0.58)',
+    fontFamily: FontFamily.serifItalic,
+    fontSize: 20,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.58)',
     letterSpacing: -0.3,
-    lineHeight:    20 * 1.45,
+    lineHeight: 20 * 1.45,
   },
 
   // ── Form panel ───────────────────────────────────────────────────────────────
   formPanel: {
-    flex:            1,
+    flex: 1,
     backgroundColor: Colors.surfaceDeep,
   },
   formInner: {
     paddingHorizontal: Space.screenH,
-    paddingTop:        Space[8],
-    paddingBottom:     Space[6],
+    paddingTop: Space[8],
+    paddingBottom: Space[6],
   },
   fieldsBlock: {
-    gap: Space[8],  // 32px — clears the absolute error caption below first field
+    gap: Space[8], // 32px — clears the absolute error caption below first field
   },
 
   // ── CTA ─────────────────────────────────────────────────────────────────────
@@ -430,12 +488,12 @@ const styles = StyleSheet.create({
     marginTop: Space[8],
   },
   ctaButton: {
-    width:           '100%',
-    height:          56,
+    width: '100%',
+    height: 56,
     backgroundColor: Colors.ink1,
-    borderRadius:    Radius.pill,
-    alignItems:      'center',
-    justifyContent:  'center',
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaButtonLoading: {
     // Slightly reduced opacity while busy — button stays full-width per spec
@@ -443,22 +501,22 @@ const styles = StyleSheet.create({
   },
   ctaLabel: {
     ...Type.bodyStrong,
-    color:         '#FFFFFF',
+    color: '#FFFFFF',
     letterSpacing: 0.4,
   },
   dotsRow: {
     flexDirection: 'row',
-    gap:           8,
-    alignItems:    'center',
+    gap: 8,
+    alignItems: 'center',
   },
   dot: {
-    width:         6,
-    height:        6,
-    borderRadius:  3,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#FFFFFF',
   },
   registerLink: {
-    marginTop:  Space[4],
+    marginTop: Space[4],
     alignItems: 'center',
   },
   registerText: {
@@ -467,7 +525,7 @@ const styles = StyleSheet.create({
   },
   registerTextBold: {
     ...Type.caption,
-    color:      Colors.ink1,
+    color: Colors.ink1,
     fontWeight: '600',
   },
 });

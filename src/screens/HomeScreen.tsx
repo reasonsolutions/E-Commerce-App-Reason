@@ -23,6 +23,7 @@ import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interf
 import { getProductsByCategory, getCategories, getBrands } from '../api/product';
 import { fallbackImageUrl } from '../utils/resolveImageUrl';
 import { useProductImage } from '../hooks/useProductImage';
+import { clearSession } from '../utils/auth';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
 import { useFocusEffect } from '@react-navigation/native';
@@ -234,8 +235,8 @@ function useCustomBackHandler(navigation: NavigationProp) {
                 {
                   text: 'Yes',
                   onPress: async () => {
-                    await AsyncStorage.clear();
-                    navigation.navigate('Login');
+                    await clearSession();
+                    navigation.navigate('Home');
                   },
                 },
               ],
@@ -359,9 +360,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
-      runCategories(() => getCategories().then((d) => d.result), cancelled);
+      const categoriesPromise = getCategories().then((d) => d.result as CategoryInterface[]);
+      runCategories(() => categoriesPromise, cancelled);
       runProducts(async () => {
-        const catRes = await getCategories().then((d) => d.result as CategoryInterface[]);
+        const catRes = await categoriesPromise;
         if (!catRes?.length) return [];
         const ids = catRes.map((c) => c.CategoryId);
         const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
@@ -655,7 +657,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         {/* ── Flash Deals shelf ──────────────────────────────────────────── */}
         <Animated.View style={[styles.shelfSection, shelfAnim]}>
           <View style={styles.shelfHead}>
-            <Text style={styles.shelfTitle}>Flash Deals</Text>
+            <Text style={styles.shelfTitle}>{flashDealProducts?.length ? 'Flash Deals' : 'New Arrivals'}</Text>
             <TouchableOpacity
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               onPress={() => navigation.navigate('Result', { categoryName: 'Flash Deals' })}
@@ -731,6 +733,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <BottomNavBar
         activeTab="Home"
         onNavigate={(route) => navigation.navigate(route)}
+        onNavigateToAuth={(screen) => navigation.navigate(screen)}
         cartCount={cartItemsCount > 0 ? cartItemsCount : undefined}
       />
     </SafeAreaView>

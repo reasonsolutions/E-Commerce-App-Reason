@@ -8,3 +8,12 @@ export const postDeleteCartItem     = cart.postDeleteCartItem;
 export const quantityIncrement      = cart.quantityIncrement;
 export const quantityDecrement      = cart.quantityDecrement;
 export const updateCartItemQuantity = cart.updateCartItemQuantity;
+
+export {
+  getGuestCart,
+  addToGuestCart,
+  updateGuestCartItem,
+  removeFromGuestCart,
+  clearGuestCart,
+} from './guestCartApi';
+export type { GuestCartItem } from './guestCartApi';

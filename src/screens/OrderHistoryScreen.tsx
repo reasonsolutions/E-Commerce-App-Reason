@@ -16,7 +16,7 @@ import { postOrderHistory } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useFocusEffect } from '@react-navigation/native';
-import { EmptyState, StatusBadge, BottomNavBar, DarkHeader, FadeImage, Skeleton } from '../components/ui';
+import { StatusBadge, BottomNavBar, DarkHeader, FadeImage, Skeleton } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -163,20 +163,24 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   );
 
   const renderEmpty = () => (
-    <EmptyState
-      icon={<Icon name="receipt-outline" size={26} color={Colors.ink4} />}
-      title="No orders yet."
-      body="Once you place an order, it will live here."
-      action={
+    <View style={styles.emptyWrap}>
+      <View style={styles.emptyContent}>
+        <View style={styles.emptyIllustration}>
+          <Icon name="receipt-outline" size={52} color={Colors.ink3} />
+        </View>
+        <Text style={styles.emptyTitle}>No orders yet.</Text>
+        <Text style={styles.emptyBody}>Once you place an order, it will live here.</Text>
+      </View>
+      <View style={styles.emptyFooter}>
         <TouchableOpacity
+          style={styles.emptyCTA}
+          activeOpacity={0.88}
           onPress={() => navigation.navigate('Home')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.emptyLink}>Browse the collection</Text>
-          <View style={styles.emptyLinkUnderline} />
+          <Text style={styles.emptyCTAText}>Browse the collection</Text>
         </TouchableOpacity>
-      }
-    />
+      </View>
+    </View>
   );
 
   const renderBody = () => {
@@ -252,6 +256,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
       <BottomNavBar
         activeTab="Orders"
         onNavigate={(route) => navigation.navigate(route)}
+        onNavigateToAuth={(screen) => navigation.navigate(screen)}
       />
     </View>
   );
@@ -376,17 +381,51 @@ const styles = StyleSheet.create({
     marginTop:      Space[2],
   },
 
-  // ── Empty state CTA — text link ───────────────────────────────────────────────
-  emptyLink: {
-    ...Type.caption,
-    color:     Colors.ink3,
-    textAlign: 'center',
+  // ── Empty state ───────────────────────────────────────────────────────────────
+  emptyWrap: {
+    flex: 1,
   },
-  emptyLinkUnderline: {
-    height:          1,
-    backgroundColor: Colors.ink4,
-    marginTop:       3,
-    width:           '100%',
+  emptyContent: {
+    flex:              1,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingHorizontal: Space[6],
+    gap:               Space[4],
+  },
+  emptyIllustration: {
+    width:           120,
+    height:          120,
+    borderRadius:    60,
+    backgroundColor: Colors.surfaceSoft,
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginBottom:    Space[2],
+  },
+  emptyTitle: {
+    ...Type.title,
+    textAlign: 'center',
+    color:     Colors.ink1,
+  },
+  emptyBody: {
+    ...Type.caption,
+    textAlign: 'center',
+    color:     Colors.ink3,
+    maxWidth:  260,
+  },
+  emptyFooter: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
+    paddingTop:        Space[4],
+  },
+  emptyCTA: {
+    backgroundColor: Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingVertical: Space[4],
+    alignItems:      'center',
+  },
+  emptyCTAText: {
+    ...Type.bodyStrong,
+    color: '#FFFFFF',
   },
 });
 

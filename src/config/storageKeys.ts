@@ -14,6 +14,8 @@ export const STORAGE_KEYS = {
   authToken: 'authToken',
   /** Recent search terms — JSON array of strings, max 8 entries. */
   recentSearches: 'recentSearches',
+  /** Guest cart — JSON array of GuestCartItem, cleared after login merge. */
+  guestCart: 'guestCart',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

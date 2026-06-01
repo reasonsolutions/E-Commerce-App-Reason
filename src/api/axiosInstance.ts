@@ -4,6 +4,8 @@ import * as Keychain from 'react-native-keychain';
 import { classifyError, apiLog } from './apiError';
 import { logRequest, logResponse, logError, TimedAxiosRequestConfig } from './apiLogger';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { clearSession } from '../utils/auth';
+import { resetToLogin } from '../utils/navigationService';
 
 // In-memory token cache — avoids a Keychain read (~100-300ms) on every request.
 // Primed by setTokenCache() after login, cleared by clearTokenCache() on logout.
@@ -73,10 +75,12 @@ axiosInstance.interceptors.response.use(
     //
     return response;
   },
-  err => {
+  async err => {
     logError(err);
-    // All HTTP / network / timeout errors flow here.
-    // Classify into a structured ApiError and log in dev only.
+    if (err?.response?.status === 401) {
+      await clearSession();
+      resetToLogin();
+    }
     const classified = classifyError(err);
     apiLog(err?.config?.url ?? 'unknown endpoint', classified);
     return Promise.reject(classified);

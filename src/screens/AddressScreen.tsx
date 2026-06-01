@@ -319,15 +319,12 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     setSubmitting(true);
     try {
       const response = await placeOrder(payload);
-      console.log('[placeOrder] response:', JSON.stringify(response, null, 2));
-
       if (response?.statusCode !== 1) {
         setOrderError(response?.userMessage || 'Could not place your order. Please try again.');
         return;
       }
       navigation.navigate('OrderSuccess', { orderNumber: response.result?.OrderNumber ?? '' });
     } catch (err: any) {
-      console.log('[placeOrder] error:', err);
       setOrderError('Could not place your order. Please try again.');
     } finally {
       setSubmitting(false);

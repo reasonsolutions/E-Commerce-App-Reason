@@ -21,14 +21,21 @@ export const addToWishlist = async (customerprofilecode: number, inventory_id: n
     WishlistCode:        _nextWishlistCode++,
     CustomerProfileCode: customerprofilecode,
     InventoryID:         inventory_id,
+    ItemID:              inventory_id,
     Name:                product.Name,
     BrandName:           product.BrandName,
     AddedOn:             new Date().toISOString(),
     StockCount:          variant?.Stock ?? 0,
-    Price:               variant?.PriceDetails.Price ?? product.MinPrice,
-    ComparePrice:        variant?.PriceDetails.ComparePrice ?? product.MaxComparePrice,
     SKU:                 variant?.SKU ?? '',
+    ORGANISATIONID:      '',
+    OrganisationName:    '',
     IsInStock:           (variant?.Stock ?? 0) > 0 ? 1 : 0,
+    Images:              [],
+    PriceDetails:        {
+      Price:        variant?.PriceDetails.Price ?? product.MinPrice,
+      ComparePrice: variant?.PriceDetails.ComparePrice ?? product.MaxComparePrice,
+      Taxes:        [],
+    },
   };
   _wishlist = [..._wishlist, newItem];
   return delay(ok(true, 'Added to wishlist.'));

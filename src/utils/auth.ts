@@ -4,8 +4,10 @@ import { STORAGE_KEYS } from '../config/storageKeys';
 import { clearTokenCache } from '../api/axiosInstance';
 
 function base64Decode(str: string): string {
+  // JWT uses URL-safe base64 (- and _ instead of + and /), no padding
+  const normalized = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '==='.slice((normalized.length + 3) % 4);
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  const padded = str + '==='.slice((str.length + 3) % 4);
   let out = '';
   for (let i = 0; i < padded.length; i += 4) {
     const a = chars.indexOf(padded[i]);
@@ -27,21 +29,26 @@ function isTokenExpired(token: string): boolean {
     const decoded = JSON.parse(base64Decode(payload));
     return decoded.exp * 1000 < Date.now();
   } catch {
-    return true;
+    // Non-standard token format — presence in Keychain is sufficient proof of login
+    return false;
   }
 }
 
 export async function getInitialRoute(): Promise<'Home' | 'Login'> {
+  return 'Home';
+}
+
+export async function isLoggedIn(): Promise<boolean> {
   try {
     const credentials = await Keychain.getGenericPassword({ service: STORAGE_KEYS.authToken });
-    if (!credentials) return 'Login';
+    if (!credentials) return false;
     if (isTokenExpired(credentials.password)) {
       await clearSession();
-      return 'Login';
+      return false;
     }
-    return 'Home';
+    return true;
   } catch {
-    return 'Login';
+    return false;
   }
 }
 

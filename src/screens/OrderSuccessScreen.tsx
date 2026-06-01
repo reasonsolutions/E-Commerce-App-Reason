@@ -8,12 +8,15 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle } from 'react-native-svg';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type NavigationProp = {
   navigate: {
@@ -47,15 +50,16 @@ const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, rou
   const primaryTactile = useTactile();
 
   // ── Animation values ───────────────────────────────────────────────────────
-  // Mark: ring scales up, then mark character fades in
-  const ringScale   = useRef(new Animated.Value(0.52)).current;
-  const ringOpacity = useRef(new Animated.Value(0)).current;
-  const markOpacity = useRef(new Animated.Value(0)).current;
+  const RING_R        = 34;
+  const CIRCUMFERENCE = 2 * Math.PI * RING_R;
+
+  // SVG stroke draw: dashoffset goes from full circumference → 0
+  const strokeOffset = useRef(new Animated.Value(CIRCUMFERENCE)).current;
+  const markOpacity  = useRef(new Animated.Value(0)).current;
 
   // Content blocks: each fades + translates up independently
   const headlineAnim = useRef(new Animated.Value(0)).current;
   const orderAnim    = useRef(new Animated.Value(0)).current;
-  const bodyAnim     = useRef(new Animated.Value(0)).current;
   const ctasAnim     = useRef(new Animated.Value(0)).current;
 
   const makeSettle = (val: Animated.Value, delay: number) =>
@@ -70,24 +74,15 @@ const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, rou
     ]);
 
   useEffect(() => {
-    // Mark ring expands on Carry curve
-    Animated.parallel([
-      Animated.timing(ringOpacity, {
-        toValue:  1,
-        duration: 160,
-        delay:    DELAY.mark,
-        easing:   Motion.easing.out,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ringScale, {
-        toValue:  1,
-        duration: Motion.duration.carry,
-        delay:    DELAY.mark,
-        easing:   Motion.easing.inOut,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      // Mark character appears after ring settles, haptic fires here
+    // SVG circle stroke draws itself around the ring
+    Animated.timing(strokeOffset, {
+      toValue:  0,
+      duration: Motion.duration.carry,
+      delay:    DELAY.mark,
+      easing:   Motion.easing.inOut,
+      useNativeDriver: true,
+    }).start(() => {
+      // Tick fades in after circle completes, haptic fires here
       Animated.timing(markOpacity, {
         toValue:  1,
         duration: Motion.duration.tap,
@@ -101,7 +96,6 @@ const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, rou
     Animated.parallel([
       makeSettle(headlineAnim, DELAY.headline),
       makeSettle(orderAnim,    DELAY.order),
-      makeSettle(bodyAnim,     DELAY.body),
       makeSettle(ctasAnim,     DELAY.ctas),
     ]).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,19 +124,29 @@ const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, rou
 
         {/* ── Success mark ────────────────────────────────────────────── */}
         <View style={styles.markWrap}>
-          <Animated.View
-            style={[
-              styles.ring,
-              {
-                opacity:   ringOpacity,
-                transform: [{ scale: ringScale }],
-              },
-            ]}
-          >
+          <View style={styles.ringWrap}>
+            {/* Tinted fill background */}
+            <View style={styles.ringFill} />
+            {/* Animated SVG stroke draw */}
+            <Svg width={72} height={72} style={StyleSheet.absoluteFill}>
+              <AnimatedCircle
+                cx={36}
+                cy={36}
+                r={RING_R}
+                fill="none"
+                stroke={Colors.accent}
+                strokeWidth={1.5}
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={strokeOffset}
+                strokeLinecap="round"
+                transform="rotate(-90, 36, 36)"
+              />
+            </Svg>
+            {/* Tick fades in after ring completes */}
             <Animated.Text style={[styles.markChar, { opacity: markOpacity }]}>
               ✓
             </Animated.Text>
-          </Animated.View>
+          </View>
         </View>
 
         {/* ── Headline ─────────────────────────────────────────────────── */}
@@ -153,7 +157,7 @@ const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, rou
           </Text>
         </Animated.View>
 
-        {/* ── Order number row ─────────────────────────────────────────── */}
+        {/* ── Order number + delivery estimate ─────────────────────────── */}
         {orderNumber ? (
           <Animated.View style={[styles.orderBlock, blockStyle(orderAnim, 10)]}>
             <View style={styles.orderRule} />
@@ -164,14 +168,6 @@ const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, rou
             <View style={styles.orderRule} />
           </Animated.View>
         ) : null}
-
-        {/* ── Body copy ────────────────────────────────────────────────── */}
-        <Animated.View style={[styles.bodyBlock, blockStyle(bodyAnim, 8)]}>
-          <Text style={styles.bodyText}>
-            You can track the status of your order{'\n'}
-            in the orders section.
-          </Text>
-        </Animated.View>
 
         {/* ── CTAs ─────────────────────────────────────────────────────── */}
         <Animated.View style={[styles.ctasBlock, blockStyle(ctasAnim, 10)]}>
@@ -224,24 +220,23 @@ const styles = StyleSheet.create({
     marginBottom: Space[8] + Space[2],
     alignItems:   'center',
   },
-  // Thin ember ring — accentTint fill, 1.5px accent border
-  ring: {
-    width:           72,
-    height:          72,
+  ringWrap: {
+    width:          72,
+    height:         72,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  ringFill: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius:    Radius.pill,
     backgroundColor: Colors.accentTint,
-    borderWidth:     1.5,
-    borderColor:     Colors.accent,
-    alignItems:      'center',
-    justifyContent:  'center',
   },
   markChar: {
-    fontFamily:    FontFamily.serifItalic,
-    fontSize:      28,
-    color:         Colors.accent,
-    lineHeight:    32,
-    // Optical vertical centering for the serif checkmark glyph
-    marginTop:     2,
+    fontFamily: FontFamily.serifItalic,
+    fontSize:   28,
+    color:      Colors.accent,
+    lineHeight: 32,
+    marginTop:  2,
   },
 
   // ── Headline block ───────────────────────────────────────────────────────
@@ -291,16 +286,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
 
-  // ── Body copy ────────────────────────────────────────────────────────────
-  bodyBlock: {
-    marginBottom: Space[10],
-  },
-  bodyText: {
-    ...Type.caption,
-    textAlign:  'center',
-    lineHeight: 13 * 1.6,
-    color:      Colors.ink4,
-  },
+
 
   // ── CTAs ─────────────────────────────────────────────────────────────────
   ctasBlock: {

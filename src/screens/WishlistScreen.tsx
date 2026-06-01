@@ -14,9 +14,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useProfileCode } from '../hooks/useProfileCode';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
-import { selectProduct } from '../api/product';
 import type { WishlistItemInterface } from '../api/interfaces';
-import { EmptyState, BottomNavBar, Price, DarkHeader } from '../components/ui';
+import { BottomNavBar, Price, DarkHeader } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -131,28 +130,12 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
   const [items, setItems]                               = useState<WishlistItemInterface[]>([]);
-  const [itemIdMap, setItemIdMap]                       = useState<Record<number, number>>({});
   const hasFetched = useRef(false);
   const profileCode = useProfileCode();
 
   useEffect(() => {
     if (!fetched) return;
     if (fetched.length > 0) setItems(fetched);
-    // Resolve InventoryID → ItemId for navigation (backend doesn't return ItemId yet)
-    Promise.all(
-      fetched.map(item =>
-        selectProduct(String(item.InventoryID))
-          .then(res => {
-            const product = Array.isArray(res?.result) ? res.result[0] : null;
-            return product ? { inventoryId: item.InventoryID, itemId: Number(product.Item_Id) } : null;
-          })
-          .catch(() => null),
-      ),
-    ).then(results => {
-      const map: Record<number, number> = {};
-      results.forEach(r => { if (r) map[r.inventoryId] = r.itemId; });
-      setItemIdMap(map);
-    });
   }, [fetched]);
 
   const fetchWishlist = useCallback(
@@ -188,8 +171,8 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       item={item}
       onRemove={handleRemove}
       onPress={(inventoryId) => {
-        const itemId = itemIdMap[inventoryId];
-        if (itemId) navigation.navigate('Product', { product: String(itemId) });
+        const item = items.find(i => i.InventoryID === inventoryId);
+        if (item?.ItemID) navigation.navigate('Product', { product: String(item.ItemID) });
       }}
       delay={Math.min(index * 55, 320)}
       isLast={index === items.length - 1}
@@ -197,20 +180,24 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   );
 
   const renderEmpty = () => (
-    <EmptyState
-      icon={<Icon name="heart-outline" size={26} color={Colors.ink4} />}
-      title="Nothing saved yet."
-      body="Save items as you browse — they'll appear here."
-      action={
+    <View style={styles.emptyWrap}>
+      <View style={styles.emptyContent}>
+        <View style={styles.emptyIllustration}>
+          <Icon name="heart-outline" size={52} color={Colors.ink3} />
+        </View>
+        <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
+        <Text style={styles.emptyBody}>Save items as you browse — they'll appear here.</Text>
+      </View>
+      <View style={styles.emptyFooter}>
         <TouchableOpacity
+          style={styles.emptyCTA}
+          activeOpacity={0.88}
           onPress={() => navigation.navigate('Home')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.emptyLink}>Browse the collection</Text>
-          <View style={styles.emptyLinkUnderline} />
+          <Text style={styles.emptyCTAText}>Browse the collection</Text>
         </TouchableOpacity>
-      }
-    />
+      </View>
+    </View>
   );
 
   const itemCount = items.length;
@@ -282,6 +269,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       <BottomNavBar
         activeTab="Wishlist"
         onNavigate={(route) => navigation.navigate(route)}
+        onNavigateToAuth={(screen) => navigation.navigate(screen)}
       />
     </View>
   );
@@ -418,17 +406,51 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceDeep,
   },
 
-  // ── Empty state CTA — text link, no Button component ─────────────────────────
-  emptyLink: {
-    ...Type.caption,
-    color:     Colors.ink3,
-    textAlign: 'center',
+  // ── Empty state ───────────────────────────────────────────────────────────────
+  emptyWrap: {
+    flex: 1,
   },
-  emptyLinkUnderline: {
-    height:          1,
-    backgroundColor: Colors.ink4,
-    marginTop:       3,
-    width:           '100%',
+  emptyContent: {
+    flex:              1,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingHorizontal: Space[6],
+    gap:               Space[4],
+  },
+  emptyIllustration: {
+    width:           120,
+    height:          120,
+    borderRadius:    60,
+    backgroundColor: Colors.surfaceSoft,
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginBottom:    Space[2],
+  },
+  emptyTitle: {
+    ...Type.title,
+    textAlign: 'center',
+    color:     Colors.ink1,
+  },
+  emptyBody: {
+    ...Type.caption,
+    textAlign: 'center',
+    color:     Colors.ink3,
+    maxWidth:  260,
+  },
+  emptyFooter: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
+    paddingTop:        Space[4],
+  },
+  emptyCTA: {
+    backgroundColor: Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingVertical: Space[4],
+    alignItems:      'center',
+  },
+  emptyCTAText: {
+    ...Type.bodyStrong,
+    color: '#FFFFFF',
   },
 });
 

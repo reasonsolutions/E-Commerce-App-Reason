@@ -11,7 +11,7 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { postConfirmCustomer } from '../api/auth';
+import { postConfirmCustomer, postCreateCustomer } from '../api/auth';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -40,9 +40,11 @@ const OTPVerificationScreen: React.FC = () => {
 
   const { CustomerName, EmailID, MobileNumber, CountryCode, Password } = route.params;
 
-  const [otp, setOtp]           = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [otp, setOtp]             = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(30);
 
   const inputRef = useRef<TextInput>(null);
   const shakeAnim  = useRef(new Animated.Value(0)).current;
@@ -57,6 +59,28 @@ const OTPVerificationScreen: React.FC = () => {
     }).start();
     setTimeout(() => inputRef.current?.focus(), 400);
   }, [contentAnim]);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  const handleResend = useCallback(async () => {
+    if (countdown > 0 || resending) return;
+    setResending(true);
+    setError(null);
+    setOtp('');
+    try {
+      await postCreateCustomer({ CustomerName, EmailID, MobileNumber: Number(MobileNumber), CountryCode, Password });
+      setCountdown(30);
+      haptic.success();
+    } catch {
+      setError('Failed to resend. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  }, [countdown, resending, CustomerName, EmailID, MobileNumber, CountryCode, Password, haptic]);
 
   const shake = useCallback(() => {
     haptic.warning();
@@ -75,16 +99,12 @@ const OTPVerificationScreen: React.FC = () => {
     setLoading(true);
     try {
       const res = await postConfirmCustomer({
-        OTP:           code,
+        OTP:          code,
         CustomerName,
         EmailID,
-        MobileNumber:  Number(MobileNumber),
+        MobileNumber: Number(MobileNumber),
         CountryCode,
-        LoginPassword: Password,
-        Address:       '',
-        StreetName:    '',
-        CityName:      '',
-        ZipCode:       0,
+        Password,
       });
 
       if (res.statusCode !== 1) {
@@ -163,6 +183,8 @@ const OTPVerificationScreen: React.FC = () => {
           maxLength={OTP_LENGTH}
           style={styles.hiddenInput}
           caretHidden
+          textContentType="oneTimeCode"
+          autoComplete="one-time-code"
         />
 
         {/* OTP boxes */}
@@ -177,6 +199,17 @@ const OTPVerificationScreen: React.FC = () => {
         </Animated.View>
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <TouchableOpacity
+          onPress={handleResend}
+          disabled={countdown > 0 || resending}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.resendWrap}
+        >
+          <Text style={[styles.resendText, countdown > 0 && styles.resendTextDisabled]}>
+            {resending ? 'Sending…' : countdown > 0 ? `Resend code in ${countdown}s` : 'Resend code'}
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => handleVerify(otp)}
@@ -230,8 +263,8 @@ const styles = StyleSheet.create({
   hiddenInput: {
     position: 'absolute',
     opacity:  0,
-    width:    0,
-    height:   0,
+    width:    1,
+    height:   1,
   },
   otpRow: {
     marginBottom: Space[4],
@@ -270,6 +303,17 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color:        Colors.danger,
     marginBottom: Space[4],
+  },
+  resendWrap: {
+    alignSelf:    'center',
+    marginBottom: Space[2],
+  },
+  resendText: {
+    ...Type.caption,
+    color: Colors.ink2,
+  },
+  resendTextDisabled: {
+    color: Colors.ink4,
   },
   ctaButton: {
     width:           '100%',

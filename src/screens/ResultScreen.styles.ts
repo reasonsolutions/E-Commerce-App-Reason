@@ -333,4 +333,15 @@ export const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.ink2,
   },
+  heartBtn: {
+    position:        'absolute',
+    top:             Space[2],
+    right:           Space[2],
+    width:           30,
+    height:          30,
+    borderRadius:    15,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
 });

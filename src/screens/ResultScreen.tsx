@@ -54,6 +54,8 @@ import {
   SPAN_IMG_H,
   HERO_IMG_H,
 } from './ResultScreen.styles';
+import { addToWishlist } from '../api/wishlist';
+import { useProfileCode } from '../hooks/useProfileCode';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
@@ -93,6 +95,39 @@ function applySort(
   }
   return copy;
 }
+
+// ── Wishlist heart — fire-and-forget, outline only on listing ─────────────────
+const WishlistHeart: React.FC<{ inventoryId: number }> = ({ inventoryId }) => {
+  const haptic      = useHaptic();
+  const profileCode = useProfileCode();
+  const [added, setAdded] = useState(false);
+
+  const onPress = useCallback(async () => {
+    if (!profileCode || added) return;
+    haptic.light();
+    setAdded(true);
+    try {
+      await addToWishlist(profileCode, inventoryId);
+    } catch {
+      setAdded(false);
+    }
+  }, [profileCode, inventoryId, haptic, added]);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      style={styles.heartBtn}
+      activeOpacity={0.7}
+    >
+      <Icon
+        name={added ? 'heart' : 'heart-outline'}
+        size={18}
+        color={added ? Colors.accent : '#FFFFFF'}
+      />
+    </TouchableOpacity>
+  );
+};
 
 // ── Ember discount badge — shared across all three card types ─────────────────
 const DiscountBadge: React.FC<{ pct: number }> = ({ pct }) => (
@@ -137,12 +172,14 @@ const HeroCard: React.FC<{
         activeOpacity={1}
       >
         <View style={styles.heroImgWrap}>
-          <Animated.Image
-            source={{ uri: product.Images?.split(';')[0] || '' }}
-            style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
-            resizeMode="cover"
-            onLoad={onLoad}
-          />
+          {product.Images?.split(';').filter(Boolean)[0] ? (
+            <Animated.Image
+              source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+              style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+              resizeMode="cover"
+              onLoad={onLoad}
+            />
+          ) : null}
         </View>
         <LinearGradient
           colors={[
@@ -160,6 +197,7 @@ const HeroCard: React.FC<{
             <DiscountBadge pct={discountPct} />
           </View>
         )}
+        <WishlistHeart inventoryId={product.Inventory_Id} />
         <View style={styles.heroFooter}>
           <View style={styles.heroFooterLeft}>
             {product.Brand_Name ? (
@@ -232,17 +270,20 @@ const GridTile: React.FC<{
           activeOpacity={1}
         >
           <View style={styles.gridImgWrap}>
-            <Animated.Image
-              source={{ uri: product.Images?.split(';')[0] || '' }}
-              style={[styles.gridImg, { opacity: imgOpacity }]}
-              resizeMode="cover"
-              onLoad={onLoad}
-            />
+            {product.Images?.split(';').filter(Boolean)[0] ? (
+              <Animated.Image
+                source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+                style={[styles.gridImg, { opacity: imgOpacity }]}
+                resizeMode="cover"
+                onLoad={onLoad}
+              />
+            ) : null}
             {hasDiscount && (
               <View style={styles.gridBadgeWrap}>
                 <DiscountBadge pct={discountPct} />
               </View>
             )}
+            <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.gridInfo}>
             {product.Brand_Name ? (
@@ -305,12 +346,14 @@ const SpanCard: React.FC<{
           style={{ flex: 1 }}
         >
           <View style={styles.spanImgWrap}>
-            <Animated.Image
-              source={{ uri: product.Images?.split(';')[0] || '' }}
-              style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
-              resizeMode="cover"
-              onLoad={onLoad}
-            />
+            {product.Images?.split(';').filter(Boolean)[0] ? (
+              <Animated.Image
+                source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+                style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+                resizeMode="cover"
+                onLoad={onLoad}
+              />
+            ) : null}
           </View>
           <LinearGradient
             colors={['transparent', 'rgba(8,8,8,0.48)', 'rgba(8,8,8,0.80)']}
@@ -323,6 +366,7 @@ const SpanCard: React.FC<{
               <DiscountBadge pct={discountPct} />
             </View>
           )}
+          <WishlistHeart inventoryId={product.Inventory_Id} />
           <View style={styles.spanFooter}>
             {product.Brand_Name ? (
               <Text style={styles.spanBrand}>
@@ -749,6 +793,21 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     [haptic],
   );
 
+  // ── Price bounds derived from all loaded products ─────────────────────────
+  // Price bounds persist across fetches — never reset to 0/10000 mid-session
+  const priceBoundsRef = useRef<{ floor: number; ceiling: number } | null>(null);
+  useEffect(() => {
+    if (allProducts.length === 0) return;
+    const lo = Math.floor(allProducts.reduce((m, p) => Math.min(m, p.Price), Infinity));
+    const hi = Math.ceil(allProducts.reduce((m, p) => Math.max(m, p.Price), -Infinity));
+    priceBoundsRef.current = {
+      floor:   priceBoundsRef.current ? Math.min(priceBoundsRef.current.floor, lo) : lo,
+      ceiling: priceBoundsRef.current ? Math.max(priceBoundsRef.current.ceiling, hi) : hi,
+    };
+  }, [allProducts]);
+  const priceFloor   = priceBoundsRef.current?.floor   ?? 0;
+  const priceCeiling = priceBoundsRef.current?.ceiling ?? 10000;
+
   // ── Rendered product list (sort applied client-side, driven by allProducts) ─
   const deduplicated = useMemo(
     () => applySort(allProducts, sortKey),
@@ -1001,6 +1060,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         sheetCategories={sheetCategories}
         allBrandsFromSheet={allBrandsFromSheet}
         hideBrands={brandId != null}
+        priceFloor={priceFloor}
+        priceCeiling={priceCeiling}
       />
     </View>
   );

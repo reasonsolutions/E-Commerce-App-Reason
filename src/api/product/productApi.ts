@@ -136,29 +136,6 @@ export const getProductsByBrand = async (
   }));
 };
 
-export const getProductsBySubCategory = async (subcategorycode: string) => {
-  const response = await axiosInstance.get(
-    `${productEndpoints.getProductsBySubCategory}?subcategorycode=${subcategorycode}`,
-  );
-  return response.data;
-};
-
-export const selectProduct = async (inventorycode: string) => {
-  const response = await axiosInstance.get(
-    `${productEndpoints.selectProduct}?inventorycode=${inventorycode}`,
-  );
-  return response.data;
-};
-
-export const searchProducts = async (
-  filterstring: string,
-  category_id: string,
-) => {
-  const response = await axiosInstance.get(
-    `${productEndpoints.searchProduct}?filterstring=${filterstring}&Category_Id=${category_id}`,
-  );
-  return response.data;
-};
 
 export const getProductByItemId = async (itemId: number | string) => {
   const response = await axiosInstance.get(

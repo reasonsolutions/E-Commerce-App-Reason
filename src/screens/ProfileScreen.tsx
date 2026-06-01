@@ -8,7 +8,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
-  Alert,
   Modal,
   KeyboardAvoidingView,
   Platform,
@@ -17,7 +16,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { clearSession } from '../utils/auth';
-import { BottomNavBar, Skeleton, FloatingLabelInput, PrimaryButton } from '../components/ui';
+import { useCart } from '../context/CartContext';
+import { BottomNavBar, Skeleton, FloatingLabelInput, PrimaryButton, ConfirmSheet } from '../components/ui';
 import { ErrorBanner } from '../components/ui';
 import { getDeliveryAddresses } from '../api/address';
 import { postUpdateCustomer } from '../api/auth';
@@ -316,6 +316,7 @@ const editStyles = StyleSheet.create({
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const { setCartCount } = useCart();
 
   const headerAnim   = useEntrance(0);
   const infoAnim     = useEntrance(80);
@@ -326,6 +327,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const [session, setSession]           = useState<LoggedInCustomerInterface | null>(null);
   const [primaryAddress, setPrimaryAddress] = useState<DeliveryAddress | null>(null);
   const [editVisible, setEditVisible]   = useState(false);
+  const [logoutVisible, setLogoutVisible] = useState(false);
 
   // Re-read session on every focus so in-app edits and external changes are reflected
   useFocusEffect(useCallback(() => {
@@ -351,22 +353,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   const handleLogout = () => {
     haptic.warning();
-    Alert.alert(
-      'Log out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log out',
-          style: 'destructive',
-          onPress: async () => {
-            await clearSession();
-            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-          },
-        },
-      ],
-      { cancelable: true },
-    );
+    setLogoutVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutVisible(false);
+    await clearSession();
+    setCartCount(0);
+    navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
   };
 
   const displayName  = session?.CustomerName || '—';
@@ -496,7 +490,19 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       <BottomNavBar
         activeTab="Profile"
         onNavigate={(route) => navigation.navigate(route)}
+        onNavigateToAuth={(screen) => navigation.navigate(screen)}
       />
+
+      {logoutVisible && (
+        <ConfirmSheet
+          onClose={() => setLogoutVisible(false)}
+          onConfirm={confirmLogout}
+          title="Log out?"
+          body="You'll need to sign in again to access your orders and wishlist."
+          confirmLabel="Log out"
+          destructive
+        />
+      )}
     </View>
   );
 };

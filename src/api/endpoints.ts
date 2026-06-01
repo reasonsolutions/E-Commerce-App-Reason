@@ -10,14 +10,8 @@ export const authEndpoints = {
 export const productEndpoints = {
   allProducts:              'ecomm/allProducts',
   getBrands:                'ecomm/getBrands',
-  getProductsByBrands:      'ecomm/getProductsByBrands',
-  getCategoryByBrand:       'ecomm/getCategoryByBrand',
   getCategory:              'ecomm/getCategory',
-  getProductsByCategory:    'ecomm/getProductsByCategory',
   getSubCategoryByCategory: 'ecomm/getSubCategoryByCategory',
-  getProductsBySubCategory: 'ecomm/getProductsBySubCategory',
-  selectProduct:            'ecomm/selectProduct',
-  searchProduct:            'ecomm/searchProduct',
   getProductByItemId:       'merchant/getProductByItemId',
 } as const;
 

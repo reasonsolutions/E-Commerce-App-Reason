@@ -5,7 +5,6 @@ import {
   mockBrands,
   mockProducts,
   getMockProductDetail,
-  getMockSearchResults,
   getMockProductsByCategory,
 } from '../mock/mockData';
 import { ProductByCategoryProductDetails } from '../interfaces';
@@ -30,19 +29,6 @@ export const getProductsByCategory = async (categorycode: string | number, _page
 export const getProductsByBrand = async (_brandId: number | string): Promise<ProductByCategoryProductDetails[]> =>
   delay([] as ProductByCategoryProductDetails[]);
 
-export const getProductsBySubCategory = async (_subcategorycode: string) =>
-  delay(ok({ productsDetails: mockProducts, brandsDetails: mockBrands }));
-
-export const selectProduct = async (inventorycode: string) => {
-  const id = Number(inventorycode);
-  const { detail } = getMockProductDetail(id);
-  return delay(ok(detail));
-};
-
-export const searchProducts = async (filterstring: string, _category_id: string) => {
-  const results = getMockSearchResults(filterstring);
-  return delay(ok(results));
-};
 
 export const getProductByItemId = async (itemId: number | string) => {
   const id = Number(itemId);

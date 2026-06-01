@@ -18,15 +18,22 @@ export const postOrderHistory = async (customerprofilecode: number) => {
   const payload: OrderHistoryRequest = { CustomerProfileCode: customerprofilecode };
   const response = await axiosInstance.post(orderEndpoints.getOrderHistory, payload);
   const raw = response.data;
-  if (raw?.result?.OrdHistoryDetails) {
-    raw.result.OrdHistoryDetails = raw.result.OrdHistoryDetails.map((item: any) => ({
-      ...item,
-      Inventory_Id: item.InventoryID,
-      Item_Id:      item.ItemID,
-      Brand_Id:     item.BrandID,
-      Brand_Name:   item.BrandName,
-      Amount:       item.Price ?? 0,
-    }));
+
+  // result is an array of order groups each with an Items array — flatten to OrdHistoryDetails
+  if (Array.isArray(raw?.result)) {
+    const flat = raw.result.flatMap((order: any) =>
+      (order.Items ?? []).map((item: any) => ({
+        ...item,
+        OrderNumber:  order.OrderNumber,
+        OrderedDate:  order.OrderedDate,
+        Inventory_Id: item.InventoryID,
+        Item_Id:      item.ItemID,
+        Brand_Id:     item.BrandID,
+        Brand_Name:   item.BrandName,
+        Amount:       item.Price ?? 0,
+      })),
+    );
+    raw.result = { OrdHistoryDetails: flat };
   }
   return raw;
 };
