@@ -1,3 +1,14 @@
+import { TaxType }            from '../config/enum_files/TaxType';
+import { WeightUnit }         from '../config/enum_files/WeightUnit';
+import { DimensionUnit }      from '../config/enum_files/DimensionUnit';
+import { VolumeUnit }         from '../config/enum_files/VolumeUnit';
+import { ItemCondition }      from '../config/enum_files/ItemCondition';
+import { HazardClass }        from '../config/enum_files/HazardClass';
+import { HazardLabel }        from '../config/enum_files/HazardLabel';
+import { WarrantyType }       from '../config/enum_files/WarrantyType';
+import { ProductDemographic } from '../config/enum_files/ProductDemographic';
+import { Season }             from '../config/enum_files/Season';
+
 export interface PostCartSaveInterface {
   CustomerProfileCode: number;
   InventoryId: number;
@@ -13,6 +24,11 @@ export interface deleteCartInterface {
 
 export interface OrderHistoryRequest {
     CustomerProfileCode: number;
+    SortBy?: 'asc' | 'desc';
+    DateFrom?: string | null;
+    DateTo?: string | null;
+    PageNumber?: number;
+    PageSize?: number;
 }
 
 export interface OrderDetailRequest {
@@ -35,7 +51,8 @@ export interface createCustomerInterface {
 
 export interface postLoginInterface {
     "LoginID": string,
-    "Password": string
+    "Password": string,
+    "ClientType": string,
 }
 
 export interface postUpdateCustomerInterface {
@@ -113,34 +130,167 @@ export interface MultipleOrderDetailInterface {
 
 
 //result of allproducts api
-export interface ProductVariant {
-    InventoryID: string;
-    Variant: string;
-    Stock: number;
-    SKU: string;
-    PriceDetails: {
-        Price: number;
-        ComparePrice: number;
+export interface VariantTax {
+    VariantTaxConfigurationId: number;
+    TaxId:             number;
+    TaxType:           TaxType;
+    TaxRate:           number;
+    Reason:            string;
+    IsActive:          number;
+    CreatedAt:         string;
+    UpdatedAt:         string;
+    IsIncludedInPrice: number;
+}
+
+export interface PhysicalAttributes {
+    Weight:        number | null;
+    WeightUnit:    { Value: WeightUnit; Description: string } | null;
+    PackageLength: number | null;
+    PackageWidth:  number | null;
+    PackageHeight: number | null;
+    DimensionUnit: { Value: DimensionUnit; Description: string } | null;
+    Volume:        number | null;
+    VolumeUnit:    { Value: VolumeUnit; Description: string } | null;
+    IsFragile:     boolean;
+    IsPerishable:  boolean;
+    ShelfLife:     string;
+    Condition:     { Value: ItemCondition; Description: string } | null;
+}
+
+export interface ProductComplianceInfo {
+    AgeRestrictedInfo: {
+        IsAgeRestricted:      boolean;
+        MinimumAge:           number | null;
+        PrescriptionRequired: boolean;
     };
+    HazardousInfo: {
+        IsHazardous:          boolean;
+        HazardClasses:        string[] | null;
+        UnNumber:             string | null;
+        HazardLabels:         string[] | null;
+        HandlingInstructions: string | null;
+        SafetyDataSheetURL:   string | null;
+    };
+    RestrictedRegion: string[];
+    SaleHours:        { StartTime: string; EndTime: string } | null;
+}
+
+export interface ProductDetailComplianceInfo {
+    AgeRestrictedInfo: {
+        IsAgeRestricted:      boolean;
+        MinimumAge:           number | null;
+        PrescriptionRequired: boolean;
+    };
+    HazardousInfo: {
+        isHazardous:              boolean;
+        HazardClasses:            { Value: HazardClass; Description: string }[] | null;
+        UnNumber:                 string | null;
+        HazardLabels:             { Value: HazardLabel; Description: string }[] | null;
+        HandlingInstructions:     string | null;
+        SafetyHazardousSheetURL:  string | null;
+    };
+    RestrictedRegion: string[];
+    SaleHours:        { StartTime: string; EndTime: string } | null;
+}
+
+export interface ProductClassification {
+    IsDigital:              boolean;
+    IsVirtual:              boolean;
+    IsDownloadable:         boolean;
+    CountryOfOrigin:        string | null;
+    HSCode:                 string | null;
+    Manufacturer:           string | null;
+    ManufacturerPartNumber: string | null;
+}
+
+export interface ProductMarketing {
+    Tags:            string[];
+    MetaTitle:       string | null;
+    MetaDescription: string | null;
+}
+
+export interface ProductPolicyInfo {
+    IsReturnable:    boolean;
+    ReturnWindow:    number | null;
+    ReturnPolicy:    string | null;
+    HasWarranty:     boolean;
+    WarrantyPeriod:  number | null;
+    WarrantyType:    WarrantyType | null;
+    WarrantyDetails: string | null;
+}
+
+export interface ProductShippingInfo {
+    FreeShipping:             boolean;
+    SeparateShippingRequired: boolean;
+    EstimatedDeliveryDays:    string | null;
+    CanShipInternational:     boolean;
+    RestrictedCountries:      string[] | null;
+}
+
+// allProducts variant
+export interface ProductVariant {
+    InventoryID:       string;
+    Variant:           string;
+    Stock:             number;
+    SKU:               string;
+    Threshold:         number;
+    MaxPerOrder:       number;
+    Remarks:           string;
+    DateCreated:       string;
+    DateUpdated:       string;
+    StockStatus:       { Value: number; Description: string };
+    BackOrder: {
+        AllowBackOrder:        boolean;
+        BackOrderLimit:        number | null;
+        SupplierLeadTime:      number | null;
+        BackOrderUsedQuantity: number;
+        BackOrderUpdatedBy:    string;
+        BackOrderUpdatedOn:    string | null;
+    };
+    PriceDetails: {
+        Price:        number;
+        ComparePrice: number;
+        NetAmount:    number | null;
+        TaxAmount:    number | null;
+        GrossAmount:  number | null;
+        Taxes:        VariantTax[];
+    };
+    PhysicalAttributes: PhysicalAttributes;
 }
 
 export interface ProductInterface {
-    ItemID: number;
-    Name: string;
-    Description: string;
-    SubcategoryID: string;
-    Images: string;
-    CreatedDate: string;
-    BrandID: string;
-    BrandName: string;
-    SCName: string;
-    CategoryID: string;
-    CategoryName: string;
-    CategoryImage: string;
-    MinPrice: number;
-    MaxComparePrice: number;
-    OrganisationId: string;
-    Variants: ProductVariant[];
+    ItemID:                number;
+    Name:                  string;
+    OrganisationName:      string;
+    OrganisationId:        string;
+    Description:           string;
+    SubcategoryID:         string;
+    Images:                string;
+    CreatedDate:           string;
+    BrandID:               string;
+    BrandName:             string;
+    SCName:                string;
+    CategoryID:            string;
+    CategoryName:          string;
+    CategoryImage:         string;
+    RelatedProducts:       null;
+    MinPrice:              number;
+    MaxComparePrice:       number;
+    DiscountPct:           number;
+    ComplianceInfo:        ProductComplianceInfo;
+    ProductClassification: ProductClassification;
+    Marketing:             ProductMarketing;
+    PolicyInfo:            ProductPolicyInfo;
+    AdditionalInfo: {
+        VideoUrl:            string | null;
+        SizeChart:           string | null;
+        CareInstructions:    string | null;
+        MaterialComposition: string | null;
+        Color:               string | null;
+        Season:              Season | null;
+    };
+    ShippingInfo: ProductShippingInfo;
+    Variants:     ProductVariant[];
 }
 
 
@@ -246,31 +396,73 @@ export interface SubCategoryInterface {
 }
 
 // result of getProductByItemId api
-export interface VariantPriceDetails {
-    Price: number | null;
-    ComparePrice: number | null;
-}
-
 export interface VariantInterface {
-    InventoryId: string;
-    Variant: string;
-    Stock: number;
-    SKU: string;
-    PriceDetails: VariantPriceDetails;
-    StockStatus: { Value: number; Description: string };
+    InventoryId:        string;
+    Variant:            string;
+    Stock:              number;
+    SKU:                string;
+    Threshold:          number;
+    MaxPerOrder:        number;
+    DateCreated:        string;
+    DateUpdated:        string;
+    Remarks:            string;
+    Status:             string;
+    VerificationStatus: string;
+    StockStatus:        { Value: number; Description: string };
+    BackOrder: {
+        AllowBackOrder:        boolean;
+        BackOrderLimit:        number | null;
+        SupplierLeadTime:      number | null;
+        BackOrderUsedQuantity: number;
+        BackOrderUpdatedBy:    string;
+        BackOrderUpdatedOn:    string | null;
+    };
+    PriceDetails: {
+        Price:        number;
+        ComparePrice: number;
+    };
+    Taxes:              VariantTax[];
+    PhysicalAttributes: PhysicalAttributes;
 }
 
 export interface ProductDetailInterface {
-    ItemId: string;
-    Name: string;
-    Description: string;
-    Images: string;
-    BrandId: number;
-    BrandName: string;
-    CategoryId: string;
-    CategoryName: string;
-    SubCategoryName: string;
-    Variants: VariantInterface[];
+    ItemId:                string;
+    Name:                  string;
+    OrganisationID:        string;
+    OrganisationName:      string;
+    Description:           string;
+    SubCategoryId:         string;
+    Images:                string;
+    DateCreated:           string;
+    MerchantID:            string;
+    MerchantStaffID:       string;
+    RelatedProducts:       string;
+    VerificationStatus:    string;
+    Status:                string;
+    ApprovedBy:            string;
+    ApprovedOn:            string;
+    Remarks:               string;
+    BrandId:               number;
+    BrandName:             string;
+    SubCategoryName:       string;
+    CategoryId:            string;
+    CategoryName:          string;
+    CategoryImage:         string;
+    ComplianceInfo:        ProductDetailComplianceInfo;
+    ProductClassification: ProductClassification;
+    Marketing:             ProductMarketing;
+    PolicyInfo:            ProductPolicyInfo;
+    AdditionalInfo: {
+        VideoUrl:            string | null;
+        SizeChart:           string | null;
+        CareInstructions:    string | null;
+        MaterialComposition: string | null;
+        Color:               string | null;
+        ProductDemoGraphic:  ProductDemographic | null;
+        Season:              Season | null;
+    };
+    ShippingInfo: ProductShippingInfo;
+    Variants:     VariantInterface[];
 }
 
 export interface LoggedInCustomerInterface {
@@ -328,17 +520,20 @@ export interface SavedCartItemInterface {
     InventoryId: number;
     Quantity: number;
     IsPurchased: boolean;
+    CreatedDate: string;
+    CheckedoutDate: string | null;
     Images: string;
     Name: string;
     Count: number;
     Variant: string;
     BrandName: string;
-    OrganisationId?: string;
+    OrganisationId: string;
+    OrganisationName: string;
     Price: number;
     PriceDetails: {
         Price: number;
         ComparePrice: number;
-        Taxes: any[];
+        Taxes: { VariantTaxConfigurationId: number; TaxId: number; TaxType: TaxType; TaxRate: number; IsActive: boolean; CreatedAt: string }[];
     };
 }
 

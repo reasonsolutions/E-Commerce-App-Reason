@@ -18,7 +18,7 @@ import { FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { ProductDetailInterface, PostCartSaveInterface } from '../api/interfaces';
+import { ProductDetailInterface, PostCartSaveInterface, WishlistItemInterface, VariantInterface } from '../api/interfaces';
 import { postSaveCartItems } from '../api/cart';
 import { getProductByItemId } from '../api/product';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
@@ -110,19 +110,18 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   }, [data, plateAnim]);
 
   useEffect(() => {
-    if (!data?.product) return;
+    if (!data?.product || !profileCode) return;
     let cancelled = false;
-    const code = profileCode ?? 100080;
     const inventoryId = Number(data.product.Variants?.[0]?.InventoryId ?? 0);
-    getWishlist(code).then(res => {
+    getWishlist(profileCode).then(res => {
       if (cancelled) return;
       if (res.statusCode === 1) {
-        const match = (res.result || []).find((w: any) => w.InventoryID === inventoryId);
+        const match = (res.result || []).find((w: WishlistItemInterface) => w.InventoryID === inventoryId);
         if (match) { setWishlisted(true); setWishlistItemCode(match.WishlistCode); }
       }
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [data]);
+  }, [data, profileCode]);
 
   const handleHeroImageLoad = useCallback(() => {
     Animated.timing(heroImgOpacity, {
@@ -160,7 +159,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       } else {
         // Guest: save to local cart
         const product = data?.product;
-        const variantObj = product?.Variants?.find((v: any) => String(v.InventoryId) === selectedVariant) ?? product?.Variants?.[0];
+        const variantObj = product?.Variants?.find((v: VariantInterface) => String(v.InventoryId) === selectedVariant) ?? product?.Variants?.[0];
         await addToGuestCart({
           inventoryId,
           quantity,
@@ -208,7 +207,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         if (res?.statusCode === 1) {
           getWishlist(profileCode).then(wRes => {
             if (wRes.statusCode === 1) {
-              const match = (wRes.result || []).find((w: any) => w.InventoryID === inventoryId);
+              const match = (wRes.result || []).find((w: WishlistItemInterface) => w.InventoryID === inventoryId);
               if (match) setWishlistItemCode(match.WishlistCode);
             }
           }).catch(() => {});
@@ -236,7 +235,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const activePrice        = selectedVariantObj?.PriceDetails?.Price ?? 0;
   const activeComparePrice = selectedVariantObj?.PriceDetails?.ComparePrice ?? 0;
   const isOutOfStock   = selectedVariantObj?.StockStatus?.Description === 'out_of_stock';
-  const allowBackOrder = (selectedVariantObj as any)?.BackOrder?.AllowBackOrder === true;
+  const allowBackOrder = selectedVariantObj?.BackOrder?.AllowBackOrder === true;
   const hasDiscount    = activeComparePrice > activePrice;
   const discountPct    = hasDiscount
     ? Math.round(((activeComparePrice - activePrice) / activeComparePrice) * 100) : 0;

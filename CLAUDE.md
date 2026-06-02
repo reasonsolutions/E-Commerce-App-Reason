@@ -89,6 +89,14 @@ All responses: `{ statusCode: 1|0, result: {...}, userMessage: string }`. Unwrap
 
 Read each domain's `index.ts` before assuming mock or real. Currently: auth/cart/wishlist/address/product = real. Order = real (all endpoints: `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`).
 
+### Enums
+
+Server-side enums live in `src/config/enum_files/` — one file per enum (e.g. `TaxType.ts`, `SortBy.ts`). Import directly from the specific file, no barrel index. These are used in `src/api/interfaces.ts` to type numeric fields from API responses. Do not use raw `number` for fields that have a corresponding enum.
+
+### SortBy
+
+`allProducts` endpoint accepts `sortBy: SortBy | null` in the request body. `SortBy.LowToHigh = 1`, `SortBy.HighToLow = 2`. All three product fetch functions (`getAllProducts`, `getProductsByCategory`, `getProductsByBrand`) accept an optional `sortBy` parameter. `ResultScreen` maps `price_asc`/`price_desc` to server-side sort; `newest`/`default` remain client-side.
+
 ---
 
 ## Component Architecture
@@ -285,9 +293,11 @@ Phase 3 complete: RegisterScreen · OTPVerificationScreen · ProfileScreen · Ad
 
 **Cart:** `useCart()` → `{ cartCount, setCartCount }`. Integer only — server-authoritative. Do not add item arrays to CartContext.
 
-**Auth:** JWT in Keychain (`STORAGE_KEYS.authToken`). User data in AsyncStorage (`STORAGE_KEYS.userData`). App always starts on `Home` — no session check at startup. `isLoggedIn()` in `src/utils/auth.ts` checks Keychain at runtime. Token format is non-standard (not a parseable JWT) — expiry is detected reactively via 401, not by decoding `exp`.
+**Auth:** JWT in Keychain (`STORAGE_KEYS.authToken`). Refresh token in Keychain (`STORAGE_KEYS.refreshToken`). User data in AsyncStorage (`STORAGE_KEYS.userData`). App always starts on `Home` — no session check at startup. `isLoggedIn()` in `src/utils/auth.ts` checks Keychain presence only — no clock-based expiry check. Token expiry is detected reactively via 401.
 
-**401 handling:** `axiosInstance.ts` response interceptor catches 401, calls `clearSession()` + `resetToLogin()` (navigates to Home). Auth endpoints (`token/`, `postCreateCustomer`, `postConfirmCustomer`) are excluded from Bearer token injection and are not affected.
+**Token lifecycle:** Access token lifetime = 15 minutes. Refresh token lifetime = 7 days. Login payload requires `ClientType: 'MOB-RN-2F9A'` — injected automatically by `loginCustomer()` in `authApi.ts`, callers do not pass it. On login, both tokens are stored in Keychain. On logout/401-no-recovery, both are cleared via `clearSession()`.
+
+**401 handling:** `axiosInstance.ts` response interceptor catches 401 → calls `token/getEcommAccessToken` with refresh token as Bearer → on success updates Keychain + in-memory cache + retries original request. Multiple concurrent 401s share one `_refreshPromise` to avoid duplicate refresh calls. If refresh also fails → `clearSession()` + `resetToLogin()`. Auth endpoints (`token/postLoginCustomer`, `token/getEcommAccessToken`, `postCreateCustomer`, `postConfirmCustomer`) are excluded from Bearer token injection.
 
 **Guest browsing:** Unauthenticated users land on Home and can browse freely. Protected actions (wishlist toggle, checkout, Orders/Wishlist/Profile tabs) are guarded by `useAuthGuard` hook — shows `LoginPromptSheet` instead of navigating. Guest cart stored in AsyncStorage under `STORAGE_KEYS.guestCart` as `GuestCartItem[]`, merged to server cart on login.
 
@@ -301,7 +311,13 @@ Phase 3 complete: RegisterScreen · OTPVerificationScreen · ProfileScreen · Ad
 |---|---|
 | ~~`postCnfOrderDetail` on mock~~ | Switched to real; `Brand_Name` fallback mapping added |
 | ~~401 session clearing~~ | Done — `axiosInstance` response interceptor calls `clearSession()` + `resetToLogin()` |
+| ~~Refresh token flow~~ | Done — 401 → refresh → retry wired in `axiosInstance.ts`. Both tokens cleared on logout. |
+| ~~Clock-based token expiry~~ | Removed — expiry is server-driven via 401, not `exp` decode |
+| ~~`SortBy` server-side~~ | Done — `allProducts` payload sends `sortBy`, `ResultScreen` maps sort keys |
+| ~~Tax in order payload~~ | Done — `AddressScreen` maps `PriceDetails.Taxes` into `PlaceOrderTax[]` |
 | `postUpdateCustomer` password | Overwrites stored password — backend fix pending |
+| Tax display in UI | `ProductScreen`, `CartScreen`, `AddressScreen` don't show tax breakdown yet |
+| `getSavedCartItems` tax verification | Unconfirmed whether cart API returns `PriceDetails.Taxes` populated |
 | `useSession` adoption | AddressScreen, OrderHistoryScreen, OrderDetailScreen still read AsyncStorage directly |
 | OrganisationID cold-start | `getOrgIdForInventory()` returns empty if user reaches checkout without browsing products |
 | OTP resend | No resend button on OTPVerificationScreen — user has no recovery if OTP expires |

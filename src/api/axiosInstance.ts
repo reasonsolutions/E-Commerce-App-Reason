@@ -6,10 +6,13 @@ import { logRequest, logResponse, logError, TimedAxiosRequestConfig } from './ap
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { clearSession } from '../utils/auth';
 import { resetToLogin } from '../utils/navigationService';
+import { authEndpoints } from './endpoints';
 
 // In-memory token cache — avoids a Keychain read (~100-300ms) on every request.
 // Primed by setTokenCache() after login, cleared by clearTokenCache() on logout.
 let _cachedToken: string | null = null;
+// Prevents multiple concurrent requests from each triggering their own refresh.
+let _refreshPromise: Promise<string | null> | null = null;
 
 export function setTokenCache(token: string): void {
   _cachedToken = token;
@@ -17,6 +20,30 @@ export function setTokenCache(token: string): void {
 
 export function clearTokenCache(): void {
   _cachedToken = null;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const creds = await Keychain.getGenericPassword({ service: STORAGE_KEYS.refreshToken });
+    console.log('[refresh] refresh token in keychain:', creds ? creds.password.slice(0, 20) + '...' : 'NOT FOUND');
+    if (!creds) return null;
+    const response = await axios.get(`${API_BASE_URL}${authEndpoints.getEcommAccessToken}`, {
+      headers: { Authorization: `Bearer ${creds.password}` },
+    });
+    const data = response.data;
+    console.log('[refresh] statusCode:', data?.statusCode, '| new access token:', data?.result?.AccessToken?.slice(0, 20) + '...');
+    if (data?.statusCode !== 1 || !data?.result?.AccessToken) return null;
+    const newToken: string = data.result.AccessToken;
+    _cachedToken = newToken;
+    await Keychain.setGenericPassword('token', newToken, {
+      service: STORAGE_KEYS.authToken,
+      securityLevel: Keychain.SECURITY_LEVEL.ANY,
+    });
+    return newToken;
+  } catch (e) {
+    console.log('[refresh] error:', e);
+    return null;
+  }
 }
 
 const axiosInstance = axios.create({
@@ -39,11 +66,15 @@ axiosInstance.interceptors.request.use(
     if (!isAuthEndpoint) {
       if (_cachedToken) {
         config.headers.Authorization = `Bearer ${_cachedToken}`;
+        console.log('[axiosInstance] token injected (cache):', _cachedToken?.slice(0, 20) + '...');
       } else {
         const credentials = await Keychain.getGenericPassword({ service: STORAGE_KEYS.authToken });
         if (credentials) {
           _cachedToken = credentials.password;
           config.headers.Authorization = `Bearer ${credentials.password}`;
+          console.log('[axiosInstance] token injected (keychain):', credentials.password.slice(0, 20) + '...');
+        } else {
+          console.log('[axiosInstance] no token found — request sent without Authorization');
         }
       }
     }
@@ -77,12 +108,33 @@ axiosInstance.interceptors.response.use(
   },
   async err => {
     logError(err);
-    if (err?.response?.status === 401) {
+    const config = err?.config;
+    const is401 = err?.response?.status === 401;
+    const isRefreshEndpoint = config?.url?.includes('getEcommAccessToken');
+
+    if (is401 && !isRefreshEndpoint && !config?._retried) {
+      config._retried = true;
+      if (!_refreshPromise) {
+        _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
+      }
+      const newToken = await _refreshPromise;
+      if (newToken) {
+        config.headers.Authorization = `Bearer ${newToken}`;
+        return axiosInstance.request(config);
+      }
+      await clearSession();
+      resetToLogin();
+      const classified = classifyError(err);
+      apiLog(config?.url ?? 'unknown endpoint', classified);
+      return Promise.reject(classified);
+    }
+
+    if (is401) {
       await clearSession();
       resetToLogin();
     }
     const classified = classifyError(err);
-    apiLog(err?.config?.url ?? 'unknown endpoint', classified);
+    apiLog(config?.url ?? 'unknown endpoint', classified);
     return Promise.reject(classified);
   },
 );

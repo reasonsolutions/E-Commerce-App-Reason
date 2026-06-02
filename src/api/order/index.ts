@@ -1,14 +1,16 @@
 import * as real from './orderApi';
-import type { OrderHistoryItemInterface, OrderDetailResponseInterface } from '../interfaces';
+import type { OrderHistoryItemInterface, OrderDetailResponseInterface, OrderDetailItemExtendedInterface } from '../interfaces';
+export type { OrderHistoryFilters } from './orderApi';
 
 export const placeOrder              = real.placeOrder;
 export const postPlacedMultipleOrder = real.postPlacedMultipleOrder;
 
 export async function postOrderHistory(
   customerProfileCode: number,
-): Promise<OrderHistoryItemInterface[]> {
-  const raw = await real.postOrderHistory(customerProfileCode);
-  return raw.result?.OrdHistoryDetails ?? [];
+  page: number = 1,
+  filters: real.OrderHistoryFilters = {},
+): Promise<{ items: OrderHistoryItemInterface[]; hasMore: boolean }> {
+  return real.postOrderHistory(customerProfileCode, page, filters);
 }
 
 export async function postCnfOrderDetail(
@@ -17,9 +19,9 @@ export async function postCnfOrderDetail(
 ): Promise<OrderDetailResponseInterface> {
   const raw = await real.postCnfOrderDetail(orderNumber, customerProfileCode);
   const result = raw.result ?? { OrderDetails: [], DeliveryDetail: [] };
-  result.OrderDetails = (result.OrderDetails ?? []).map((item: any) => ({
+  result.OrderDetails = (result.OrderDetails ?? []).map((item: OrderDetailItemExtendedInterface) => ({
     ...item,
-    Brand_Name: item.Brand_Name ?? item.BrandName,
+    Brand_Name: item.Brand_Name ?? (item as OrderDetailItemExtendedInterface & { BrandName?: string }).BrandName,
   }));
   return result;
 }

@@ -2,8 +2,11 @@ import axiosInstance from '../axiosInstance';
 import { authEndpoints } from '../endpoints';
 import type { createCustomerInterface, postLoginInterface, postUpdateCustomerInterface } from '../interfaces';
 
-export const loginCustomer = async (data: postLoginInterface) => {
-  const response = await axiosInstance.post(authEndpoints.postLoginCustomer, data);
+export const loginCustomer = async (data: Pick<postLoginInterface, 'LoginID' | 'Password'>) => {
+  const response = await axiosInstance.post(authEndpoints.postLoginCustomer, {
+    ...data,
+    ClientType: 'MOB-RN-2F9A',
+  } satisfies postLoginInterface);
   return response.data;
 };
 

@@ -2,6 +2,7 @@ import axiosInstance from '../axiosInstance';
 import { productEndpoints } from '../endpoints';
 import type { ProductInterface } from '../interfaces';
 import { ProductByCategoryProductDetails } from '../interfaces';
+import { SortBy } from '../../config/enum_files/SortBy';
 
 // InventoryID → OrganisationId — populated on every product fetch, used at checkout
 const _orgByInventory: Map<number, string> = new Map();
@@ -18,7 +19,7 @@ function cacheOrgIds(products: ProductInterface[]): void {
   }
 }
 
-export const getAllProducts = async () => {
+export const getAllProducts = async (sortBy?: SortBy) => {
   const response = await axiosInstance.post(productEndpoints.allProducts, {
     brands: [],
     categories: [],
@@ -26,6 +27,7 @@ export const getAllProducts = async () => {
     searchQuery: '%',
     priceRange: { from: null, to: null },
     discount: null,
+    sortBy: sortBy ?? null,
     pagination: { pageNumber: 1, pageSize: 10 },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];
@@ -56,6 +58,7 @@ export const getProductsByCategory = async (
   categoryId: number | string,
   pageNumber = 1,
   pageSize = 20,
+  sortBy?: SortBy,
 ): Promise<ProductByCategoryProductDetails[]> => {
   const response = await axiosInstance.post(productEndpoints.allProducts, {
     brands: [],
@@ -64,6 +67,7 @@ export const getProductsByCategory = async (
     searchQuery: '%',
     priceRange: { from: null, to: null },
     discount: null,
+    sortBy: sortBy ?? null,
     pagination: { pageNumber, pageSize },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];
@@ -98,6 +102,7 @@ export const getProductsByBrand = async (
   brandId: number | string,
   pageNumber = 1,
   pageSize = 20,
+  sortBy?: SortBy,
 ): Promise<ProductByCategoryProductDetails[]> => {
   const response = await axiosInstance.post(productEndpoints.allProducts, {
     brands: [Number(brandId)],
@@ -106,6 +111,7 @@ export const getProductsByBrand = async (
     searchQuery: '%',
     priceRange: { from: null, to: null },
     discount: null,
+    sortBy: sortBy ?? null,
     pagination: { pageNumber, pageSize },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];

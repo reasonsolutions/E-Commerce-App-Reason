@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,30 @@ import {
   StatusBar,
   FlatList,
   Animated,
+  ActivityIndicator,
   ListRenderItemInfo,
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { postOrderHistory } from '../api/order';
+import type { OrderHistoryFilters } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useFocusEffect } from '@react-navigation/native';
-import { StatusBadge, BottomNavBar, DarkHeader, FadeImage, Skeleton } from '../components/ui';
+import {
+  StatusBadge,
+  BottomNavBar,
+  DarkHeader,
+  FadeImage,
+  Skeleton,
+  OrderFilterSheet,
+  ErrorBanner,
+} from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
@@ -115,52 +124,143 @@ const OrderRow: React.FC<{
   );
 };
 
+const getProfileCode = async (): Promise<number | null> => {
+  const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+  if (!raw) return null;
+  return JSON.parse(raw).CustomerProfileCode ?? null;
+};
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const [refreshing, setRefreshing] = useState(false);
-  const { data: orders, loading, isError, error, run } = useAsyncState<OrderHistoryItemInterface[]>([]);
-  const [hasFetched, setHasFetched] = useState(false);
+  const haptic = useHaptic();
 
-  const fetchOrders = useCallback(
-    (cancelled?: { current: boolean }) =>
-      run(async () => {
-        const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-        if (!userData) return [];
-        const user = JSON.parse(userData);
-        const result = await postOrderHistory(user.CustomerProfileCode);
-        setHasFetched(true);
-        return result;
-      }, cancelled),
-    [run],
-  );
+  const [orders, setOrders]           = useState<OrderHistoryItemInterface[]>([]);
+  const [hasMore, setHasMore]         = useState(true);
+  const [hasFetched, setHasFetched]   = useState(false);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [fetchError, setFetchError]       = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+
+  const [filters, setFilters]             = useState<OrderHistoryFilters>({});
+  const [filterVisible, setFilterVisible] = useState(false);
+
+  // Refs so closures always read current values without stale captures
+  const fetchingRef  = useRef(false);
+  const pageRef      = useRef(1);
+  const filtersRef   = useRef<OrderHistoryFilters>({});
+  filtersRef.current = filters;
+
+  // Fetch a specific page and append or replace
+  const fetchPage = useCallback(async (
+    pageNum: number,
+    activeFilters: OrderHistoryFilters,
+    replace: boolean,
+  ) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      const code = await getProfileCode();
+      if (!code) { setHasFetched(true); return; }
+      const { items, hasMore: more } = await postOrderHistory(code, pageNum, activeFilters);
+      setOrders(prev => replace ? items : [...prev, ...items]);
+      pageRef.current = pageNum;
+      setHasMore(more);
+      if (replace) setFetchError(null);
+      else setLoadMoreError(null);
+    } catch (e: any) {
+      const msg = e?.message ?? 'Something went wrong.';
+      if (replace) setFetchError(msg);
+      else setLoadMoreError(msg);
+    } finally {
+      setHasFetched(true);
+      fetchingRef.current = false;
+    }
+  }, []);
+
+  // Reset + load page 1 on focus or filter change
+  const reload = useCallback((activeFilters: OrderHistoryFilters) => {
+    setHasFetched(false);
+    setOrders([]);
+    pageRef.current = 1;
+    setHasMore(true);
+    setFetchError(null);
+    fetchPage(1, activeFilters, true);
+  }, [fetchPage]);
 
   useFocusEffect(
     useCallback(() => {
-      setHasFetched(false);
-      const cancelled = { current: false };
-      fetchOrders(cancelled);
-      return () => { cancelled.current = true; };
-    }, [fetchOrders]),
+      reload(filtersRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchOrders();
+    await fetchPage(1, filters, true);
     setRefreshing(false);
   };
 
-  const orderList  = orders ?? [];
-  const orderCount = orderList.length;
+  const onEndReached = async () => {
+    if (!hasMore || fetchingRef.current) return;
+    setLoadingMore(true);
+    await fetchPage(pageRef.current + 1, filtersRef.current, false);
+    setLoadingMore(false);
+  };
+
+  const handleApplyFilters = (newFilters: OrderHistoryFilters) => {
+    setFilters(newFilters);
+    setFilterVisible(false);
+    reload(newFilters);
+  };
+
+  const handleClearFilters = () => {
+    setFilters({});
+    setFilterVisible(false);
+    reload({});
+  };
+
+  const activeFilterCount = [
+    filters.sortBy && filters.sortBy !== 'desc',
+    filters.dateFrom,
+    filters.dateTo,
+  ].filter(Boolean).length;
+
+  const orderCount = orders.length;
 
   const renderItem = ({ item, index }: ListRenderItemInfo<OrderHistoryItemInterface>) => (
     <OrderRow
       item={item}
       onPress={(order) => navigation.navigate('OrderDetails', { orderItem: order })}
       delay={Math.min(index * 55, 320)}
-      isLast={index === orderList.length - 1}
+      isLast={index === orderCount - 1 && !hasMore}
     />
   );
+
+  const renderFooter = () => {
+    if (loadMoreError) {
+      return (
+        <ErrorBanner
+          body={loadMoreError}
+          onRetry={() => {
+            setLoadMoreError(null);
+            fetchPage(pageRef.current + 1, filtersRef.current, false);
+          }}
+        />
+      );
+    }
+    if (loadingMore) {
+      return (
+        <View style={styles.footerLoader}>
+          <ActivityIndicator size="small" color={Colors.ink3} />
+        </View>
+      );
+    }
+    return null;
+  };
+
+  const hasActiveFilters = !!(filters.sortBy && filters.sortBy !== 'desc') || !!filters.dateFrom || !!filters.dateTo;
 
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
@@ -168,23 +268,42 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         <View style={styles.emptyIllustration}>
           <Icon name="receipt-outline" size={52} color={Colors.ink3} />
         </View>
-        <Text style={styles.emptyTitle}>No orders yet.</Text>
-        <Text style={styles.emptyBody}>Once you place an order, it will live here.</Text>
+        {hasActiveFilters ? (
+          <>
+            <Text style={styles.emptyTitle}>No orders found.</Text>
+            <Text style={styles.emptyBody}>Try adjusting your filters.</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.emptyTitle}>No orders yet.</Text>
+            <Text style={styles.emptyBody}>Once you place an order, it will live here.</Text>
+          </>
+        )}
       </View>
       <View style={styles.emptyFooter}>
-        <TouchableOpacity
-          style={styles.emptyCTA}
-          activeOpacity={0.88}
-          onPress={() => navigation.navigate('Home')}
-        >
-          <Text style={styles.emptyCTAText}>Browse the collection</Text>
-        </TouchableOpacity>
+        {hasActiveFilters ? (
+          <TouchableOpacity
+            style={styles.emptyCTA}
+            activeOpacity={0.88}
+            onPress={handleClearFilters}
+          >
+            <Text style={styles.emptyCTAText}>Clear filters</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.emptyCTA}
+            activeOpacity={0.88}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text style={styles.emptyCTAText}>Browse the collection</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 
   const renderBody = () => {
-    if (!hasFetched && !isError) {
+    if (!hasFetched) {
       return (
         <View style={styles.skeletonWrap}>
           {[0, 1, 2, 3].map(i => (
@@ -207,27 +326,30 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         </View>
       );
     }
-    if (isError) {
+    if (fetchError) {
       return (
         <ErrorState
           title="Couldn't load your orders."
-          message={error ?? 'Tap retry to try again.'}
-          onRetry={() => fetchOrders()}
-          retryLoading={loading}
+          message={fetchError}
+          onRetry={() => reload(filters)}
+          retryLoading={!hasFetched}
         />
       );
     }
-    if (orderCount === 0 && hasFetched) {
+    if (orderCount === 0) {
       return renderEmpty();
     }
     return (
       <FlatList
-        data={orderList}
+        data={orders}
         renderItem={renderItem}
         keyExtractor={(item, index) => `${item.Inventory_Id}-${index}`}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={renderFooter}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -246,12 +368,32 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
       <DarkHeader
         eyebrow="YOUR ORDERS"
-        title={orderCount === 0 ? 'History' : `${orderCount} ${orderCount === 1 ? 'order' : 'orders'}`}
+        title="History"
         onBack={() => navigation.goBack()}
         paddingTop={insets.top + Space[2]}
+        rightSlot={
+          <TouchableOpacity
+            onPress={() => { haptic.light(); setFilterVisible(true); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.filterBtn}
+          >
+            <Icon name="options-outline" size={20} color="#FFFFFF" />
+            {activeFilterCount > 0 ? (
+              <View style={styles.filterDot} />
+            ) : null}
+          </TouchableOpacity>
+        }
       />
 
       {renderBody()}
+
+      <OrderFilterSheet
+        visible={filterVisible}
+        onClose={() => setFilterVisible(false)}
+        onApply={handleApplyFilters}
+        onClearAll={handleClearFilters}
+        current={filters}
+      />
 
       <BottomNavBar
         activeTab="Orders"
@@ -268,6 +410,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
 
+  // ── Filter button ─────────────────────────────────────────────────────────────
+  filterBtn: {
+    position: 'relative',
+  },
+  filterDot: {
+    position:        'absolute',
+    top:             -2,
+    right:           -2,
+    width:           7,
+    height:          7,
+    borderRadius:    4,
+    backgroundColor: Colors.accent,
+  },
+
   // ── List ──────────────────────────────────────────────────────────────────────
   list: {
     flex: 1,
@@ -276,6 +432,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[5],
     paddingBottom:     Space[8],
+  },
+  footerLoader: {
+    paddingVertical: Space[5],
+    alignItems:      'center',
   },
 
   // ── Row — no card boxing, hairline dividers ───────────────────────────────────

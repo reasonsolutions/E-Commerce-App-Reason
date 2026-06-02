@@ -17,6 +17,7 @@ import {
   postSaveCartItems,
   getGuestCart,
   clearGuestCart,
+  type GuestCartItem,
 } from '../api/cart';
 import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -264,12 +265,19 @@ const Login: React.FC = () => {
         shake();
         return;
       }
-      const { AccessToken, ...userData } = result.result;
+      const { AccessToken, RefreshToken, ...userData } = result.result;
+      const keychainOpts = { securityLevel: Keychain.SECURITY_LEVEL.ANY };
       await Promise.all([
         Keychain.setGenericPassword('token', AccessToken, {
           service: STORAGE_KEYS.authToken,
-          securityLevel: Keychain.SECURITY_LEVEL.ANY,
+          ...keychainOpts,
         }),
+        RefreshToken
+          ? Keychain.setGenericPassword('token', RefreshToken, {
+              service: STORAGE_KEYS.refreshToken,
+              ...keychainOpts,
+            })
+          : Promise.resolve(),
         AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(userData)),
       ]);
       setTokenCache(AccessToken);
@@ -278,7 +286,7 @@ const Login: React.FC = () => {
         const guestItems = await getGuestCart();
         if (guestItems.length > 0) {
           await Promise.all(
-            guestItems.map((item: any) =>
+            guestItems.map((item: GuestCartItem) =>
               postSaveCartItems({
                 CustomerProfileCode: userData.CustomerProfileCode,
                 InventoryId: item.inventoryId,
@@ -291,7 +299,7 @@ const Login: React.FC = () => {
         }
         const cartRes = await getSavedCartItems(userData.CustomerProfileCode).catch(() => null);
         if (cartRes?.statusCode === 1) {
-          setCartCount((cartRes.result ?? []).length);
+          setCartCount((cartRes.result ?? []).reduce((sum: number, item: any) => sum + item.Quantity, 0));
         }
       }
       setLoading(false);
@@ -303,7 +311,7 @@ const Login: React.FC = () => {
       );
       shake();
     }
-  }, [loading, username, password, navigation, shake]);
+  }, [loading, username, password, navigation, shake, setCartCount]);
 
   // ── Derived layout ──────────────────────────────────────────────────────────
   const heroHeight = Math.round(screenHeight * 0.39);

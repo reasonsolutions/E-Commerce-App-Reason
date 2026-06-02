@@ -12,6 +12,8 @@ export const STORAGE_KEYS = {
   userData: 'userData',
   /** Keychain service key for JWT access token. */
   authToken: 'authToken',
+  /** Keychain service key for JWT refresh token. */
+  refreshToken: 'refreshToken',
   /** Recent search terms — JSON array of strings, max 8 entries. */
   recentSearches: 'recentSearches',
   /** Guest cart — JSON array of GuestCartItem, cleared after login merge. */

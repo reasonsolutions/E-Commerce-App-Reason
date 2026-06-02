@@ -25,11 +25,13 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { getCategories, getBrands } from '../api/product';
+import { SortBy } from '../config/enum_files/SortBy';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
 import {
   ProductByCategoryProductDetails,
   CategoryInterface,
+  GetBrandItem,
 } from '../api/interfaces';
 import {
   Skeleton,
@@ -76,24 +78,22 @@ function isFeaturedSpan(indexInGrid: number): boolean {
   return indexInGrid > 0 && indexInGrid % 5 === 0;
 }
 
+function toServerSortBy(sortKey: SortKey): SortBy | null {
+  if (sortKey === 'price_asc')  return SortBy.LowToHigh;
+  if (sortKey === 'price_desc') return SortBy.HighToLow;
+  return null;
+}
+
 function applySort(
   products: ProductByCategoryProductDetails[],
   sortKey: SortKey,
 ): ProductByCategoryProductDetails[] {
-  if (sortKey === 'default') return products;
-  const copy = [...products];
-  if (sortKey === 'price_asc') {
-    copy.sort((a, b) => a.Price - b.Price);
-  } else if (sortKey === 'price_desc') {
-    copy.sort((a, b) => b.Price - a.Price);
-  } else if (sortKey === 'newest') {
-    copy.sort((a, b) => {
-      const da = new Date(a.Date_Created).getTime();
-      const db = new Date(b.Date_Created).getTime();
-      return db - da;
-    });
+  if (sortKey === 'newest') {
+    return [...products].sort((a, b) =>
+      new Date(b.Date_Created).getTime() - new Date(a.Date_Created).getTime(),
+    );
   }
-  return copy;
+  return products;
 }
 
 // ── Wishlist heart — fire-and-forget, outline only on listing ─────────────────
@@ -553,9 +553,9 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         .then(res => {
           if (!active) return;
           const list = res?.result ?? [];
-          _cachedBrands = list.map((b: any) => ({
-            id: Number(b.BrandId ?? b.Brand_Id),
-            name: b.BrandName ?? b.Brand_Name ?? '',
+          _cachedBrands = list.map((b: GetBrandItem) => ({
+            id: Number(b.BrandId),
+            name: b.BrandName,
           }));
           setSheetBrands(_cachedBrands);
         })
@@ -585,9 +585,27 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   ]);
 
   // ── Shared mapper: allProducts API response → ProductByCategoryProductDetails
-  const mapProducts = (raw: any[]): ProductByCategoryProductDetails[] =>
+  interface RawProduct {
+    ItemID:       string;
+    Name:         string;
+    MinPrice:     number;
+    MaxComparePrice: number;
+    Description:  string;
+    SubcategoryID:string;
+    Images:       string;
+    CreatedDate:  string;
+    BrandID:      string;
+    BrandName:    string;
+    CategoryID:   string;
+    CategoryName: string;
+    CategoryImage:string;
+    SCName:       string;
+    Variants?:    { InventoryID: string; Variant: string; Stock: number }[];
+  }
+
+  const mapProducts = (raw: RawProduct[]): ProductByCategoryProductDetails[] =>
     raw.map(p => ({
-      Item_Id: p.ItemID,
+      Item_Id: Number(p.ItemID),
       Name: p.Name,
       Price: p.MinPrice,
       ComparePrice: p.MaxComparePrice,
@@ -621,6 +639,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         priceMax?: string;
         discount?: boolean;
         query?: string;
+        sort?: SortKey;
       },
     ) => {
       const cats = opts?.cats ?? filterCategories;
@@ -628,6 +647,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       const priceMin = opts?.priceMin ?? filterPriceMin;
       const priceMax = opts?.priceMax ?? filterPriceMax;
       const discount = opts?.discount ?? filterDiscount;
+      const serverSort = toServerSortBy(opts?.sort ?? sortKey);
 
       const effectiveBrands =
         brands.length > 0 ? brands : brandId != null ? [Number(brandId)] : [];
@@ -644,6 +664,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           to: priceMax !== '' ? Number(priceMax) : null,
         },
         discount: discount || isFlashDeals ? 1 : null,
+        sortBy: serverSort,
         pagination: { pageNumber: page, pageSize: PAGE_SIZE },
       };
       // isFlashDeals intentionally included — buildPayload must re-close when route params change
@@ -654,6 +675,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       filterPriceMin,
       filterPriceMax,
       filterDiscount,
+      sortKey,
       brandId,
       categoryId,
       searchQueryParam,
@@ -670,6 +692,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       priceMax?: string;
       discount?: boolean;
       query?: string;
+      sort?: SortKey;
       cancelled?: { current: boolean };
     }) => {
       setPageNumber(1);
@@ -752,6 +775,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       priceMin: draftPriceMin,
       priceMax: draftPriceMax,
       discount: draftDiscount,
+      sort: draftSortKey,
     });
   }, [
     draftCategories,

@@ -19,7 +19,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
 import CategoryItem from '../components/CategoryItem';
 import ProductCard from '../components/ProductCard';
-import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interfaces';
+import { CategoryInterface, ProductInterface, GetBrandItem, ProductByCategoryProductDetails } from '../api/interfaces';
 import { getProductsByCategory, getCategories, getBrands } from '../api/product';
 import { fallbackImageUrl } from '../utils/resolveImageUrl';
 import { useProductImage } from '../hooks/useProductImage';
@@ -311,7 +311,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         const names: string[] = Array.from(
           new Set<string>(
             (response.data?.result?.Products ?? [])
-              .map((p: any) => p.Name)
+              .map((p: ProductByCategoryProductDetails) => p.Name)
               .filter(Boolean),
           ),
         );
@@ -386,10 +386,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               CategoryID:      String(p.Category_Id),
               CategoryName:    p.CategoryName,
               CategoryImage:   p.CategoryImage,
-              MinPrice:        p.Price ?? 0,
-              MaxComparePrice: p.ComparePrice ?? 0,
-              OrganisationId:  '',
-              Variants:        [],
+              MinPrice:              p.Price ?? 0,
+              MaxComparePrice:       p.ComparePrice ?? 0,
+              OrganisationId:        '',
+              OrganisationName:      '',
+              RelatedProducts:       null,
+              DiscountPct:           0,
+              ComplianceInfo:        { AgeRestrictedInfo: { IsAgeRestricted: false, MinimumAge: null, PrescriptionRequired: false }, HazardousInfo: { IsHazardous: false, HazardClasses: null, UnNumber: null, HazardLabels: null, HandlingInstructions: null, SafetyDataSheetURL: null }, RestrictedRegion: [], SaleHours: null },
+              ProductClassification: { IsDigital: false, IsVirtual: false, IsDownloadable: false, CountryOfOrigin: null, HSCode: null, Manufacturer: null, ManufacturerPartNumber: null },
+              Marketing:             { Tags: [], MetaTitle: null, MetaDescription: null },
+              PolicyInfo:            { IsReturnable: false, ReturnWindow: null, ReturnPolicy: null, HasWarranty: false, WarrantyPeriod: null, WarrantyType: null, WarrantyDetails: null },
+              AdditionalInfo:        { VideoUrl: null, SizeChart: null, CareInstructions: null, MaterialComposition: null, Color: null, Season: null },
+              ShippingInfo:          { FreeShipping: false, SeparateShippingRequired: false, EstimatedDeliveryDays: null, CanShipInternational: false, RestrictedCountries: null },
+              Variants:              [],
             });
           }
         }

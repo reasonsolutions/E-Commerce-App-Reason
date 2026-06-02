@@ -1,6 +1,6 @@
 # Project Modernization Audit — E-Commerce React Native App
 
-**Last updated:** 2026-05-28
+**Last updated:** 2026-06-02
 **Branch:** `dev` (canonical)
 **TypeScript status:** 0 errors, 51+ files compiled clean
 
@@ -34,17 +34,16 @@ This document is the canonical engineering reference for the E-Commerce React Na
 The app is a React Native e-commerce client (iOS + Android) supporting: product browsing, category/search results, product detail, cart, checkout with address management, order history, order detail, wishlist, profile, registration, and OTP verification. Authentication is username/password with JWT stored in Keychain; session validity is checked at startup to determine the initial route.
 
 **Current state:**
-- Feature/domain-organized API layer — all domains (auth, cart, wishlist, address, product) are on real APIs. Order domain is mixed (history real, detail still mock).
+- Feature/domain-organized API layer — all domains (auth, cart, wishlist, address, product, order) are on real APIs. Order detail (`postCnfOrderDetail`) still on mock pending backend verification.
 - Auth token injection fully implemented — Keychain-backed Bearer token on all non-auth requests, with in-memory cache to avoid repeated Keychain reads.
-- Dynamic initial route — `getInitialRoute()` in `src/utils/auth.ts` checks Keychain for a valid, non-expired JWT on startup; routes to `Home` or `Login` accordingly.
+- Refresh token flow implemented — 401 → `token/getEcommAccessToken` → retry. Concurrent 401s deduplicated. Both tokens cleared on logout/failed refresh.
+- `getInitialRoute()` always returns `'Home'` — token expiry handled reactively via 401, no clock-based checks.
 - Design token system, shared UI and system component library, premium motion vocabulary.
 - NativeWind v4 + semantic primitives layer for new component work.
 - Gluestack overlay stack abandoned; local component ownership adopted.
 - `useAsyncState` cancellation-safe async hook across all data-fetching screens.
 - Server-authoritative cart badge via `CartContext`.
-- 5 screens frozen as the visual standard (Login, Home, ProductScreen, OrderSuccessScreen, CartScreen).
-- Phase 3 redesign pending: ResultScreen, WishlistScreen, OrderHistoryScreen, OrderDetailScreen.
-- Completed Phase 3: ProfileScreen, AddressScreen, RegisterScreen, OTPVerificationScreen, AddressManagementScreen.
+- Phase 3 redesign complete: all 14 screens done. Frozen reference screens: Login, HomeScreen, ProductScreen, OrderSuccessScreen, CartScreen.
 
 ---
 
@@ -204,18 +203,18 @@ All domains except order detail are on the real API:
 - Base URL: `API_BASE_URL` from `@env`
 - Timeout: 10,000ms
 - Header: `content-type: application/json`
-- **Request interceptor:** Injects `Authorization: Bearer <token>` on all non-auth endpoints. Reads from an in-memory cache (`_cachedToken`) first; falls back to Keychain read (~100–300ms) if cache is cold. Auth endpoints (`token/`, `postCreateCustomer`, `postConfirmCustomer`) are excluded. Token cache is primed by `setTokenCache()` after login, cleared by `clearTokenCache()` on logout/session expiry.
-- **Response interceptor:** Classifies all HTTP/network/timeout errors via `classifyError()`, logs via `apiLog()`. Application-level envelope check (`statusCode !== 1`) remains commented out — uncomment when all screens are on `useAsyncState`.
+- **Request interceptor:** Injects `Authorization: Bearer <token>` on all non-auth endpoints. Reads from in-memory cache (`_cachedToken`) first; falls back to Keychain read (~100–300ms) if cold. Excluded endpoints: `token/postLoginCustomer`, `api/token/getEcommAccessToken`, `postCreateCustomer`, `postConfirmCustomer`.
+- **Response interceptor:** On 401 — calls `token/getEcommAccessToken` with refresh token as Bearer header. On success: updates Keychain + in-memory cache, retries the original request. Multiple concurrent 401s share one `_refreshPromise` to avoid duplicate refresh calls. If refresh also fails → `clearSession()` + `resetToLogin()`. Classifies all other errors via `classifyError()`, logs via `apiLog()`. Application-level envelope check (`statusCode !== 1`) remains commented out.
 
 ### 4.5 Session management (`src/utils/auth.ts`)
 
-`getInitialRoute()` — called once at app startup by `AppNavigator`:
-1. Reads JWT from Keychain.
-2. Base64-decodes the payload and checks the `exp` claim.
-3. If expired or missing, calls `clearSession()` (clears Keychain + AsyncStorage) and returns `'Login'`.
-4. If valid, returns `'Home'`.
+`getInitialRoute()` — always returns `'Home'`. No Keychain read at startup. Token expiry is handled reactively via the 401 interceptor, not by decoding `exp` at startup (clock-skew risk removed).
 
-This replaces the previous hardcoded `initialRouteName="Login"`.
+`isLoggedIn()` — checks Keychain presence only (no expiry check). Returns `true` if a token exists.
+
+`clearSession()` — clears in-memory token cache, access token Keychain entry (`STORAGE_KEYS.authToken`), refresh token Keychain entry (`STORAGE_KEYS.refreshToken`), and `STORAGE_KEYS.userData` from AsyncStorage.
+
+**Token lifecycle:** Access token = 15 min, Refresh token = 7 days. Login requires `ClientType: 'MOB-RN-2F9A'` — injected automatically by `authApi.ts`. Both tokens stored in Keychain on login.
 
 ### 4.6 OrganisationID caching (`src/api/product/productApi.ts`)
 
@@ -243,33 +242,17 @@ All responses follow:
 
 ### 4.9 ProductInterface — live API shape
 
-```typescript
-export interface ProductVariant {
-    InventoryID: string;
-    Variant: string;
-    Stock: number;
-    SKU: string;
-    PriceDetails: { Price: number; ComparePrice: number; };
-}
+`ProductInterface` and `ProductVariant` (allProducts) and `ProductDetailInterface` + `VariantInterface` (getProductByItemId) are fully typed in `src/api/interfaces.ts` to match the real API response including: `StockStatus`, `BackOrder`, `PhysicalAttributes`, `PriceDetails.Taxes`, `ComplianceInfo`, `ProductClassification`, `Marketing`, `PolicyInfo`, `AdditionalInfo`, `ShippingInfo`, `DiscountPct`, `OrganisationName`.
 
-export interface ProductInterface {
-    ItemID: number;
-    Name: string;
-    Description: string;
-    SubcategoryID: string;
-    Images: string;           // relative path — resolved via resolveImageUrl()
-    CreatedDate: string;
-    BrandID: string;
-    BrandName: string;
-    SCName: string;
-    CategoryID: string;
-    CategoryName: string;
-    CategoryImage: string;    // full Cloudinary URL
-    MinPrice: number;
-    MaxComparePrice: number;
-    Variants: ProductVariant[];
-}
-```
+Shared sub-interfaces: `VariantTax`, `PhysicalAttributes`, `ProductComplianceInfo`, `ProductDetailComplianceInfo`, `ProductClassification`, `ProductMarketing`, `ProductPolicyInfo`, `ProductShippingInfo`.
+
+### 4.10 Enums (`src/config/enum_files/`)
+
+Server-side enums — one file each: `TaxType`, `SortBy`, `WeightUnit`, `DimensionUnit`, `VolumeUnit`, `ItemCondition`, `HazardClass`, `HazardLabel`, `WarrantyType`, `ProductDemographic`, `Season`. All are applied to the relevant numeric fields in `interfaces.ts`. Import directly from the specific file — no barrel index.
+
+### 4.11 SortBy — server-side sorting
+
+`allProducts` endpoint accepts `sortBy: SortBy | null`. All three product fetch functions (`getAllProducts`, `getProductsByCategory`, `getProductsByBrand`) accept an optional `sortBy?: SortBy` parameter. `ResultScreen` maps `price_asc` → `SortBy.LowToHigh`, `price_desc` → `SortBy.HighToLow` server-side; `newest` and `default` remain client-side.
 
 ### 4.10 Adapter/domain normalization layer — intentionally absent
 
@@ -521,9 +504,9 @@ Gluestack overlay packages ship ESM-only and depend on `react-dom`, `react-aria`
 
 See §4.10. Screens consume DTOs directly. Adapters were prototyped and removed.
 
-### 8.6 Dynamic initial route via JWT expiry check
+### 8.6 Reactive token expiry — no clock-based checks
 
-The app no longer hardcodes `initialRouteName="Login"`. `getInitialRoute()` decodes the JWT from Keychain and checks the `exp` claim — expired tokens are cleared and the user is sent to Login. This means returning users land directly on Home without re-authenticating.
+Clock-based JWT expiry check removed from `getInitialRoute()` and `isLoggedIn()`. Token validity is determined reactively: if the server returns 401, the interceptor attempts a refresh. This eliminates clock-skew false logouts. `getInitialRoute()` always returns `'Home'` — the app starts there regardless of token state, and the first authenticated API call will trigger refresh/logout if needed.
 
 ### 8.7 OrganisationID via product fetch cache
 
@@ -541,6 +524,8 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | `postUpdateCustomer` password | `Password` field is required but overwrites the stored password — cannot update profile without setting a new password. Backend discussing fix. |
 | Order detail on mock | `postCnfOrderDetail` still uses mock in `order/index.ts`. Switch to real once `getOrderStatus` endpoint is confirmed working. |
 | `useSession` adoption | WishlistScreen and CartScreen migrated to `useProfileCode()`. Still pending: AddressScreen, OrderHistoryScreen, OrderDetailScreen. |
+| Tax display in UI | `ProductScreen`, `CartScreen`, `AddressScreen` don't show tax breakdown. Tax data is available in variant response but not rendered. |
+| `getSavedCartItems` tax verification | Unconfirmed whether cart API returns `PriceDetails.Taxes` populated — needs real response check before tax display work. |
 | API response types | `axiosInstance` responses are untyped (`any`). Incremental hardening deferred. |
 | Navigation prop typing | Most screens use `any`-typed navigation props. Should use `StackNavigationProp` generics. |
 | `heroBanner` from legacy `src/data/mockData.js` | HomeScreen still imports from the old mock file. Should migrate to `api/mock/mockData.ts`. |
@@ -552,7 +537,13 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | Item | Resolution |
 |---|---|
 | Auth token injection | Implemented — Keychain-backed Bearer token with in-memory cache in `axiosInstance.ts` |
-| Hardcoded initial route to Login | Resolved — `getInitialRoute()` in `src/utils/auth.ts` checks JWT expiry |
+| Hardcoded initial route to Login | Resolved — `getInitialRoute()` always returns `'Home'`; expiry handled reactively |
+| Clock-based JWT expiry check | Removed — replaced with 401-reactive refresh flow |
+| Refresh token flow | Implemented — `api/token/getEcommAccessToken` called on 401; concurrent 401s deduplicated; both tokens cleared on logout |
+| Tax data in order payload | Fixed — `AddressScreen` maps `PriceDetails.Taxes` from cart items into `PlaceOrderTax[]` |
+| `ProductInterface` partial typing | Fully typed against live API — includes `PhysicalAttributes`, `ComplianceInfo`, `Taxes`, `StockStatus`, all nested objects |
+| Server-side sorting | Implemented — `allProducts` payload sends `sortBy: SortBy | null`; `ResultScreen` maps sort keys |
+| Enum files | Created — `src/config/enum_files/` with 11 enums applied to `interfaces.ts` |
 | Cart/WishlistScreen reading AsyncStorage directly | Migrated to `useProfileCode()` hook |
 | `endpoints.js` plain JS | Migrated to `endpoints.ts` with `as const` domain objects |
 | `url.js` base URL config | Deleted — base URL lives in `.env` |
@@ -580,10 +571,10 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | AddressManagementScreen | 3 | **Complete** | Full CRUD for delivery addresses. Inline form with `FloatingLabelInput`. Uses `useAsyncState`. |
 | ProfileScreen | 3 | **Complete** | Redesigned to frozen standard. |
 | AddressScreen | 3 | **Complete** | Redesigned. Uses `getOrgIdForInventory` for order payload. Still reads AsyncStorage directly (not yet on `useProfileCode`). |
-| ResultScreen | 3 | Pending | Phase 3 candidate. |
-| WishlistScreen | 3 | Pending | Phase 3 candidate. On `useProfileCode`. |
-| OrderHistoryScreen | 3 | Pending | Phase 3 candidate. |
-| OrderDetailScreen | 3 | Pending | Phase 3 candidate. `postCnfOrderDetail` still on mock. |
+| ResultScreen | 3 | **Complete** | Server-side SortBy wired. |
+| WishlistScreen | 3 | **Complete** | On `useProfileCode`. |
+| OrderHistoryScreen | 3 | **Complete** | Hairline rows, StatusBadge, pull-to-refresh. |
+| OrderDetailScreen | 3 | **Complete** | `postCnfOrderDetail` still on mock pending backend verification. |
 
 ---
 
@@ -751,12 +742,9 @@ Used by: CartScreen, WishlistScreen, OrderHistoryScreen, ProfileScreen, ResultSc
 
 **Exception:** HomeScreen retains its own local entrance. Do not replace.
 
-### 16.5 Remaining Phase 3 priority order
+### 16.5 Phase 3 status
 
-1. ResultScreen — high visibility, `ProductCard` already frozen
-2. WishlistScreen — emotional screen, current grid reads as marketplace not curated edit
-3. OrderHistoryScreen — hairline rows, `StatusBadge` retone
-4. OrderDetailScreen — `DetailRow` flat layout; unblock by switching `postCnfOrderDetail` to real
+All 14 screens complete. No pending redesign work.
 
 ---
 

@@ -20,6 +20,7 @@ import { FontFamily } from '../theme/fonts';
 import { getDeliveryAddresses, postCreateDeliveryAddress } from '../api/address';
 import { placeOrder } from '../api/order';
 import { getOrgIdForInventory } from '../api/product';
+import { useCart } from '../context/CartContext';
 import { PlaceOrderInterface, SavedCartItemInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -145,6 +146,7 @@ const PlaceOrderButton: React.FC<{
 const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
 
+  const { setCartCount } = useCart();
   const { data: addresses, loading: fetchLoading, isError: fetchError, error: fetchErrorMsg, run } =
     useAsyncState<DeliveryAddress[]>([]);
 
@@ -272,7 +274,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     // Group items by OrganisationId — use field from cart API, fall back to product cache
     const orgMap = new Map<string, SavedCartItemInterface[]>();
     for (const item of cartItems) {
-      const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId) || 'NULL';
+      const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId);
       if (!orgMap.has(orgId)) orgMap.set(orgId, []);
       orgMap.get(orgId)!.push(item);
     }
@@ -290,7 +292,13 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         Discount:           0,
         VAT:                0,
         OrderStatus:        1,
-        Taxes:              [],
+        Taxes:              (item.PriceDetails?.Taxes ?? []).map(t => ({
+          TaxId:   t.TaxId,
+          TaxName: '',
+          TaxType: t.TaxType,
+          TaxRate: t.TaxRate,
+          Reason:  '',
+        })),
       })),
     }));
 
@@ -323,6 +331,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         setOrderError(response?.userMessage || 'Could not place your order. Please try again.');
         return;
       }
+      setCartCount(0);
       navigation.navigate('OrderSuccess', { orderNumber: response.result?.OrderNumber ?? '' });
     } catch (err: any) {
       setOrderError('Could not place your order. Please try again.');
