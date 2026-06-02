@@ -18,6 +18,8 @@ export const STORAGE_KEYS = {
   recentSearches: 'recentSearches',
   /** Guest cart — JSON array of GuestCartItem, cleared after login merge. */
   guestCart: 'guestCart',
+  /** Recently viewed products — JSON array of ProductInterface snapshots, max 8, newest-first. */
+  recentlyViewed: 'recentlyViewed',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

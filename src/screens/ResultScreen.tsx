@@ -600,6 +600,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     CategoryName: string;
     CategoryImage:string;
     SCName:       string;
+    DiscountPct?: number;
     Variants?:    { InventoryID: string; Variant: string; Stock: number }[];
   }
 
@@ -622,6 +623,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       CategoryName: p.CategoryName,
       CategoryImage: p.CategoryImage,
       SCName: p.SCName,
+      DiscountPct:  p.DiscountPct ?? 0,
       Inventory_Id: p.Variants?.[0] ? Number(p.Variants[0].InventoryID) : 0,
       Variant: p.Variants?.[0]?.Variant ?? '',
       Count: p.Variants?.[0]?.Stock ?? 0,

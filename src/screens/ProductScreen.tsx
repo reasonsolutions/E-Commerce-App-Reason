@@ -46,6 +46,8 @@ import { useAuthGuard } from '../hooks/useAuthGuard';
 import { LoginPromptSheet } from '../components/ui/LoginPromptSheet';
 import { addToGuestCart } from '../api/cart';
 import { getOrgIdForInventory } from '../api/product';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/storageKeys';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_H = Math.round(SCREEN_H * 0.58);
@@ -108,6 +110,28 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     const preselect = firstInStock ?? variants[0];
     if (preselect) setSelectedVariant(String(preselect.InventoryId));
   }, [data, plateAnim]);
+
+  // Risk 4 fix: recently viewed write isolated — only fires once per successful product load
+  useEffect(() => {
+    if (!data?.product) return;
+    const p = data.product;
+    const itemIdNum = parseInt(p.ItemId, 10);
+    const preselect = p.Variants?.find(v => v.StockStatus?.Description !== 'out_of_stock') ?? p.Variants?.[0];
+    AsyncStorage.getItem(STORAGE_KEYS.recentlyViewed).then(raw => {
+      const prev: any[] = raw ? JSON.parse(raw) : [];
+      const snapshot = {
+        ItemID:          itemIdNum,
+        Name:            p.Name,
+        BrandName:       p.BrandName,
+        Images:          p.Images,
+        MinPrice:        preselect?.PriceDetails?.Price ?? 0,
+        MaxComparePrice: preselect?.PriceDetails?.ComparePrice ?? 0,
+        Inventory_Id:    preselect?.InventoryId ?? null,
+      };
+      const next = [snapshot, ...prev.filter((x: any) => x.ItemID !== itemIdNum)].slice(0, 8);
+      AsyncStorage.setItem(STORAGE_KEYS.recentlyViewed, JSON.stringify(next));
+    }).catch(() => {});
+  }, [data]);
 
   useEffect(() => {
     if (!data?.product || !profileCode) return;

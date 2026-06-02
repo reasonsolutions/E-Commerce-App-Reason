@@ -187,7 +187,7 @@ All domains except order detail are on the real API:
 | `cart` | **Real** | All functions |
 | `address` | **Real** | All functions |
 | `wishlist` | **Real** | All functions |
-| `order` | **Mixed** | `placeOrder` + `postOrderHistory` = real; `postCnfOrderDetail` = mock (pending backend verification) |
+| `order` | **Mixed** | `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory` = real (with pagination + filters); `postCnfOrderDetail` = mock (pending backend verification) |
 
 `MOCK_MODE` in `src/config/env.ts` is `__DEV__` but no longer gates any domain — all domains bypass it. The constant remains for `MOCK_DELAY_MS` usage in mock implementations.
 
@@ -356,6 +356,7 @@ Thin NativeWind-ready wrappers over React Native core components. Enables `class
 | `ToastOverlay` | Active | Portal-style overlay — subscribes to `toastEmitter`, renders `AppToast` at top of screen with spring entrance. Auto-dismisses after 3.5s. Mount once in `App.tsx`. |
 | `VariantSheet` | Active | Bottom sheet for variant selection — uses `gluestack/Actionsheet` |
 | `FilterSheet` | Active | Bottom sheet for sort/category/brand/price/discount filters. Uses RN `Modal`. Owns all draft filter state via props. |
+| `OrderFilterSheet` | Active | Lightweight filter sheet for order history — sort (asc/desc) + date range. Uses RN `Modal`. |
 | `HeroNavButton` | Active | Floating nav button (ProductScreen) |
 | `Rating` | Deprecated | `@deprecated` JSDoc present. Zero screen usage. Adopt before use. |
 | `SectionLabel` | Deprecated | `@deprecated` JSDoc present. Zero screen usage. Migrate HomeScreen section headers here before adopting. |
@@ -561,11 +562,11 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 
 | Screen | Phase | Status | Notes |
 |---|---|---|---|
-| Login | 2 | **Frozen** | Dark hero / light form split. Staggered spring entrance. Seeds cart count post-login. |
-| HomeScreen | 2 | **Frozen** | Local entrance animation (exception to shared hook — intentional). |
-| ProductScreen | 2 | **Frozen** | NativeWind reference implementation. |
-| CartScreen | 2 | **Frozen** | Hairline dividers, no card boxing. |
-| OrderSuccessScreen | 2 | **Frozen** | Ember ring animation on Carry curve. |
+| Login | 2 | **Complete** | Dark hero / light form split. Staggered spring entrance. Seeds cart count post-login. |
+| HomeScreen | 2 | **Complete** | Local entrance animation (exception to shared hook — intentional). |
+| ProductScreen | 2 | **Complete** | NativeWind reference implementation. |
+| CartScreen | 2 | **Complete** | Hairline dividers, no card boxing. |
+| OrderSuccessScreen | 2 | **Complete** | Ember ring animation on Carry curve. |
 | RegisterScreen | 3 | **Complete** | `postCreateCustomer` → navigates to OTPVerification with params. |
 | OTPVerificationScreen | 3 | **Complete** | `postConfirmCustomer` → navigates to Login on success. 6-digit OTP input. |
 | AddressManagementScreen | 3 | **Complete** | Full CRUD for delivery addresses. Inline form with `FloatingLabelInput`. Uses `useAsyncState`. |
@@ -573,7 +574,7 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | AddressScreen | 3 | **Complete** | Redesigned. Uses `getOrgIdForInventory` for order payload. Still reads AsyncStorage directly (not yet on `useProfileCode`). |
 | ResultScreen | 3 | **Complete** | Server-side SortBy wired. |
 | WishlistScreen | 3 | **Complete** | On `useProfileCode`. |
-| OrderHistoryScreen | 3 | **Complete** | Hairline rows, StatusBadge, pull-to-refresh. |
+| OrderHistoryScreen | 3 | **Complete** | Hairline rows, StatusBadge, pull-to-refresh, infinite scroll pagination, sort/date filters via OrderFilterSheet. |
 | OrderDetailScreen | 3 | **Complete** | `postCnfOrderDetail` still on mock pending backend verification. |
 
 ---
@@ -589,7 +590,7 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | Cart | **Real** | All functions |
 | Address | **Real** | All functions |
 | Wishlist | **Real** | All functions |
-| Order | **Mixed** | `placeOrder` + `postOrderHistory` = real; `postCnfOrderDetail` = mock |
+| Order | **Mixed** | `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory` = real (pagination + filters); `postCnfOrderDetail` = mock |
 
 ### Image resolution
 
@@ -641,7 +642,7 @@ Reactotron
 
 | Branch | Role |
 |---|---|
-| `main` | Historical baseline — frozen at pre-modernization state. Do not modify. |
+| `main` | Production branch — kept in sync with `dev` via merge. |
 | `dev` | Canonical engineering branch. All work happens here. |
 
 ---
@@ -665,7 +666,7 @@ Reactotron
 
 ---
 
-## 16. Premium UX Refinement — Frozen Patterns (Phase 2)
+## 16. Premium UX Refinement — Reference Patterns (Phase 2)
 
 These patterns define the visual and interaction standard. Phase 3 work must follow them.
 
@@ -699,21 +700,21 @@ Press-scale animator. Returns `{ animatedStyle, handlers }`. Wrap in `Animated.V
 #### `src/components/ui/FloatingLabelInput.tsx`
 Static-label underline input. Label always visible at `Type.label` scale. Only the underline animates on focus (1→2px, Tap curve). Used in Login, RegisterScreen, AddressScreen, AddressManagementScreen.
 
-### 16.2 Frozen screens — key decisions
+### 16.2 Reference screens — key decisions
 
-#### Login — FROZEN
+#### Login
 Dark hero / light form panel split. 5-layer `LinearGradient` atmospheric composition. Staggered spring entrance. Failure: inline caption + button shake + `haptic.warning()`.
 
-#### HomeScreen — FROZEN
+#### HomeScreen
 **Architecture exception:** HomeScreen retains its own local entrance animation (500ms/440ms, `initialY=14`) — do not replace with the shared hook. The different timing is intentional for the hero's heavier feel.
 
-#### ProductScreen — FROZEN
+#### ProductScreen
 NativeWind reference implementation. Identity plate below image: brand `Type.label` → name `Type.heading` → price `Type.priceLarge`. Ember discount marker. Hairline variant chips. `PrimaryButton` + `TextLinkButton` CTA pair.
 
-#### OrderSuccessScreen — FROZEN
+#### OrderSuccessScreen
 72px ember ring scales from 0.52→1.0 on Carry curve. `haptic.success()` at completion. Staggered Settle content entrance.
 
-#### CartScreen — FROZEN
+#### CartScreen
 No card boxing — hairline `Colors.rule` dividers. 4:5 portrait image ratio. Inline `− N +` mono qty control. `Colors.surfaceDeep` summary panel. `Shadow.sm` only.
 
 ### 16.3 Binding patterns for Phase 3

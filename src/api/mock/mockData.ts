@@ -32,49 +32,49 @@ export const mockCategories: CategoryInterface[] = [
     CategoryId: 1,
     CategoryName: 'Footwear',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146432/shoes_xu0vfr.png',
-    Brands: [{ Brand_Id: 1, Brand_Name: 'Nike' }],
+    Brands: [{ BrandId: '1', BrandName: 'Nike' }],
   },
   {
     CategoryId: 2,
     CategoryName: 'Watches',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146431/watch_ztlcto.png',
-    Brands: [{ Brand_Id: 5, Brand_Name: 'Casio' }],
+    Brands: [{ BrandId: '5', BrandName: 'Casio' }],
   },
   {
     CategoryId: 3,
     CategoryName: 'Bag',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146429/bags_x9w0pz.png',
-    Brands: [{ Brand_Id: 6, Brand_Name: 'Van Heusen' }],
+    Brands: [{ BrandId: '6', BrandName: 'Van Heusen' }],
   },
   {
     CategoryId: 4,
     CategoryName: 'Pants',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146429/jeans_zmbaiy.png',
-    Brands: [{ Brand_Id: 7, Brand_Name: 'Allen Solly' }],
+    Brands: [{ BrandId: '7', BrandName: 'Allen Solly' }],
   },
   {
     CategoryId: 5,
     CategoryName: 'Clothes',
     CategoryImage: 'https://res.cloudinary.com/dwnaq2fk7/image/upload/v1736146428/shirt_mjjvxn.png',
-    Brands: [{ Brand_Id: 8, Brand_Name: 'ARROW' }],
+    Brands: [{ BrandId: '8', BrandName: 'ARROW' }],
   },
   {
     CategoryId: 7,
     CategoryName: 'Skin Care',
     CategoryImage: 'https://png.pngtree.com/png-clipart/20221015/original/pngtree-skincare-logo-png-image_8689417.png',
-    Brands: [{ Brand_Id: 11, Brand_Name: 'Lakme' }],
+    Brands: [{ BrandId: '11', BrandName: 'Lakme' }],
   },
 ];
 
 // ─── Brands ───────────────────────────────────────────────────────────────────
 
 export const mockBrands: BrandInterface[] = [
-  { Brand_Id: 1,  Brand_Name: 'Nike',        BrandImage: 'https://upload.wikimedia.org/wikipedia/commons/a/a6/Logo_NIKE.svg' },
-  { Brand_Id: 5,  Brand_Name: 'Casio',       BrandImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Casio_logo.svg/320px-Casio_logo.svg.png' },
-  { Brand_Id: 6,  Brand_Name: 'Van Heusen',  BrandImage: 'https://upload.wikimedia.org/wikipedia/commons/5/5d/Van_Heusen_Logo.png' },
-  { Brand_Id: 7,  Brand_Name: 'Allen Solly', BrandImage: 'https://upload.wikimedia.org/wikipedia/en/2/26/Allen_Solly_logo.png' },
-  { Brand_Id: 8,  Brand_Name: 'ARROW',       BrandImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Arrow_brand_logo.jpg/320px-Arrow_brand_logo.jpg' },
-  { Brand_Id: 11, Brand_Name: 'Lakme',       BrandImage: 'https://upload.wikimedia.org/wikipedia/en/thumb/9/98/Lakmé_logo.svg/320px-Lakmé_logo.svg.png' },
+  { BrandId: 1,  BrandName: 'Nike',        BrandImage: 'https://upload.wikimedia.org/wikipedia/commons/a/a6/Logo_NIKE.svg' },
+  { BrandId: 5,  BrandName: 'Casio',       BrandImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Casio_logo.svg/320px-Casio_logo.svg.png' },
+  { BrandId: 6,  BrandName: 'Van Heusen',  BrandImage: 'https://upload.wikimedia.org/wikipedia/commons/5/5d/Van_Heusen_Logo.png' },
+  { BrandId: 7,  BrandName: 'Allen Solly', BrandImage: 'https://upload.wikimedia.org/wikipedia/en/2/26/Allen_Solly_logo.png' },
+  { BrandId: 8,  BrandName: 'ARROW',       BrandImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Arrow_brand_logo.jpg/320px-Arrow_brand_logo.jpg' },
+  { BrandId: 11, BrandName: 'Lakme',       BrandImage: 'https://upload.wikimedia.org/wikipedia/en/thumb/9/98/Lakmé_logo.svg/320px-Lakmé_logo.svg.png' },
 ];
 
 // ─── Products (all) ───────────────────────────────────────────────────────────

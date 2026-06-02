@@ -6,23 +6,20 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Image,
   FlatList,
   Alert,
   BackHandler,
   Dimensions,
   Animated,
 } from 'react-native';
+import styles from './HomeScreen.styles';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
-import CategoryItem from '../components/CategoryItem';
-import ProductCard from '../components/ProductCard';
 import { CategoryInterface, ProductInterface, GetBrandItem, ProductByCategoryProductDetails } from '../api/interfaces';
 import { getProductsByCategory, getCategories, getBrands } from '../api/product';
-import { fallbackImageUrl } from '../utils/resolveImageUrl';
-import { useProductImage } from '../hooks/useProductImage';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
@@ -30,178 +27,150 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
-import { SearchBar, Skeleton, SkeletonRow, BottomNavBar } from '../components/ui';
-import { Colors, Space, Radius } from '../theme';
-import { Type } from '../theme/typography';
-import { FontFamily } from '../theme/fonts';
+import {
+  SearchBar, Skeleton, BottomNavBar,
+  SectionHead, BrandTile, CategoryTile, ProductRail,
+  TrustStrip, DeptFooter,
+} from '../components/ui';
+import { Colors, Space } from '../theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_H   = Math.round(SCREEN_W * 1.18);
-const BRIDGE_H = 64;
 
-const BRAND_DOMAINS: Record<string, string> = {
-  'nike':        'nike.com',
-  'casio':       'casio.com',
-  'van heusen':  'vanheusen.com',
-  'allen solly': 'pvhcorp.com',
-  'arrow':       'arrowshirts.com',
-  'parle':       'parle.com',
-  'lakme':       'lakmeindia.com',
-  'fogg':        'vini.co.in',
-  'crocs':       'crocs.com',
-};
-
-function brandFaviconUrl(brandName: string): string {
-  const key    = brandName.toLowerCase().trim();
-  const domain = BRAND_DOMAINS[key] ?? `${key.replace(/\s+/g, '')}.com`;
-  return `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=256`;
+// ── Discount helper — guard against inverted server DiscountPct ───────────────
+function calcDiscount(price: number, comparePrice: number): number {
+  if (comparePrice > price && price > 0) {
+    return Math.round(((comparePrice - price) / comparePrice) * 100);
+  }
+  return 0;
 }
 
-const FALLBACK_COLORS = [
-  Colors.ink2, Colors.ink3, Colors.accent,
-  Colors.ink1, Colors.ink3, Colors.ink2,
-  Colors.accent, Colors.ink1,
-];
+// ── Recently viewed snapshot — only the fields ProductCard actually reads ────
+interface RecentlyViewedItem {
+  ItemID:          number;
+  Name:            string;
+  BrandName:       string;
+  Images:          string;
+  MinPrice:        number;
+  MaxComparePrice: number;
+  Inventory_Id?:   number | null;
+}
 
-// ── Brand tile: favicon with letter fallback ─────────────────────────────────
-const BrandTile: React.FC<{ uri: string; name: string; fallbackColor: string }> = ({ uri, name, fallbackColor }) => {
-  const [failed, setFailed] = useState(false);
-  return (
-    <View style={styles.brandLogoWrap}>
-      {failed ? (
-        <Text style={[styles.brandFallbackLetter, { color: fallbackColor }]}>
-          {name.charAt(0).toUpperCase()}
-        </Text>
-      ) : (
-        <Image
-          source={{ uri }}
-          style={styles.brandLogo}
-          resizeMode="contain"
-          onError={() => setFailed(true)}
-        />
-      )}
-    </View>
-  );
-};
+// ── Spotlight shape for BannerSlot ────────────────────────────────────────────
+interface Spotlight {
+  kind: 'product' | 'category';
+  eyebrow: string;
+  title: string;
+  sub: string;
+  cta: string;
+  imageUri: string;
+  theme: 'photo' | 'split';
+  itemId?: number;
+  categoryId?: number;
+}
 
-
-
-// ── Hero slide — extracted so hooks can be called per item ───────────────────
-const HeroSlide: React.FC<{ item: ProductInterface; onPress: (id: number) => void }> = ({ item, onPress }) => {
-  const { uri, loading } = useProductImage(item.Name, item.BrandName, 'portrait');
+// ── Single banner card ─────────────────────────────────────────────────────────
+const BannerCard: React.FC<{ spot: Spotlight; height: number; onPress: () => void }> = ({
+  spot,
+  height,
+  onPress,
+}) => {
   const imgOpacity = useRef(new Animated.Value(0)).current;
-
-  const onImageLoad = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  const onLoad = useCallback(() => {
+    Animated.timing(imgOpacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   }, [imgOpacity]);
 
-  const hasDiscount = item.MaxComparePrice > item.MinPrice;
-  const discountPct = hasDiscount
-    ? Math.round(((item.MaxComparePrice - item.MinPrice) / item.MaxComparePrice) * 100)
-    : 0;
+  const isEditorial = spot.theme === 'split';
 
   return (
-    <TouchableOpacity style={styles.heroSlide} activeOpacity={0.97} onPress={() => onPress(item.ItemID)}>
-      {/* Shimmer background while loading */}
-      {loading && <Skeleton height={HERO_H} radius={0} style={StyleSheet.absoluteFillObject} />}
-      {/* Fade in once URI is ready */}
-      {uri ? (
+    <TouchableOpacity style={[styles.bannerCard, { height }]} activeOpacity={0.92} onPress={onPress}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.ink1 }]} />
+      {spot.imageUri ? (
         <Animated.Image
-          source={{ uri }}
-          style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+          source={{ uri: spot.imageUri }}
+          style={[StyleSheet.absoluteFillObject, styles.bannerImg, { opacity: imgOpacity }]}
           resizeMode="cover"
-          onLoad={onImageLoad}
+          onLoad={onLoad}
         />
       ) : null}
       <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.92)']}
-        locations={[0.25, 0.52, 0.78, 1]}
+        colors={
+          isEditorial
+            ? ['rgba(18,15,12,0.92)', 'rgba(18,15,12,0.92)', 'rgba(18,15,12,0.25)']
+            : ['rgba(18,15,12,0.05)', 'rgba(18,15,12,0.05)', 'rgba(18,15,12,0.82)']
+        }
+        locations={isEditorial ? [0, 0.38, 1] : [0, 0.30, 1]}
+        start={{ x: isEditorial ? 0 : 0, y: isEditorial ? 0 : 0 }}
+        end={{ x: isEditorial ? 1 : 0, y: isEditorial ? 0 : 1 }}
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
       />
-      {hasDiscount && (
-        <View style={styles.heroSlideBadge}>
-          <Text style={styles.heroSlideBadgeText}>−{discountPct}%</Text>
-        </View>
-      )}
-      <View style={styles.heroSlideFooter}>
-        {item.BrandName ? (
-          <Text style={styles.heroSlideBrand}>{item.BrandName.toUpperCase()}</Text>
-        ) : null}
-        <Text style={styles.heroSlideName} numberOfLines={2}>{item.Name}</Text>
-        <View style={styles.heroSlidePriceRow}>
-          {item.MinPrice > 0 && <Text style={styles.heroSlidePrice}>Rs {item.MinPrice.toFixed(0)}</Text>}
-          {hasDiscount && <Text style={styles.heroSlidePriceWas}>Rs {item.MaxComparePrice.toFixed(0)}</Text>}
-        </View>
-        <View style={styles.heroSlideShopRow}>
-          <Text style={styles.heroSlideShopText}>Shop now</Text>
-          <Icon name="arrow-forward" size={13} color="rgba(255,255,255,0.75)" />
+      <View style={[styles.bannerContent, isEditorial && styles.bannerContentSplit]}>
+        <Text style={styles.bannerEyebrow}>{spot.eyebrow}</Text>
+        <Text style={[styles.bannerTitle, isEditorial && styles.bannerTitleItalic]} numberOfLines={2}>
+          {spot.title}
+        </Text>
+        <Text style={styles.bannerSub} numberOfLines={2}>{spot.sub}</Text>
+        <View style={styles.bannerCtaWrap}>
+          <View style={styles.bannerCta}>
+            <Text style={styles.bannerCtaText}>{spot.cta}</Text>
+            <Icon name="arrow-forward" size={15} color={Colors.ink1} />
+          </View>
         </View>
       </View>
     </TouchableOpacity>
   );
 };
 
-// ── Hero carousel ────────────────────────────────────────────────────────────
-const HeroCarousel: React.FC<{
-  products: ProductInterface[] | null;
-  onPress: (itemId: number) => void;
-}> = ({ products, onPress }) => {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
-  const autoTimer   = useRef<ReturnType<typeof setInterval> | null>(null);
+// ── BannerSlot — manual swipe, bounded cards, dots below ─────────────────────
+const BannerSlot: React.FC<{
+  spots: Spotlight[] | null;
+  onPress: (spot: Spotlight) => void;
+}> = ({ spots, onPress }) => {
+  const [active, setActive] = useState(0);
+  const listRef = useRef<FlatList>(null);
+  const BANNER_H = 432;
+  const CARD_W = SCREEN_W - Space.screenH * 2;
 
-  const slides = products ?? [];
-
-  const startAutoAdvance = useCallback(() => {
-    if (autoTimer.current) clearInterval(autoTimer.current);
-    if (slides.length < 2) return;
-    autoTimer.current = setInterval(() => {
-      setActiveIndex(prev => {
-        const next = (prev + 1) % slides.length;
-        flatListRef.current?.scrollToIndex({ index: next, animated: true });
-        return next;
-      });
-    }, 3500);
-  }, [slides.length]);
-
-  useEffect(() => {
-    startAutoAdvance();
-    return () => { if (autoTimer.current) clearInterval(autoTimer.current); };
-  }, [startAutoAdvance]);
-
-  if (!products) {
-    return <Skeleton height={HERO_H} radius={0} />;
+  if (spots === null) {
+    return (
+      <View style={styles.bannerSlot}>
+        <Skeleton height={BANNER_H} radius={20} style={{ marginHorizontal: Space.screenH }} />
+      </View>
+    );
   }
 
-  if (slides.length === 0) {
-    return <View style={[styles.heroBg, { height: HERO_H }]} />;
-  }
+  if (spots.length === 0) return null;
 
   return (
-    <View style={styles.heroBg}>
+    <View style={styles.bannerSlot}>
       <FlatList
-        ref={flatListRef}
-        data={slides}
-        keyExtractor={(item) => String(item.ItemID)}
+        ref={listRef}
+        data={spots}
+        keyExtractor={(_, i) => String(i)}
         horizontal
-        pagingEnabled
+        pagingEnabled={false}
         showsHorizontalScrollIndicator={false}
+        snapToInterval={CARD_W + Space[4]}
+        decelerationRate="fast"
+        contentContainerStyle={{ paddingHorizontal: Space.screenH, gap: Space[4] }}
         scrollEventThrottle={16}
-        onMomentumScrollBegin={() => {
-          if (autoTimer.current) clearInterval(autoTimer.current);
-        }}
         onMomentumScrollEnd={(e) => {
-          const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-          setActiveIndex(idx);
-          startAutoAdvance();
+          const idx = Math.round(e.nativeEvent.contentOffset.x / (CARD_W + Space[4]));
+          setActive(Math.min(idx, spots.length - 1));
         }}
-        renderItem={({ item }) => <HeroSlide item={item} onPress={onPress} />}
+        renderItem={({ item }) => (
+          <View style={{ width: CARD_W }}>
+            <BannerCard spot={item} height={BANNER_H} onPress={() => onPress(item)} />
+          </View>
+        )}
       />
-      {slides.length > 1 && (
-        <View style={styles.heroDots}>
-          {slides.map((_, i) => (
-            <View key={i} style={[styles.heroDot, i === activeIndex && styles.heroDotActive]} />
+      {spots.length > 1 && (
+        <View style={styles.bannerDots}>
+          {spots.map((_, i) => (
+            <View
+              key={i}
+              style={[styles.bannerDot, i === active && styles.bannerDotActive]}
+            />
           ))}
         </View>
       )}
@@ -209,13 +178,55 @@ const HeroCarousel: React.FC<{
   );
 };
 
+// ── Category spotlight card (EditFeature) ─────────────────────────────────────
+const CategorySpotlightCard: React.FC<{
+  category: CategoryInterface;
+  onPress: () => void;
+}> = ({ category, onPress }) => {
+  const imgOpacity = useRef(new Animated.Value(0)).current;
+  const onLoad = useCallback(() => {
+    Animated.timing(imgOpacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+  }, [imgOpacity]);
+  const imgUri = resolveImageUrl(category.CategoryImage);
+
+  return (
+    <TouchableOpacity style={styles.spotCard} onPress={onPress} activeOpacity={0.88}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.ink1 }]} />
+      {imgUri ? (
+        <Animated.Image
+          source={{ uri: imgUri }}
+          style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+          resizeMode="cover"
+          onLoad={onLoad}
+        />
+      ) : null}
+      <LinearGradient
+        colors={['rgba(18,15,12,0.82)', 'rgba(18,15,12,0.15)', 'rgba(18,15,12,0.80)']}
+        locations={[0, 0.46, 1]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+      <View style={styles.spotContent}>
+        <Text style={styles.spotEyebrow}>SHOP THE CATEGORY</Text>
+        <Text style={styles.spotTitle}>{category.CategoryName}</Text>
+        <View style={{ flex: 1 }} />
+        <View style={styles.spotCtaWrap}>
+          <View style={styles.spotCta}>
+            <Text style={styles.spotCtaText}>Explore {category.CategoryName}</Text>
+            <Icon name="arrow-forward" size={15} color={Colors.ink1} />
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// ── Back-press / logout logic ─────────────────────────────────────────────────
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
   getState?: () => { routes: Array<{ name: string }> };
 };
-type HomeScreenProps = { navigation: NavigationProp };
 
-// ── Preserved verbatim — back-press / logout logic ───────────────────────────
 function useCustomBackHandler(navigation: NavigationProp) {
   useFocusEffect(
     React.useCallback(() => {
@@ -240,21 +251,19 @@ function useCustomBackHandler(navigation: NavigationProp) {
                   },
                 },
               ],
-              { cancelable: true }
+              { cancelable: true },
             );
           }
         });
         return true;
       };
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => { subscription.remove(); };
-    }, [navigation])
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => { sub.remove(); };
+    }, [navigation]),
   );
 }
 
-// ── Preserved verbatim — local entrance hook (HomeScreen exception per CLAUDE.md) ──
-// Durations (500ms/440ms) and initialY=14 are intentionally different from the
-// shared useEntrance hook. Do not replace with the shared hook.
+// ── Preserved local entrance (HomeScreen exception per CLAUDE.md) ─────────────
 function useEntrance(delay = 0, withScale = false) {
   const opacity    = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(14)).current;
@@ -271,11 +280,14 @@ function useEntrance(delay = 0, withScale = false) {
   return { opacity, transform: withScale ? [{ translateY }, { scale }] : [{ translateY }] };
 }
 
+type HomeScreenProps = { navigation: NavigationProp };
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   useCustomBackHandler(navigation);
   const insets = useSafeAreaInsets();
+  const { cartCount } = useCart();
 
-  const { cartCount: cartItemsCount } = useCart();
+  // ── Search state ─────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery]         = useState('');
   const [suggestions, setSuggestions]         = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -283,12 +295,83 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [recentSearches, setRecentSearches]   = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Recently viewed ───────────────────────────────────────────────────────────
+  const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
+
+  // ── Resume cart cue ───────────────────────────────────────────────────────────
+  const [showResumeCue, setShowResumeCue] = useState(false);
+
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEYS.recentSearches).then(raw => {
       if (raw) try { setRecentSearches(JSON.parse(raw)); } catch {}
     });
   }, []);
 
+  // ── Data fetches ──────────────────────────────────────────────────────────────
+  const { data: categories, run: runCategories } = useAsyncState<CategoryInterface[]>(null);
+  const { data: products,   run: runProducts   } = useAsyncState<ProductInterface[]>(null);
+  const { data: brands,     run: runBrands     } = useAsyncState<GetBrandItem[]>(null);
+
+  // ── Entrance animations ───────────────────────────────────────────────────────
+  const bannerAnim  = useEntrance(60,  true);
+  const catAnim     = useEntrance(180);
+  const spotAnim    = useEntrance(240);
+  const rail1Anim   = useEntrance(300);
+  const brandsAnim  = useEntrance(360);
+  const rail2Anim   = useEntrance(420);
+
+  // Risk 2 fix: cartCount change only updates the cue, never re-fires API calls
+  useEffect(() => {
+    setShowResumeCue(cartCount > 0);
+  }, [cartCount]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const cancelled = { current: false };
+
+      // Load recently viewed from AsyncStorage
+      AsyncStorage.getItem(STORAGE_KEYS.recentlyViewed).then(raw => {
+        if (raw && !cancelled.current) {
+          try { setRecentlyViewed(JSON.parse(raw)); } catch {}
+        }
+      });
+
+      runCategories(
+        () => getCategories().then((d) => d.result as CategoryInterface[]),
+        cancelled,
+      );
+
+      runProducts(async () => {
+        // Independent fetch (Risk 3 fix) — first 4 categories only (Risk 6 fix)
+        const catRes = await getCategories().then((d) => d.result as CategoryInterface[]);
+        if (!catRes?.length) return [];
+        const ids = catRes.slice(0, 4).map((c) => c.CategoryId);
+        const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
+        const merged = results.flat() as ProductInterface[];
+        const seen = new Set<number>();
+        const deduped: ProductInterface[] = [];
+        for (const p of merged) {
+          if (!seen.has(p.ItemID)) {
+            seen.add(p.ItemID);
+            deduped.push(p);
+          }
+        }
+        return deduped;
+      }, cancelled);
+
+      runBrands(
+        () => getBrands().then((d) => {
+          const list: GetBrandItem[] = d?.result ?? [];
+          return list.slice(0, 8);
+        }),
+        cancelled,
+      );
+
+      return () => { cancelled.current = true; };
+    }, [runCategories, runProducts, runBrands]),
+  );
+
+  // ── Search handlers ───────────────────────────────────────────────────────────
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -335,151 +418,132 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     navigation.navigate('Result', { searchQuery: q, categoryName: `"${q}"` });
   }, [navigation, recentSearches]);
 
-  const {
-    data: categories,
-    run: runCategories,
-  } = useAsyncState<CategoryInterface[]>(null);
-
-  const {
-    data: products,
-    run: runProducts,
-  } = useAsyncState<ProductInterface[]>(null);
-
-  const {
-    data: brands,
-    run: runBrands,
-  } = useAsyncState<GetBrandItem[]>(null);
-
-  const heroAnim   = useEntrance(60, true);
-  const catAnim    = useEntrance(200);
-  const brandsAnim = useEntrance(260);
-  const featAnim   = useEntrance(320);
-  const shelfAnim  = useEntrance(400);
-  const editAnim   = useEntrance(480);
-
-  useFocusEffect(
-    useCallback(() => {
-      const cancelled = { current: false };
-      const categoriesPromise = getCategories().then((d) => d.result as CategoryInterface[]);
-      runCategories(() => categoriesPromise, cancelled);
-      runProducts(async () => {
-        const catRes = await categoriesPromise;
-        if (!catRes?.length) return [];
-        const ids = catRes.map((c) => c.CategoryId);
-        const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
-        const merged = results.flat();
-        const seen = new Set<number>();
-        const deduped: ProductInterface[] = [];
-        for (const p of merged) {
-          if (!seen.has(p.Item_Id)) {
-            seen.add(p.Item_Id);
-            deduped.push({
-              ItemID:          p.Item_Id,
-              Name:            p.Name,
-              Description:     p.Description,
-              SubcategoryID:   String(p.SubCategory_Id),
-              Images:          p.Images,
-              CreatedDate:     p.Date_Created,
-              BrandID:         String(p.Brand_Id),
-              BrandName:       p.Brand_Name,
-              SCName:          p.SCName,
-              CategoryID:      String(p.Category_Id),
-              CategoryName:    p.CategoryName,
-              CategoryImage:   p.CategoryImage,
-              MinPrice:              p.Price ?? 0,
-              MaxComparePrice:       p.ComparePrice ?? 0,
-              OrganisationId:        '',
-              OrganisationName:      '',
-              RelatedProducts:       null,
-              DiscountPct:           0,
-              ComplianceInfo:        { AgeRestrictedInfo: { IsAgeRestricted: false, MinimumAge: null, PrescriptionRequired: false }, HazardousInfo: { IsHazardous: false, HazardClasses: null, UnNumber: null, HazardLabels: null, HandlingInstructions: null, SafetyDataSheetURL: null }, RestrictedRegion: [], SaleHours: null },
-              ProductClassification: { IsDigital: false, IsVirtual: false, IsDownloadable: false, CountryOfOrigin: null, HSCode: null, Manufacturer: null, ManufacturerPartNumber: null },
-              Marketing:             { Tags: [], MetaTitle: null, MetaDescription: null },
-              PolicyInfo:            { IsReturnable: false, ReturnWindow: null, ReturnPolicy: null, HasWarranty: false, WarrantyPeriod: null, WarrantyType: null, WarrantyDetails: null },
-              AdditionalInfo:        { VideoUrl: null, SizeChart: null, CareInstructions: null, MaterialComposition: null, Color: null, Season: null },
-              ShippingInfo:          { FreeShipping: false, SeparateShippingRequired: false, EstimatedDeliveryDays: null, CanShipInternational: false, RestrictedCountries: null },
-              Variants:              [],
-            });
-          }
-        }
-        return deduped;
-      }, cancelled);
-      runBrands(
-        () => getBrands().then((d) => {
-          const list: GetBrandItem[] = d?.result ?? [];
-          return list.slice(0, 8);
-        }),
-        cancelled,
-      );
-      return () => { cancelled.current = true; };
-    }, [runCategories, runProducts, runBrands]),
-  );
-
-  const deduplicatedProducts = products
-    ? Array.from(new Map(products.filter(p => p.ItemID != null).map((p) => [p.ItemID, p])).values())
+  // ── Derived data ──────────────────────────────────────────────────────────────
+  const deduped = products
+    ? Array.from(new Map(products.filter(p => p.ItemID != null).map(p => [p.ItemID, p])).values())
     : null;
 
-  const featuredProduct = deduplicatedProducts?.[0] ?? null;
-  const flashDealProducts = deduplicatedProducts
-    ? deduplicatedProducts.filter((p, i) =>
-        i > 0 && p.MaxComparePrice > 0 && p.MinPrice > 0 && p.MaxComparePrice !== p.MinPrice,
-      )
+  // Group products by category for per-category rails
+  const byCategory = deduped
+    ? deduped.reduce<Record<string, ProductInterface[]>>((acc, p) => {
+        const key = p.CategoryName || 'Other';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(p);
+        return acc;
+      }, {})
     : null;
-  const shelfProducts = flashDealProducts?.length
-    ? flashDealProducts
-    : (deduplicatedProducts?.slice(1) ?? null);
 
-  const renderProduct = useCallback(
-    ({ item, index }: { item: ProductInterface; index: number }) => (
-      <ProductCard
-        product={item}
-        onPress={() => navigation.navigate('Product', { product: item.ItemID })}
-        tall={index === 0}
-      />
-    ),
-    [navigation],
-  );
+  const categoryRailKeys = byCategory ? Object.keys(byCategory).slice(0, 2) : [];
 
-  const renderCategory = useCallback(
-    ({ item }: { item: CategoryInterface }) => (
-      <CategoryItem
-        category={item}
-        onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
+  // Smart buys — products with a genuine discount
+  const smartBuys = deduped
+    ? deduped.filter(p => p.MaxComparePrice > p.MinPrice && p.MinPrice > 0)
+    : null;
 
-      />
-    ),
-    [navigation],
-  );
+  // Spotlights derived from real data
+  const spotlights: Spotlight[] | null = (() => {
+    if (!deduped || !categories) return null;
+    const result: Spotlight[] = [];
+    // Product spotlight — first product with a real discount
+    const discounted = deduped.find(p => p.MaxComparePrice > p.MinPrice);
+    if (discounted) {
+      const pct = calcDiscount(discounted.MinPrice, discounted.MaxComparePrice);
+      result.push({
+        kind:     'product',
+        eyebrow:  pct > 0 ? `${pct}% off · ${discounted.BrandName}` : discounted.BrandName,
+        title:    discounted.Name,
+        sub:      `Rs ${discounted.MinPrice.toLocaleString('en-IN')}  ·  was Rs ${discounted.MaxComparePrice.toLocaleString('en-IN')}`,
+        cta:      'Shop now',
+        imageUri: resolveImageUrl(discounted.Images),
+        theme:    'photo',
+        itemId:   discounted.ItemID,
+      });
+    } else if (deduped.length > 0) {
+      // Fallback: first available product
+      const p = deduped[0];
+      result.push({
+        kind:     'product',
+        eyebrow:  p.BrandName,
+        title:    p.Name,
+        sub:      `Rs ${p.MinPrice.toLocaleString('en-IN')}`,
+        cta:      'Shop now',
+        imageUri: resolveImageUrl(p.Images),
+        theme:    'photo',
+        itemId:   p.ItemID,
+      });
+    }
+    // Category spotlight — first category with an image
+    const catWithImg = categories.find(c => c.CategoryImage);
+    if (catWithImg) {
+      result.push({
+        kind:       'category',
+        eyebrow:    'Shop the category',
+        title:      catWithImg.CategoryName,
+        sub:        `Browse all ${catWithImg.CategoryName}`,
+        cta:        `Explore ${catWithImg.CategoryName}`,
+        imageUri:   resolveImageUrl(catWithImg.CategoryImage),
+        theme:      'split',
+        categoryId: catWithImg.CategoryId,
+      });
+    }
+    return result;
+  })();
+
+  // Category spotlight card — second category with image, different from spotlights one
+  const spotlightCatId = spotlights?.find(s => s.kind === 'category')?.categoryId;
+  const featureCategory = categories
+    ? categories.find(c => c.CategoryImage && c.CategoryId !== spotlightCatId) ?? categories[0]
+    : null;
+
+  const handleBannerPress = useCallback((spot: Spotlight) => {
+    if (spot.kind === 'product' && spot.itemId) {
+      navigation.navigate('Product', { product: spot.itemId });
+    } else if (spot.kind === 'category' && spot.categoryId) {
+      navigation.navigate('Result', { categoryId: spot.categoryId, categoryName: spot.title });
+    }
+  }, [navigation]);
+
+  const clearRecentlyViewed = useCallback(async () => {
+    await AsyncStorage.removeItem(STORAGE_KEYS.recentlyViewed);
+    setRecentlyViewed([]);
+  }, []);
 
   return (
     <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar barStyle="light-content" backgroundColor="#16130F" translucent />
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + Space[1] }]}>
-        <View style={styles.headerRow}>
-          {/* Wordmark — serifItalic to match Login brand identity */}
-          <Text style={styles.brandName}>shop.</Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Cart')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.cartBtn}
-          >
-            <Icon name="bag-outline" size={22} color="#FFFFFF" />
-            {cartItemsCount > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>
-                  {cartItemsCount > 99 ? '99+' : cartItemsCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+      {/* ── TopBar ────────────────────────────────────────────────────────────── */}
+      <View style={[styles.topBar, { paddingTop: insets.top }]}>
+        <View style={styles.topBarRow}>
+          <Text style={styles.wordmark}>
+            shop<Text style={styles.wordmarkDot}>.</Text>
+          </Text>
+          <View style={styles.topBarIcons}>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => navigation.navigate('Wishlist')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name="heart-outline" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => navigation.navigate('Cart')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name="bag-outline" size={22} color="#FFFFFF" />
+              {cartCount > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-
-      {/* ── Search band + dropdown — outside ScrollView so dropdown overlays content ── */}
-      <View style={styles.searchBandWrap}>
-        <View style={styles.searchBand}>
+        {/* Search bar inside dark TopBar */}
+        <View style={styles.searchWrap}>
           <SearchBar
             value={searchQuery}
             onChangeText={handleSearchChange}
@@ -489,722 +553,243 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             onBlur={() => setTimeout(() => { setShowSuggestions(false); setSearchFocused(false); }, 180)}
           />
         </View>
-        {showSuggestions && suggestions.length > 0 && (
-          <View style={styles.suggestionBox}>
-            {suggestions.map((s, i) => (
+        {/* Resume cart cue */}
+        {showResumeCue && cartCount > 0 && (
+          <TouchableOpacity
+            style={styles.resumeCue}
+            onPress={() => navigation.navigate('Cart')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.resumeLeft}>
+              <Icon name="bag-outline" size={16} color={Colors.accent} />
+              <Text style={styles.resumeText}>
+                {cartCount} {cartCount === 1 ? 'item' : 'items'} waiting in your bag
+              </Text>
+            </View>
+            <View style={styles.resumeRight}>
+              <Text style={styles.resumeAction}>Resume</Text>
+              <Icon name="arrow-forward" size={14} color={Colors.accent} />
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── Search suggestion dropdown — outside ScrollView ───────────────────── */}
+      {(showSuggestions && suggestions.length > 0) || (searchFocused && searchQuery.trim() === '' && recentSearches.length > 0) ? (
+        <View style={styles.suggestionBox}>
+          {showSuggestions && suggestions.length > 0 ? (
+            suggestions.map((s, i) => (
               <TouchableOpacity
                 key={i}
                 style={[styles.suggestionRow, i < suggestions.length - 1 && styles.suggestionDivider]}
-                onPress={() => {
-                  setSearchQuery(s);
-                  commitSearch(s);
-                }}
+                onPress={() => { setSearchQuery(s); commitSearch(s); }}
                 activeOpacity={0.7}
               >
                 <Icon name="search-outline" size={14} color={Colors.ink4} />
                 <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        {searchFocused && searchQuery.trim() === '' && recentSearches.length > 0 && (
-          <View style={styles.suggestionBox}>
-            <Text style={styles.recentLabel}>RECENT</Text>
-            {recentSearches.map((s, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.suggestionRow, i < recentSearches.length - 1 && styles.suggestionDivider]}
-                onPress={() => {
-                  setSearchQuery(s);
-                  commitSearch(s);
-                }}
-                activeOpacity={0.7}
-              >
-                <Icon name="time-outline" size={14} color={Colors.ink4} />
-                <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
+            ))
+          ) : (
+            <>
+              <Text style={styles.recentLabel}>RECENT</Text>
+              {recentSearches.map((s, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.suggestionRow, i < recentSearches.length - 1 && styles.suggestionDivider]}
+                  onPress={() => { setSearchQuery(s); commitSearch(s); }}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="time-outline" size={14} color={Colors.ink4} />
+                  <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+        </View>
+      ) : null}
 
+      {/* ── Scrollable content ────────────────────────────────────────────────── */}
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-
-        {/* ── Hero carousel ─────────────────────────────────────────────── */}
-        <Animated.View style={heroAnim}>
-          <HeroCarousel
-            products={deduplicatedProducts?.slice(0, 5) ?? null}
-            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-          />
-          <LinearGradient
-            colors={[Colors.ink1, Colors.surface]}
-            style={styles.tonalBridge}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            pointerEvents="none"
+        {/* BannerSlot */}
+        <Animated.View style={[{ marginTop: Space[5] }, bannerAnim]}>
+          <BannerSlot
+            spots={spotlights}
+            onPress={handleBannerPress}
           />
         </Animated.View>
 
-        {/* ── Categories ─────────────────────────────────────────────────── */}
-        <Animated.View style={[styles.catSection, catAnim]}>
+        {/* Category rail */}
+        <Animated.View style={[{ marginTop: Space[6] }, catAnim]}>
+          <SectionHead
+            eyebrow="BROWSE"
+            title="Categories"
+            action="All"
+            onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
+          />
           {categories ? (
             <FlatList
               data={categories}
-              renderItem={renderCategory}
               keyExtractor={(item) => String(item.CategoryId)}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoryRail}
-              nestedScrollEnabled
+              renderItem={({ item, index }) => (
+                <CategoryTile
+                  name={item.CategoryName}
+                  imageUri={item.CategoryImage}
+                  index={index}
+                  onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
+                />
+              )}
             />
           ) : (
             <View style={styles.categoryRail}>
               {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} width={88} height={36} radius={Radius.pill} />
+                <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 76 }}>
+                  <Skeleton width={76} height={76} radius={20} />
+                  <Skeleton width={50} height={9} />
+                </View>
               ))}
             </View>
           )}
         </Animated.View>
 
-        {/* ── Brands rail ────────────────────────────────────────────────── */}
-        {brands && brands.length > 0 && (
-          <Animated.View style={[styles.brandsSection, brandsAnim]}>
-            <View style={styles.shelfHead}>
-              <Text style={styles.shelfTitle}>Brands</Text>
-            </View>
+        {/* Category spotlight card */}
+        {featureCategory ? (
+          <Animated.View style={[{ marginTop: Space[8], paddingHorizontal: Space.screenH }, spotAnim]}>
+            <CategorySpotlightCard
+              category={featureCategory}
+              onPress={() => navigation.navigate('Result', { categoryId: featureCategory.CategoryId, categoryName: featureCategory.CategoryName })}
+            />
+          </Animated.View>
+        ) : deduped === null ? (
+          <View style={{ marginTop: Space[8], paddingHorizontal: Space.screenH }}>
+            <Skeleton height={360} radius={22} />
+          </View>
+        ) : null}
+
+        {/* First category product rail */}
+        <Animated.View style={rail1Anim}>
+          {categoryRailKeys[0] ? (
+            <ProductRail
+              eyebrow="CATEGORY"
+              title={categoryRailKeys[0]}
+              items={byCategory?.[categoryRailKeys[0]] ?? null}
+              onSeeAll={() => {
+                const cat = categories?.find(c => c.CategoryName === categoryRailKeys[0]);
+                navigation.navigate('Result', { categoryId: cat?.CategoryId, categoryName: categoryRailKeys[0] });
+              }}
+              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+            />
+          ) : (
+            <ProductRail
+              title="Products"
+              items={null}
+              onPress={() => {}}
+            />
+          )}
+        </Animated.View>
+
+        {/* Brands rail */}
+        <Animated.View style={[{ marginTop: Space[8] }, brandsAnim]}>
+          <SectionHead
+            eyebrow="MERCHANTS"
+            title="Brands"
+            action="View all"
+            onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
+          />
+          {brands ? (
             <FlatList
               data={brands}
               keyExtractor={(item) => String(item.BrandId)}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.brandsRail}
-              renderItem={({ item, index }) => {
-                const faviconUri = brandFaviconUrl(item.BrandName);
-                const fallbackColor = FALLBACK_COLORS[index % FALLBACK_COLORS.length];
-                return (
-                  <TouchableOpacity
-                    style={styles.brandChip}
-                    activeOpacity={0.75}
-                    onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
-                  >
-                    <BrandTile uri={faviconUri} name={item.BrandName} fallbackColor={fallbackColor} />
-                    <Text style={styles.brandLabel} numberOfLines={1}>{item.BrandName}</Text>
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </Animated.View>
-        )}
-
-        {/* ── Featured card ──────────────────────────────────────────────── */}
-        {deduplicatedProducts !== null && featuredProduct && (
-          <Animated.View style={[styles.section, featAnim]}>
-            <TouchableOpacity
-              style={styles.featCard}
-              activeOpacity={0.88}
-              onPress={() => navigation.navigate('Product', { product: featuredProduct.ItemID })}
-            >
-              <Image
-                source={{ uri: fallbackImageUrl(featuredProduct.ItemID + 100, 600, 520) }}
-                style={styles.featImage}
-                resizeMode="cover"
-              />
-              <LinearGradient
-                colors={['transparent', 'transparent', 'rgba(0,0,0,0.30)', 'rgba(0,0,0,0.74)']}
-                locations={[0, 0.2, 0.6, 1]}
-                style={StyleSheet.absoluteFillObject}
-              />
-
-              {/* Ember badge — replaces red danger chip */}
-              {featuredProduct.MaxComparePrice > featuredProduct.MinPrice && (
-                <View style={styles.featBadge}>
-                  <Text style={styles.featBadgeText}>
-                    -{Math.round(((featuredProduct.MaxComparePrice - featuredProduct.MinPrice) / featuredProduct.MaxComparePrice) * 100)}%
-                  </Text>
-                </View>
-              )}
-
-              <View style={styles.featFooter}>
-                <View style={styles.featFooterLeft}>
-                  {featuredProduct.BrandName ? (
-                    <Text style={styles.featBrand}>{featuredProduct.BrandName}</Text>
-                  ) : null}
-                  <Text style={styles.featName} numberOfLines={1}>
-                    {featuredProduct.Name}
-                  </Text>
-                  <View style={styles.featPriceRow}>
-                    <Text style={styles.featPrice}>Rs {featuredProduct.MinPrice.toFixed(0)}</Text>
-                    {featuredProduct.MaxComparePrice > featuredProduct.MinPrice && (
-                      <Text style={styles.featWas}>Rs {featuredProduct.MaxComparePrice.toFixed(0)}</Text>
-                    )}
-                  </View>
-                </View>
-                {/* Text-link CTA — no pill, more editorial */}
+              renderItem={({ item, index }) => (
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('Product', { product: featuredProduct.ItemID })}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.brandChip}
+                  activeOpacity={0.75}
+                  onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
                 >
-                  <Text style={styles.featLink}>View →</Text>
+                  <BrandTile name={item.BrandName} imageUri={item.BrandImage} index={index} />
+                  <Text style={styles.brandLabel} numberOfLines={1}>{item.BrandName}</Text>
                 </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-        {deduplicatedProducts === null && (
-          <View style={styles.section}>
-            <Skeleton height={260} radius={Radius.lg} style={{ marginHorizontal: Space.screenH }} />
-          </View>
-        )}
-
-        {/* ── Hairline divider ───────────────────────────────────────────── */}
-        <View style={styles.divider} />
-
-        {/* ── Flash Deals shelf ──────────────────────────────────────────── */}
-        <Animated.View style={[styles.shelfSection, shelfAnim]}>
-          <View style={styles.shelfHead}>
-            <Text style={styles.shelfTitle}>{flashDealProducts?.length ? 'Flash Deals' : 'New Arrivals'}</Text>
-            <TouchableOpacity
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              onPress={() => navigation.navigate('Result', { categoryName: 'Flash Deals' })}
-            >
-              <Text style={styles.seeAll}>See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          {shelfProducts === null ? (
-            <SkeletonRow gap={Space[4]} style={styles.shelfRail}>
-              {[0, 1, 2].map((i) => (
-                <View key={i} style={{ width: 180 }}>
-                  <Skeleton height={i === 0 ? 200 : 164} radius={Radius.md} style={{ marginBottom: Space[2] }} />
-                  <Skeleton height={9}  width="50%" style={{ marginBottom: 4 }} />
-                  <Skeleton height={12} width="78%" style={{ marginBottom: 4 }} />
-                  <Skeleton height={12} width="42%" />
+              )}
+            />
+          ) : (
+            <View style={styles.brandsRail}>
+              {[0, 1, 2, 3].map((i) => (
+                <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 70 }}>
+                  <Skeleton width={70} height={70} radius={35} />
+                  <Skeleton width={48} height={9} />
                 </View>
               ))}
-            </SkeletonRow>
-          ) : shelfProducts.length === 0 ? (
-            <View style={styles.shelfEmpty}>
-              <Text style={styles.shelfEmptyText}>No deals right now.</Text>
             </View>
-          ) : (
-            <FlatList
-              data={shelfProducts}
-              renderItem={renderProduct}
-              keyExtractor={(item: ProductInterface) => String(item.ItemID)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.shelfRail}
-              snapToInterval={180 + Space[4]}
-              decelerationRate="fast"
-            />
           )}
         </Animated.View>
 
-        {/* ── Editorial card ─────────────────────────────────────────────── */}
-        <Animated.View style={[styles.section, { marginBottom: Space[8] }, editAnim]}>
-          <TouchableOpacity
-            style={styles.editCard}
-            activeOpacity={0.88}
-            onPress={() => navigation.navigate('Result', { categoryName: 'All Products' })}
-          >
-            {/* Left text column */}
-            <View style={styles.editLeft}>
-              <Text style={styles.editEyebrow}>THE EDIT</Text>
-              <Text style={styles.editHeadline}>
-                Everything{'\n'}you need.{'\n'}Nothing{'\n'}you don't.
-              </Text>
-              <Text style={styles.editCTA}>Explore →</Text>
-            </View>
-
-            {/* Right image column */}
-            <View style={styles.editImgCol}>
-              <Image
-                source={{ uri: fallbackImageUrl((deduplicatedProducts?.[1]?.ItemID ?? deduplicatedProducts?.[0]?.ItemID ?? 99) + 200, 300, 440) }}
-                style={styles.editImg}
-                resizeMode="cover"
-              />
-              <LinearGradient
-                colors={['rgba(17,17,17,0.45)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={StyleSheet.absoluteFillObject}
-                pointerEvents="none"
-              />
-            </View>
-          </TouchableOpacity>
+        {/* Second category product rail */}
+        <Animated.View style={rail2Anim}>
+          {categoryRailKeys[1] ? (
+            <ProductRail
+              eyebrow="CATEGORY"
+              title={categoryRailKeys[1]}
+              items={byCategory?.[categoryRailKeys[1]] ?? null}
+              onSeeAll={() => {
+                const cat = categories?.find(c => c.CategoryName === categoryRailKeys[1]);
+                navigation.navigate('Result', { categoryId: cat?.CategoryId, categoryName: categoryRailKeys[1] });
+              }}
+              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+            />
+          ) : null}
         </Animated.View>
+
+        {/* Recently viewed — client-side, hidden when empty */}
+        {recentlyViewed.length > 0 && (
+          <ProductRail
+            eyebrow="WHERE YOU LEFT OFF"
+            title="Recently viewed"
+            items={recentlyViewed as unknown as ProductInterface[]}
+            cardWidth={134}
+            actionLabel="Clear"
+            onSeeAll={clearRecentlyViewed}
+            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+          />
+        )}
+
+        {/* Smart buys — products with a genuine discount */}
+        {(smartBuys === null || (smartBuys && smartBuys.length > 0)) && (
+          <ProductRail
+            eyebrow="ON SALE"
+            title="Smart buys"
+            items={smartBuys}
+            onSeeAll={() => navigation.navigate('Result', { categoryName: 'Deals' })}
+            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+          />
+        )}
+
+        {/* Trust strip */}
+        <TrustStrip />
+
+        {/* Browse all departments footer */}
+        <DeptFooter
+          categoryCount={categories?.length ?? 0}
+          onPress={() => navigation.navigate('Result', { categoryName: 'All Products' })}
+        />
       </ScrollView>
 
       <BottomNavBar
         activeTab="Home"
         onNavigate={(route) => navigation.navigate(route)}
         onNavigateToAuth={(screen) => navigation.navigate(screen)}
-        cartCount={cartItemsCount > 0 ? cartItemsCount : undefined}
+        cartCount={cartCount > 0 ? cartCount : undefined}
       />
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  root: {
-    flex:            1,
-    backgroundColor: Colors.ink1,
-  },
-
-  // ── Header ──────────────────────────────────────────────────────────────────
-  header: {
-    backgroundColor:   Colors.ink1,
-    paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[3],
-  },
-  headerRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-  },
-  // Serif italic wordmark — matches Login brand identity
-  brandName: {
-    fontFamily:    FontFamily.serifItalic,
-    fontSize:      28,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.8,
-  },
-  cartBtn: {
-    position: 'relative',
-    padding:  4,
-  },
-  cartBadge: {
-    position:          'absolute',
-    top:               0,
-    right:             0,
-    backgroundColor:   Colors.accent,
-    borderRadius:      Radius.pill,
-    minWidth:          16,
-    height:            16,
-    justifyContent:    'center',
-    alignItems:        'center',
-    paddingHorizontal: 3,
-    borderWidth:       1.5,
-    borderColor:       Colors.ink1,
-  },
-  cartBadgeText: {
-    ...Type.label,
-    color:         '#FFFFFF',
-    letterSpacing: 0,
-    fontSize:      9,
-  },
-
-  // ── Scroll ──────────────────────────────────────────────────────────────────
-  scroll: {
-    flex:            1,
-    backgroundColor: Colors.surface,
-  },
-  scrollContent: {
-    paddingBottom: Space[10],
-  },
-
-  // ── Search band + dropdown ───────────────────────────────────────────────────
-  searchBandWrap: {
-    backgroundColor: Colors.ink1,
-    zIndex:          20,
-  },
-  searchBand: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[1],
-    paddingBottom:     Space[3],
-  },
-  suggestionBox: {
-    position:         'absolute',
-    top:              '100%',
-    left:             Space.screenH,
-    right:            Space.screenH,
-    backgroundColor:  Colors.surface,
-    borderRadius:     Radius.md,
-    borderWidth:      StyleSheet.hairlineWidth,
-    borderColor:      Colors.rule,
-    shadowColor:      '#000',
-    shadowOffset:     { width: 0, height: 4 },
-    shadowOpacity:    0.10,
-    shadowRadius:     12,
-    elevation:        8,
-    overflow:         'hidden',
-    zIndex:           20,
-  },
-  suggestionRow: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               Space[3],
-    paddingHorizontal: Space[4],
-    paddingVertical:   Space[3] + 2,
-  },
-  suggestionDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.rule,
-  },
-  suggestionText: {
-    ...Type.body,
-    color:   Colors.ink1,
-    flex:    1,
-  },
-  recentLabel: {
-    ...Type.label,
-    color:             Colors.ink4,
-    paddingHorizontal: Space[4],
-    paddingTop:        Space[3],
-    paddingBottom:     Space[1],
-  },
-
-  // ── Hero ────────────────────────────────────────────────────────────────────
-  heroBg: {
-    backgroundColor: Colors.ink1,
-    height:          HERO_H,
-    overflow:        'hidden',
-  },
-  // ── Carousel slide ────────────────────────────────────────────────────────────
-  heroSlide: {
-    width:           SCREEN_W,
-    height:          HERO_H,
-    backgroundColor: Colors.surfaceDeep,
-    overflow:        'hidden',
-  },
-  heroSlideBadge: {
-    position:          'absolute',
-    top:               Space[4],
-    left:              Space.screenH,
-    backgroundColor:   Colors.accentTint,
-    borderRadius:      Radius.xs,
-    paddingVertical:   3,
-    paddingHorizontal: Space[2],
-    borderWidth:       0.5,
-    borderColor:       Colors.accent,
-  },
-  heroSlideBadgeText: {
-    ...Type.label,
-    color:         Colors.accent,
-    letterSpacing: 0.4,
-  },
-  heroSlideFooter: {
-    position:          'absolute',
-    bottom:            0,
-    left:              0,
-    right:             0,
-    paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[8],
-  },
-  heroSlideBrand: {
-    ...Type.label,
-    color:         'rgba(255,255,255,0.55)',
-    letterSpacing: 1.8,
-    marginBottom:  Space[1],
-  },
-  heroSlideName: {
-    fontFamily:    FontFamily.serifItalic,
-    fontSize:      32,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.8,
-    lineHeight:    38,
-  },
-  heroSlidePriceRow: {
-    flexDirection: 'row',
-    alignItems:    'baseline',
-    gap:           Space[2],
-    marginTop:     4,
-  },
-  heroSlidePrice: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      20,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.4,
-  },
-  heroSlidePriceWas: {
-    fontFamily:         FontFamily.sans,
-    fontSize:           13,
-    color:              'rgba(255,255,255,0.45)',
-    textDecorationLine: 'line-through',
-  },
-  heroSlideShopRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           Space[1],
-    marginTop:     Space[3],
-  },
-  heroSlideShopText: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      13,
-    fontWeight:    '500',
-    color:         'rgba(255,255,255,0.75)',
-    letterSpacing: 0.2,
-  },
-  // ── Dot indicators ────────────────────────────────────────────────────────────
-  heroDots: {
-    position:       'absolute',
-    bottom:         Space[3],
-    left:           0,
-    right:          0,
-    flexDirection:  'row',
-    justifyContent: 'center',
-    gap:            Space[1] + 2,
-  },
-  heroDot: {
-    width:           5,
-    height:          5,
-    borderRadius:    3,
-    backgroundColor: 'rgba(255,255,255,0.30)',
-  },
-  heroDotActive: {
-    width:           16,
-    backgroundColor: '#FFFFFF',
-  },
-  tonalBridge: {
-    height:    BRIDGE_H,
-    marginTop: -1,
-  },
-
-  // ── Categories ──────────────────────────────────────────────────────────────
-  catSection: {
-    // Float into the bridge gradient zone for visual continuity
-    marginTop: -(BRIDGE_H - Space[4]),
-  },
-  categoryRail: {
-    paddingHorizontal: Space.screenH,
-    gap:               Space[2],
-    flexDirection:     'row',
-    paddingBottom:     Space[2],
-  },
-
-  // ── Section shell ────────────────────────────────────────────────────────────
-  section: {
-    marginTop: Space[8],
-  },
-
-  // ── Featured card ────────────────────────────────────────────────────────────
-  featCard: {
-    marginHorizontal: Space.screenH,
-    borderRadius:     Radius.lg,
-    overflow:         'hidden',
-    height:           260,
-    backgroundColor:  Colors.surfaceDeep,
-    // No shadow — spec A3: depth through tone, not elevation
-  },
-  featImage: {
-    width:  '100%',
-    height: '100%',
-  },
-  featBadge: {
-    position:          'absolute',
-    top:               Space[3],
-    left:              Space[3],
-    backgroundColor:   Colors.accentTint,
-    borderRadius:      Radius.xs,
-    paddingVertical:   3,
-    paddingHorizontal: Space[2],
-    borderWidth:       0.5,
-    borderColor:       Colors.accent,
-  },
-  featBadgeText: {
-    ...Type.label,
-    color:         Colors.accent,
-    letterSpacing: 0.4,
-    textTransform: 'none',
-  },
-  featFooter: {
-    position:       'absolute',
-    bottom:         0,
-    left:           0,
-    right:          0,
-    padding:        Space[4],
-    flexDirection:  'row',
-    alignItems:     'flex-end',
-    justifyContent: 'space-between',
-  },
-  featFooterLeft: {
-    flex:         1,
-    gap:          3,
-    paddingRight: Space[3],
-  },
-  featBrand: {
-    ...Type.label,
-    color:         'rgba(255,255,255,0.50)',
-    letterSpacing: 1.2,
-  },
-  featName: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      18,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.4,
-    lineHeight:    22,
-  },
-  featPriceRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           Space[2],
-    marginTop:     2,
-  },
-  featPrice: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      17,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  featWas: {
-    ...Type.caption,
-    color:              'rgba(255,255,255,0.38)',
-    textDecorationLine: 'line-through',
-  },
-  // Text-link CTA — no pill
-  featLink: {
-    ...Type.bodyStrong,
-    color:             'rgba(255,255,255,0.80)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.30)',
-    paddingBottom:     1,
-  },
-
-  // ── Hairline divider ────────────────────────────────────────────────────────
-  divider: {
-    marginHorizontal: Space.screenH,
-    marginTop:        Space[8],
-    height:           StyleSheet.hairlineWidth,
-    backgroundColor:  Colors.rule,
-  },
-
-  // ── Flash Deals shelf ────────────────────────────────────────────────────────
-  shelfSection: {
-    marginTop: Space[8],
-  },
-  shelfHead: {
-    paddingHorizontal: Space.screenH,
-    marginBottom:      Space[5],
-    flexDirection:     'row',
-    alignItems:        'baseline',
-    justifyContent:    'space-between',
-  },
-  // Serif title per spec A7 section headers
-  shelfTitle: {
-    ...Type.title,
-    color: Colors.ink1,
-  },
-  seeAll: {
-    ...Type.caption,
-    color:             Colors.ink3,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.ink4,
-    paddingBottom:     1,
-  },
-  shelfRail: {
-    paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[2],
-    gap:               Space[4],
-    alignItems:        'flex-start',   // was 'center' — caused top-misaligned mixed heights
-  },
-  shelfEmpty: {
-    paddingHorizontal: Space.screenH,
-    paddingVertical:   Space[6],
-  },
-  shelfEmptyText: {
-    ...Type.caption,
-    color: Colors.ink4,
-  },
-
-  // ── Brands rail ─────────────────────────────────────────────────────────────
-  brandsSection: {
-    marginTop: Space[6],
-  },
-  brandsRail: {
-    paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[2],
-    gap:               Space[3],
-  },
-  brandChip: {
-    alignItems: 'center',
-    width:      88,
-    gap:        Space[2],
-  },
-  brandLogoWrap: {
-    width:           80,
-    height:          80,
-    borderRadius:    40,
-    backgroundColor: '#FFFFFF',
-    shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 1 },
-    shadowOpacity:   0.08,
-    shadowRadius:    4,
-    elevation:       2,
-    alignItems:      'center',
-    justifyContent:  'center',
-    overflow:        'hidden',
-  },
-  brandLogo: {
-    width:  56,
-    height: 56,
-  },
-  brandLabel: {
-    ...Type.caption,
-    color:     Colors.ink2,
-    textAlign: 'center',
-  },
-  brandFallbackLetter: {
-    fontFamily: FontFamily.serifItalic,
-    fontSize:   28,
-    lineHeight: 32,
-  },
-
-  // ── Editorial card ──────────────────────────────────────────────────────────
-  editCard: {
-    marginHorizontal: Space.screenH,
-    backgroundColor:  Colors.ink1,
-    borderRadius:     Radius.lg,
-    flexDirection:    'row',
-    height:           220,
-    overflow:         'hidden',
-    // No shadow — spec A3
-  },
-  editLeft: {
-    flex:           1,
-    padding:        Space[5],
-    justifyContent: 'space-between',
-  },
-  editEyebrow: {
-    ...Type.label,
-    color:         'rgba(255,255,255,0.28)',
-    letterSpacing: 1.8,
-  },
-  editHeadline: {
-    fontFamily:    FontFamily.serifItalic,
-    fontSize:      22,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.6,
-    lineHeight:    27,
-    flex:          1,
-    paddingTop:    Space[3],
-  },
-  editCTA: {
-    ...Type.bodyStrong,
-    color:             'rgba(255,255,255,0.75)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.28)',
-    paddingBottom:     2,
-    alignSelf:         'flex-start',
-  },
-  editImgCol: {
-    width:    130,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  editImg: {
-    width:  '100%',
-    height: '100%',
-  },
-});
 
 export default HomeScreen;

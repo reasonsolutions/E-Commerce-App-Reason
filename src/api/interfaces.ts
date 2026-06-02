@@ -277,6 +277,9 @@ export interface ProductInterface {
     MinPrice:              number;
     MaxComparePrice:       number;
     DiscountPct:           number;
+    // First-variant fields — populated by getProductsByCategory/Brand mapping
+    Inventory_Id?:         number;
+    Variant?:              string;
     ComplianceInfo:        ProductComplianceInfo;
     ProductClassification: ProductClassification;
     Marketing:             ProductMarketing;
@@ -295,17 +298,14 @@ export interface ProductInterface {
 
 
 //result of getbrands api
-export interface BrandInterface {
-    Brand_Id: number;
-    Brand_Name: string;
-    BrandImage: string;
-}
-
 export interface GetBrandItem {
     BrandId: number;
     BrandName: string;
     BrandImage: string;
 }
+
+// Legacy alias — mock data still references this name
+export type BrandInterface = GetBrandItem;
 
 //result of products api by brand
 export interface ProductByBrandCategoryDetails {
@@ -319,8 +319,8 @@ export interface ProductByBrandInterface {
 }
 
 export interface CategoryBrandInterface {
-    Brand_Id: number;
-    Brand_Name: string;
+    BrandId: string;
+    BrandName: string;
 }
 
 //result of getcategory api
@@ -364,6 +364,7 @@ export interface ProductByCategoryProductDetails {
     Name: string;
     Price: number;
     ComparePrice: number;
+    DiscountPct: number;
     Description: string;
     SubCategory_Id: number;
     Images: string;

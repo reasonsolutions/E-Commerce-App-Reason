@@ -87,7 +87,7 @@ All responses: `{ statusCode: 1|0, result: {...}, userMessage: string }`. Unwrap
 
 ### Domain mock/real status
 
-Read each domain's `index.ts` before assuming mock or real. Currently: auth/cart/wishlist/address/product = real. Order = real (all endpoints: `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`).
+Read each domain's `index.ts` before assuming mock or real. Currently: auth/cart/wishlist/address/product = real. Order = mixed — `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory` are real; `postCnfOrderDetail` is still on mock pending backend verification.
 
 ### Enums
 
@@ -279,13 +279,9 @@ const { animatedStyle, handlers } = useTactile();
 
 ---
 
-## Frozen Screens — Do Not Modify
+## Screen Status
 
-These define the visual and interaction standard for all Phase 3 work.
-
-**Login · HomeScreen · ProductScreen · OrderSuccessScreen**
-
-Phase 3 complete: RegisterScreen · OTPVerificationScreen · ProfileScreen · AddressScreen · AddressManagementScreen · CartScreen · ResultScreen · WishlistScreen · OrderHistoryScreen · OrderDetailScreen
+All 14 screens are open for redesign when explicitly requested. Login, HomeScreen, ProductScreen, and OrderSuccessScreen serve as the visual and interaction reference standard — follow their patterns when redesigning other screens, but they can also be modified if requested.
 
 ---
 
