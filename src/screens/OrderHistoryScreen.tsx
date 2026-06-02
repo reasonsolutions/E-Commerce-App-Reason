@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,27 +7,36 @@ import {
   StatusBar,
   FlatList,
   Animated,
+  ActivityIndicator,
   ListRenderItemInfo,
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { postOrderHistory } from '../api/services';
+import { postOrderHistory } from '../api/order';
+import type { OrderHistoryFilters } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useFocusEffect } from '@react-navigation/native';
-import { EmptyState, StatusBadge, BottomNavBar, DarkHeader, FadeImage } from '../components/ui';
+import {
+  StatusBadge,
+  BottomNavBar,
+  DarkHeader,
+  FadeImage,
+  Skeleton,
+  OrderFilterSheet,
+  ErrorBanner,
+} from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { formatDate } from '../utils/formatDate';
 import { orderStatusLabel } from '../utils/orderStatus';
-import type { Order } from '../api/interfaces';
+import type { OrderHistoryItemInterface } from '../api/interfaces';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -45,16 +54,16 @@ const IMG_H = 80;
 
 // ── Single order row ──────────────────────────────────────────────────────────
 const OrderRow: React.FC<{
-  item: Order;
-  onPress: (item: Order) => void;
+  item: OrderHistoryItemInterface;
+  onPress: (item: OrderHistoryItemInterface) => void;
   delay: number;
   isLast: boolean;
 }> = ({ item, onPress, delay, isLast }) => {
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const status     = orderStatusLabel(item.status);
-  const firstImage = item.images[0] ?? '';
+  const status     = orderStatusLabel(item.OrderStatus);
+  const firstImage = item.Images?.split(';').filter(Boolean)[0] ?? '';
 
   return (
     <Animated.View style={entrance}>
@@ -78,17 +87,17 @@ const OrderRow: React.FC<{
             {/* Top — brand + name + amount */}
             <View style={styles.contentTop}>
               <View style={styles.metaLeft}>
-                {item.brand ? (
-                  <Text style={styles.brand}>{item.brand.toUpperCase()}</Text>
+                {item.Brand_Name ? (
+                  <Text style={styles.brand}>{item.Brand_Name.toUpperCase()}</Text>
                 ) : null}
-                <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-                {item.variant ? (
-                  <Text style={styles.variant}>{item.variant}</Text>
+                <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
+                {item.Variant ? (
+                  <Text style={styles.variant}>{item.Variant}</Text>
                 ) : null}
               </View>
               {/* Amount — right-aligned serif */}
               <View style={styles.amountBlock}>
-                <Text style={styles.amount}>${item.amount.toFixed(2)}</Text>
+                <Text style={styles.amount}>Rs {(item.Amount ?? 0).toFixed(0)}</Text>
                 <Icon name="chevron-forward" size={13} color={Colors.ink5} />
               </View>
             </View>
@@ -96,11 +105,11 @@ const OrderRow: React.FC<{
             {/* Bottom — order meta + status */}
             <View style={styles.contentBottom}>
               <View style={styles.orderMeta}>
-                {item.orderNumber ? (
-                  <Text style={styles.orderNumber}>#{item.orderNumber}</Text>
+                {item.OrderNumber ? (
+                  <Text style={styles.orderNumber}>#{item.OrderNumber}</Text>
                 ) : null}
-                {item.orderedDate ? (
-                  <Text style={styles.orderDate}>{formatDate(item.orderedDate)}</Text>
+                {item.OrderedDate ? (
+                  <Text style={styles.orderDate}>{formatDate(item.OrderedDate)}</Text>
                 ) : null}
               </View>
               {status ? <StatusBadge status={status} /> : null}
@@ -115,88 +124,232 @@ const OrderRow: React.FC<{
   );
 };
 
+const getProfileCode = async (): Promise<number | null> => {
+  const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+  if (!raw) return null;
+  return JSON.parse(raw).CustomerProfileCode ?? null;
+};
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const [refreshing, setRefreshing] = useState(false);
-  const { data: orders, loading, isError, error, run } = useAsyncState<Order[]>([]);
+  const haptic = useHaptic();
 
-  const fetchOrders = useCallback(
-    (cancelled?: { current: boolean }) =>
-      run(async () => {
-        const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-        if (!userData) return [];
-        const user = JSON.parse(userData);
-        return postOrderHistory(user.CustomerProfileCode);
-      }, cancelled),
-    [run],
-  );
+  const [orders, setOrders]           = useState<OrderHistoryItemInterface[]>([]);
+  const [hasMore, setHasMore]         = useState(true);
+  const [hasFetched, setHasFetched]   = useState(false);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [fetchError, setFetchError]       = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+
+  const [filters, setFilters]             = useState<OrderHistoryFilters>({});
+  const [filterVisible, setFilterVisible] = useState(false);
+
+  // Refs so closures always read current values without stale captures
+  const fetchingRef  = useRef(false);
+  const pageRef      = useRef(1);
+  const filtersRef   = useRef<OrderHistoryFilters>({});
+  filtersRef.current = filters;
+
+  // Fetch a specific page and append or replace
+  const fetchPage = useCallback(async (
+    pageNum: number,
+    activeFilters: OrderHistoryFilters,
+    replace: boolean,
+  ) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      const code = await getProfileCode();
+      if (!code) { setHasFetched(true); return; }
+      const { items, hasMore: more } = await postOrderHistory(code, pageNum, activeFilters);
+      setOrders(prev => replace ? items : [...prev, ...items]);
+      pageRef.current = pageNum;
+      setHasMore(more);
+      if (replace) setFetchError(null);
+      else setLoadMoreError(null);
+    } catch (e: any) {
+      const msg = e?.message ?? 'Something went wrong.';
+      if (replace) setFetchError(msg);
+      else setLoadMoreError(msg);
+    } finally {
+      setHasFetched(true);
+      fetchingRef.current = false;
+    }
+  }, []);
+
+  // Reset + load page 1 on focus or filter change
+  const reload = useCallback((activeFilters: OrderHistoryFilters) => {
+    setHasFetched(false);
+    setOrders([]);
+    pageRef.current = 1;
+    setHasMore(true);
+    setFetchError(null);
+    fetchPage(1, activeFilters, true);
+  }, [fetchPage]);
 
   useFocusEffect(
     useCallback(() => {
-      const cancelled = { current: false };
-      fetchOrders(cancelled);
-      return () => { cancelled.current = true; };
-    }, [fetchOrders]),
+      reload(filtersRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchOrders();
+    await fetchPage(1, filters, true);
     setRefreshing(false);
   };
 
-  const orderList  = orders ?? [];
-  const orderCount = orderList.length;
+  const onEndReached = async () => {
+    if (!hasMore || fetchingRef.current) return;
+    setLoadingMore(true);
+    await fetchPage(pageRef.current + 1, filtersRef.current, false);
+    setLoadingMore(false);
+  };
 
-  const renderItem = ({ item, index }: ListRenderItemInfo<Order>) => (
+  const handleApplyFilters = (newFilters: OrderHistoryFilters) => {
+    setFilters(newFilters);
+    setFilterVisible(false);
+    reload(newFilters);
+  };
+
+  const handleClearFilters = () => {
+    setFilters({});
+    setFilterVisible(false);
+    reload({});
+  };
+
+  const activeFilterCount = [
+    filters.sortBy && filters.sortBy !== 'desc',
+    filters.dateFrom,
+    filters.dateTo,
+  ].filter(Boolean).length;
+
+  const orderCount = orders.length;
+
+  const renderItem = ({ item, index }: ListRenderItemInfo<OrderHistoryItemInterface>) => (
     <OrderRow
       item={item}
       onPress={(order) => navigation.navigate('OrderDetails', { orderItem: order })}
       delay={Math.min(index * 55, 320)}
-      isLast={index === orderList.length - 1}
+      isLast={index === orderCount - 1 && !hasMore}
     />
   );
 
-  const renderEmpty = () => (
-    <EmptyState
-      icon={<Icon name="receipt-outline" size={26} color={Colors.ink4} />}
-      title="No orders yet."
-      body="Once you place an order, it will live here."
-      action={
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Home')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.emptyLink}>Browse the collection</Text>
-          <View style={styles.emptyLinkUnderline} />
-        </TouchableOpacity>
-      }
-    />
-  );
-
-  const renderBody = () => {
-    if (isError) {
+  const renderFooter = () => {
+    if (loadMoreError) {
       return (
-        <ErrorState
-          title="Couldn't load orders"
-          message={error ?? 'Something went wrong.'}
-          onRetry={() => fetchOrders()}
-          retryLoading={loading}
+        <ErrorBanner
+          body={loadMoreError}
+          onRetry={() => {
+            setLoadMoreError(null);
+            fetchPage(pageRef.current + 1, filtersRef.current, false);
+          }}
         />
       );
     }
-    if (orderCount === 0 && !loading) {
+    if (loadingMore) {
+      return (
+        <View style={styles.footerLoader}>
+          <ActivityIndicator size="small" color={Colors.ink3} />
+        </View>
+      );
+    }
+    return null;
+  };
+
+  const hasActiveFilters = !!(filters.sortBy && filters.sortBy !== 'desc') || !!filters.dateFrom || !!filters.dateTo;
+
+  const renderEmpty = () => (
+    <View style={styles.emptyWrap}>
+      <View style={styles.emptyContent}>
+        <View style={styles.emptyIllustration}>
+          <Icon name="receipt-outline" size={52} color={Colors.ink3} />
+        </View>
+        {hasActiveFilters ? (
+          <>
+            <Text style={styles.emptyTitle}>No orders found.</Text>
+            <Text style={styles.emptyBody}>Try adjusting your filters.</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.emptyTitle}>No orders yet.</Text>
+            <Text style={styles.emptyBody}>Once you place an order, it will live here.</Text>
+          </>
+        )}
+      </View>
+      <View style={styles.emptyFooter}>
+        {hasActiveFilters ? (
+          <TouchableOpacity
+            style={styles.emptyCTA}
+            activeOpacity={0.88}
+            onPress={handleClearFilters}
+          >
+            <Text style={styles.emptyCTAText}>Clear filters</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.emptyCTA}
+            activeOpacity={0.88}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text style={styles.emptyCTAText}>Browse the collection</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderBody = () => {
+    if (!hasFetched) {
+      return (
+        <View style={styles.skeletonWrap}>
+          {[0, 1, 2, 3].map(i => (
+            <View key={i}>
+              <View style={styles.skeletonRow}>
+                <Skeleton width={IMG_W} height={IMG_H} radius={Radius.sm} />
+                <View style={styles.skeletonContent}>
+                  <Skeleton height={9}  width="35%" style={{ marginBottom: Space[2] }} />
+                  <Skeleton height={14} width="80%" style={{ marginBottom: Space[1] }} />
+                  <Skeleton height={12} width="55%" />
+                  <View style={styles.skeletonBottom}>
+                    <Skeleton height={10} width="40%" />
+                    <Skeleton height={18} width="22%" radius={Radius.pill} />
+                  </View>
+                </View>
+              </View>
+              {i < 3 && <View style={styles.divider} />}
+            </View>
+          ))}
+        </View>
+      );
+    }
+    if (fetchError) {
+      return (
+        <ErrorState
+          title="Couldn't load your orders."
+          message={fetchError}
+          onRetry={() => reload(filters)}
+          retryLoading={!hasFetched}
+        />
+      );
+    }
+    if (orderCount === 0) {
       return renderEmpty();
     }
     return (
       <FlatList
-        data={orderList}
+        data={orders}
         renderItem={renderItem}
-        keyExtractor={(item, index) => `${item.inventoryId}-${index}`}
+        keyExtractor={(item, index) => `${item.Inventory_Id}-${index}`}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={renderFooter}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -215,16 +368,37 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
       <DarkHeader
         eyebrow="YOUR ORDERS"
-        title={orderCount === 0 ? 'History' : `${orderCount} ${orderCount === 1 ? 'order' : 'orders'}`}
+        title="History"
         onBack={() => navigation.goBack()}
         paddingTop={insets.top + Space[2]}
+        rightSlot={
+          <TouchableOpacity
+            onPress={() => { haptic.light(); setFilterVisible(true); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.filterBtn}
+          >
+            <Icon name="options-outline" size={20} color="#FFFFFF" />
+            {activeFilterCount > 0 ? (
+              <View style={styles.filterDot} />
+            ) : null}
+          </TouchableOpacity>
+        }
       />
 
       {renderBody()}
 
+      <OrderFilterSheet
+        visible={filterVisible}
+        onClose={() => setFilterVisible(false)}
+        onApply={handleApplyFilters}
+        onClearAll={handleClearFilters}
+        current={filters}
+      />
+
       <BottomNavBar
         activeTab="Orders"
         onNavigate={(route) => navigation.navigate(route)}
+        onNavigateToAuth={(screen) => navigation.navigate(screen)}
       />
     </View>
   );
@@ -236,6 +410,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
 
+  // ── Filter button ─────────────────────────────────────────────────────────────
+  filterBtn: {
+    position: 'relative',
+  },
+  filterDot: {
+    position:        'absolute',
+    top:             -2,
+    right:           -2,
+    width:           7,
+    height:          7,
+    borderRadius:    4,
+    backgroundColor: Colors.accent,
+  },
+
   // ── List ──────────────────────────────────────────────────────────────────────
   list: {
     flex: 1,
@@ -244,6 +432,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[5],
     paddingBottom:     Space[8],
+  },
+  footerLoader: {
+    paddingVertical: Space[5],
+    alignItems:      'center',
   },
 
   // ── Row — no card boxing, hairline dividers ───────────────────────────────────
@@ -325,17 +517,75 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Empty state CTA — text link ───────────────────────────────────────────────
-  emptyLink: {
-    ...Type.caption,
-    color:     Colors.ink3,
-    textAlign: 'center',
+  // ── Skeleton ──────────────────────────────────────────────────────────────────
+  skeletonWrap: {
+    flex:              1,
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[5],
   },
-  emptyLinkUnderline: {
-    height:          1,
-    backgroundColor: Colors.ink4,
-    marginTop:       3,
-    width:           '100%',
+  skeletonRow: {
+    flexDirection:  'row',
+    alignItems:     'flex-start',
+    paddingVertical: Space[4],
+    gap:             Space[4],
+  },
+  skeletonContent: {
+    flex: 1,
+    gap:  Space[2],
+    paddingTop: Space[1],
+  },
+  skeletonBottom: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginTop:      Space[2],
+  },
+
+  // ── Empty state ───────────────────────────────────────────────────────────────
+  emptyWrap: {
+    flex: 1,
+  },
+  emptyContent: {
+    flex:              1,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingHorizontal: Space[6],
+    gap:               Space[4],
+  },
+  emptyIllustration: {
+    width:           120,
+    height:          120,
+    borderRadius:    60,
+    backgroundColor: Colors.surfaceSoft,
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginBottom:    Space[2],
+  },
+  emptyTitle: {
+    ...Type.title,
+    textAlign: 'center',
+    color:     Colors.ink1,
+  },
+  emptyBody: {
+    ...Type.caption,
+    textAlign: 'center',
+    color:     Colors.ink3,
+    maxWidth:  260,
+  },
+  emptyFooter: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
+    paddingTop:        Space[4],
+  },
+  emptyCTA: {
+    backgroundColor: Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingVertical: Space[4],
+    alignItems:      'center',
+  },
+  emptyCTAText: {
+    ...Type.bodyStrong,
+    color: '#FFFFFF',
   },
 });
 

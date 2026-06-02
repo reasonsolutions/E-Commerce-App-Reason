@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
-import { UserSession } from '../api/interfaces';
-import { adaptSession } from '../api/adapters/sessionAdapter';
+import type { LoggedInCustomerInterface } from '../api/interfaces';
 
-export function useSession(): UserSession | null {
-  const [session, setSession] = useState<UserSession | null>(null);
+export function useSession(): LoggedInCustomerInterface | null {
+  const [session, setSession] = useState<LoggedInCustomerInterface | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -13,9 +12,8 @@ export function useSession(): UserSession | null {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
         if (cancelled || !raw) return;
-        const parsed = JSON.parse(raw);
-        const adapted = adaptSession(parsed);
-        if (!cancelled) setSession(adapted);
+        const parsed: LoggedInCustomerInterface = JSON.parse(raw);
+        if (!cancelled && parsed?.CustomerProfileCode) setSession(parsed);
       } catch {
         // storage or parse failure — leave session null
       }

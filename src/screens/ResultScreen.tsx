@@ -1,42 +1,63 @@
-import React, { useRef, useCallback } from 'react';
+import React, {
+  useRef,
+  useCallback,
+  useState,
+  useEffect,
+  useMemo,
+} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   Animated,
   StatusBar,
+  ActivityIndicator,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import { getProductsByCategory, getAllProducts } from '../api/services';
-import { ProductByCategoryProductDetails } from '../api/interfaces';
-import { Skeleton, Price, EmptyState, DarkHeader } from '../components/ui';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/storageKeys';
+import { getCategories, getBrands } from '../api/product';
+import { SortBy } from '../config/enum_files/SortBy';
+import axiosInstance from '../api/axiosInstance';
+import { productEndpoints } from '../api/endpoints';
+import {
+  ProductByCategoryProductDetails,
+  CategoryInterface,
+  GetBrandItem,
+} from '../api/interfaces';
+import {
+  Skeleton,
+  Price,
+  EmptyState,
+  DarkHeader,
+  FilterSheet,
+  SearchBar,
+} from '../components/ui';
+import type { SortKey } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
-import { Type } from '../theme/typography';
-import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
-import { useEffect } from 'react';
-
-const { width: SCREEN_W } = Dimensions.get('window');
-const COL_GAP = Space[3];
-const COL_W   = (SCREEN_W - Space.screenH * 2 - COL_GAP) / 2;
-const SPAN_W  = SCREEN_W - Space.screenH * 2;
-
-// 4:5 portrait aspect — canonical card ratio across all Phase 2/3 screens
-const GRID_IMG_H = COL_W * 1.25;
-const SPAN_IMG_H = SPAN_W * 0.58;
-const HERO_IMG_H = SCREEN_W * 0.56;
+import {
+  styles,
+  COL_W,
+  GRID_IMG_H,
+  SPAN_IMG_H,
+  HERO_IMG_H,
+} from './ResultScreen.styles';
+import { addToWishlist } from '../api/wishlist';
+import { useProfileCode } from '../hooks/useProfileCode';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
@@ -57,6 +78,57 @@ function isFeaturedSpan(indexInGrid: number): boolean {
   return indexInGrid > 0 && indexInGrid % 5 === 0;
 }
 
+function toServerSortBy(sortKey: SortKey): SortBy | null {
+  if (sortKey === 'price_asc')  return SortBy.LowToHigh;
+  if (sortKey === 'price_desc') return SortBy.HighToLow;
+  return null;
+}
+
+function applySort(
+  products: ProductByCategoryProductDetails[],
+  sortKey: SortKey,
+): ProductByCategoryProductDetails[] {
+  if (sortKey === 'newest') {
+    return [...products].sort((a, b) =>
+      new Date(b.Date_Created).getTime() - new Date(a.Date_Created).getTime(),
+    );
+  }
+  return products;
+}
+
+// ── Wishlist heart — fire-and-forget, outline only on listing ─────────────────
+const WishlistHeart: React.FC<{ inventoryId: number }> = ({ inventoryId }) => {
+  const haptic      = useHaptic();
+  const profileCode = useProfileCode();
+  const [added, setAdded] = useState(false);
+
+  const onPress = useCallback(async () => {
+    if (!profileCode || added) return;
+    haptic.light();
+    setAdded(true);
+    try {
+      await addToWishlist(profileCode, inventoryId);
+    } catch {
+      setAdded(false);
+    }
+  }, [profileCode, inventoryId, haptic, added]);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      style={styles.heartBtn}
+      activeOpacity={0.7}
+    >
+      <Icon
+        name={added ? 'heart' : 'heart-outline'}
+        size={18}
+        color={added ? Colors.accent : '#FFFFFF'}
+      />
+    </TouchableOpacity>
+  );
+};
+
 // ── Ember discount badge — shared across all three card types ─────────────────
 const DiscountBadge: React.FC<{ pct: number }> = ({ pct }) => (
   <View style={styles.discountBadge}>
@@ -69,42 +141,53 @@ const HeroCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onPress: () => void;
 }> = ({ product, onPress }) => {
-  const haptic    = useHaptic();
+  const haptic = useHaptic();
   const { animatedStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.carry,
-      easing:          Motion.easing.inOut,
+      toValue: 1,
+      duration: Motion.duration.carry,
+      easing: Motion.easing.inOut,
       useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
   const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    ? Math.round(
+        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
+      )
     : 0;
 
   return (
     <Animated.View style={[styles.heroCard, animatedStyle]}>
       <TouchableOpacity
         {...handlers}
-        onPress={() => { haptic.light(); onPress(); }}
+        onPress={() => {
+          haptic.light();
+          onPress();
+        }}
         activeOpacity={1}
       >
         <View style={styles.heroImgWrap}>
-          <Animated.Image
-            source={{ uri: product.Images?.split(';')[0] || '' }}
-            style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
-            resizeMode="cover"
-            onLoad={onLoad}
-          />
+          {product.Images?.split(';').filter(Boolean)[0] ? (
+            <Animated.Image
+              source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+              style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+              resizeMode="cover"
+              onLoad={onLoad}
+            />
+          ) : null}
         </View>
-        {/* Gradient only for text legibility — starts from 40% down */}
         <LinearGradient
-          colors={['transparent', 'transparent', 'rgba(8,8,8,0.38)', 'rgba(8,8,8,0.78)']}
+          colors={[
+            'transparent',
+            'transparent',
+            'rgba(8,8,8,0.38)',
+            'rgba(8,8,8,0.78)',
+          ]}
           locations={[0, 0.35, 0.65, 1]}
           style={[StyleSheet.absoluteFillObject, { height: HERO_IMG_H }]}
           pointerEvents="none"
@@ -114,21 +197,28 @@ const HeroCard: React.FC<{
             <DiscountBadge pct={discountPct} />
           </View>
         )}
+        <WishlistHeart inventoryId={product.Inventory_Id} />
         <View style={styles.heroFooter}>
           <View style={styles.heroFooterLeft}>
             {product.Brand_Name ? (
-              <Text style={styles.heroCardBrand}>{product.Brand_Name.toUpperCase()}</Text>
+              <Text style={styles.heroCardBrand}>
+                {product.Brand_Name.toUpperCase()}
+              </Text>
             ) : null}
-            <Text style={styles.heroCardName} numberOfLines={1}>{product.Name}</Text>
+            <Text style={styles.heroCardName} numberOfLines={1}>
+              {product.Name}
+            </Text>
             <View style={styles.heroPriceRow}>
-              {/* White-on-dark context — cannot use Price component */}
-              <Text style={styles.heroCardPrice}>${product.Price.toFixed(2)}</Text>
+              <Text style={styles.heroCardPrice}>
+                Rs {product.Price.toFixed(0)}
+              </Text>
               {hasDiscount && (
-                <Text style={styles.heroCardWas}>${product.ComparePrice.toFixed(2)}</Text>
+                <Text style={styles.heroCardWas}>
+                  Rs {product.ComparePrice.toFixed(0)}
+                </Text>
               )}
             </View>
           </View>
-          {/* Underlined text CTA — matches frozen screen secondary action pattern */}
           <View style={styles.heroViewLink}>
             <Text style={styles.heroViewLinkText}>View</Text>
             <View style={styles.heroViewLinkUnderline} />
@@ -145,23 +235,27 @@ const GridTile: React.FC<{
   onPress: () => void;
   delay: number;
 }> = ({ product, onPress, delay }) => {
-  const haptic    = useHaptic();
-  const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, 12) };
+  const haptic = useHaptic();
+  const { animatedStyle: entranceStyle } = {
+    animatedStyle: useEntrance(delay, false, 12),
+  };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.settle,
-      easing:          Motion.easing.out,
+      toValue: 1,
+      duration: Motion.duration.settle,
+      easing: Motion.easing.out,
       useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
   const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    ? Math.round(
+        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
+      )
     : 0;
 
   return (
@@ -169,21 +263,27 @@ const GridTile: React.FC<{
       <Animated.View style={pressStyle}>
         <TouchableOpacity
           {...handlers}
-          onPress={() => { haptic.light(); onPress(); }}
+          onPress={() => {
+            haptic.light();
+            onPress();
+          }}
           activeOpacity={1}
         >
           <View style={styles.gridImgWrap}>
-            <Animated.Image
-              source={{ uri: product.Images?.split(';')[0] || '' }}
-              style={[styles.gridImg, { opacity: imgOpacity }]}
-              resizeMode="cover"
-              onLoad={onLoad}
-            />
+            {product.Images?.split(';').filter(Boolean)[0] ? (
+              <Animated.Image
+                source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+                style={[styles.gridImg, { opacity: imgOpacity }]}
+                resizeMode="cover"
+                onLoad={onLoad}
+              />
+            ) : null}
             {hasDiscount && (
               <View style={styles.gridBadgeWrap}>
                 <DiscountBadge pct={discountPct} />
               </View>
             )}
+            <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.gridInfo}>
             {product.Brand_Name ? (
@@ -191,8 +291,9 @@ const GridTile: React.FC<{
                 {product.Brand_Name.toUpperCase()}
               </Text>
             ) : null}
-            <Text style={styles.gridName} numberOfLines={2}>{product.Name}</Text>
-            {/* Light-surface context — Price component is safe here */}
+            <Text style={styles.gridName} numberOfLines={2}>
+              {product.Name}
+            </Text>
             <Price
               value={product.Price}
               was={hasDiscount ? product.ComparePrice : undefined}
@@ -211,23 +312,25 @@ const SpanCard: React.FC<{
   onPress: () => void;
   delay: number;
 }> = ({ product, onPress, delay }) => {
-  const haptic    = useHaptic();
+  const haptic = useHaptic();
   const entranceStyle = useEntrance(delay, false, 12);
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.carry,
-      easing:          Motion.easing.inOut,
+      toValue: 1,
+      duration: Motion.duration.carry,
+      easing: Motion.easing.inOut,
       useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
 
   const hasDiscount = product.ComparePrice > product.Price;
   const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    ? Math.round(
+        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
+      )
     : 0;
 
   return (
@@ -235,17 +338,22 @@ const SpanCard: React.FC<{
       <Animated.View style={[{ flex: 1 }, pressStyle]}>
         <TouchableOpacity
           {...handlers}
-          onPress={() => { haptic.light(); onPress(); }}
+          onPress={() => {
+            haptic.light();
+            onPress();
+          }}
           activeOpacity={1}
           style={{ flex: 1 }}
         >
           <View style={styles.spanImgWrap}>
-            <Animated.Image
-              source={{ uri: product.Images?.split(';')[0] || '' }}
-              style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
-              resizeMode="cover"
-              onLoad={onLoad}
-            />
+            {product.Images?.split(';').filter(Boolean)[0] ? (
+              <Animated.Image
+                source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+                style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+                resizeMode="cover"
+                onLoad={onLoad}
+              />
+            ) : null}
           </View>
           <LinearGradient
             colors={['transparent', 'rgba(8,8,8,0.48)', 'rgba(8,8,8,0.80)']}
@@ -258,13 +366,17 @@ const SpanCard: React.FC<{
               <DiscountBadge pct={discountPct} />
             </View>
           )}
+          <WishlistHeart inventoryId={product.Inventory_Id} />
           <View style={styles.spanFooter}>
             {product.Brand_Name ? (
-              <Text style={styles.spanBrand}>{product.Brand_Name.toUpperCase()}</Text>
+              <Text style={styles.spanBrand}>
+                {product.Brand_Name.toUpperCase()}
+              </Text>
             ) : null}
-            <Text style={styles.spanName} numberOfLines={1}>{product.Name}</Text>
-            {/* White-on-dark overlay — inline price required */}
-            <Text style={styles.spanPrice}>${product.Price.toFixed(2)}</Text>
+            <Text style={styles.spanName} numberOfLines={1}>
+              {product.Name}
+            </Text>
+            <Text style={styles.spanPrice}>Rs {product.Price.toFixed(0)}</Text>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -275,16 +387,30 @@ const SpanCard: React.FC<{
 // ── Skeleton — matches loaded layout shape ────────────────────────────────────
 const ResultSkeleton: React.FC = () => (
   <View style={styles.skeletonWrap}>
-    <Skeleton height={HERO_IMG_H} radius={Radius.md} style={{ marginBottom: Space[6] }} />
+    <Skeleton
+      height={HERO_IMG_H}
+      radius={Radius.md}
+      style={{ marginBottom: Space[6] }}
+    />
     <View style={styles.gridRow}>
       <View style={{ width: COL_W }}>
-        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton
+          height={GRID_IMG_H}
+          width={COL_W}
+          radius={Radius.md}
+          style={{ marginBottom: Space[2] }}
+        />
         <Skeleton height={9} width="45%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={13} width="80%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={12} width="35%" />
       </View>
       <View style={{ width: COL_W }}>
-        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton
+          height={GRID_IMG_H}
+          width={COL_W}
+          radius={Radius.md}
+          style={{ marginBottom: Space[2] }}
+        />
         <Skeleton height={9} width="55%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={13} width="70%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={12} width="40%" />
@@ -292,12 +418,22 @@ const ResultSkeleton: React.FC = () => (
     </View>
     <View style={[styles.gridRow, { marginTop: Space[5] }]}>
       <View style={{ width: COL_W }}>
-        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton
+          height={GRID_IMG_H}
+          width={COL_W}
+          radius={Radius.md}
+          style={{ marginBottom: Space[2] }}
+        />
         <Skeleton height={9} width="38%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={13} width="85%" />
       </View>
       <View style={{ width: COL_W }}>
-        <Skeleton height={GRID_IMG_H} width={COL_W} radius={Radius.md} style={{ marginBottom: Space[2] }} />
+        <Skeleton
+          height={GRID_IMG_H}
+          width={COL_W}
+          radius={Radius.md}
+          style={{ marginBottom: Space[2] }}
+        />
         <Skeleton height={9} width="50%" style={{ marginBottom: Space[1] }} />
         <Skeleton height={13} width="65%" />
       </View>
@@ -305,56 +441,413 @@ const ResultSkeleton: React.FC = () => (
   </View>
 );
 
+// ── Module-level cache — fetched once per app session ────────────────────────
+let _cachedCategories: CategoryInterface[] = [];
+let _cachedBrands: { id: number; name: string }[] = [];
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const route  = useRoute();
+  const route = useRoute();
+  const haptic = useHaptic();
   const {
     categoryId,
+    brandId,
+    searchQuery: searchQueryParam,
     categoryName = 'Browse',
     flashDeals: isFlashDeals = false,
-  } = route.params as { categoryId?: string; categoryName?: string; flashDeals?: boolean };
+  } = route.params as {
+    categoryId?: string;
+    brandId?: number;
+    searchQuery?: string;
+    categoryName?: string;
+    flashDeals?: boolean;
+  };
 
-  const { data: products, loading, isError, error, run } = useAsyncState<ProductByCategoryProductDetails[]>([]);
+  const { loading, isError, error, run } = useAsyncState<
+    ProductByCategoryProductDetails[]
+  >([]);
+  const [allProducts, setAllProducts] = useState<
+    ProductByCategoryProductDetails[]
+  >([]);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 20;
 
   const headerAnim = useEntrance(40, false, 12);
-  const heroAnim   = useEntrance(160, false, 12);
+  const heroAnim = useEntrance(160, false, 12);
 
+  // ── Filter / sort state ────────────────────────────────────────────────────
+  const [filterCategories, setFilterCategories] = useState<number[]>([]);
+  const [filterBrands, setFilterBrands] = useState<number[]>([]);
+  const [filterPriceMin, setFilterPriceMin] = useState('');
+  const [filterPriceMax, setFilterPriceMax] = useState('');
+  const [filterDiscount, setFilterDiscount] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('default');
+  const [sheetCategories, setSheetCategories] =
+    useState<CategoryInterface[]>(_cachedCategories);
+  const [sheetBrands, setSheetBrands] =
+    useState<{ id: number; name: string }[]>(_cachedBrands);
+
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [localQuery, setLocalQuery] = useState(searchQueryParam ?? '');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEYS.recentSearches).then(raw => {
+      if (raw) try { setRecentSearches(JSON.parse(raw)); } catch {}
+    });
+  }, []);
+
+  const saveRecentSearch = useCallback(async (term: string) => {
+    const updated = [term, ...recentSearches.filter(s => s !== term)].slice(0, 8);
+    setRecentSearches(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.recentSearches, JSON.stringify(updated));
+  }, [recentSearches]);
+
+  // Debounced live search — fires 500ms after user stops typing
+  useEffect(() => {
+    const q = localQuery.trim();
+    if (!q) return;
+    const timer = setTimeout(() => {
+      fetchProducts({ query: q });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localQuery]);
+
+  // Draft state — lives in sheet until Apply is tapped
+  const [draftCategories, setDraftCategories] = useState<number[]>([]);
+  const [draftBrands, setDraftBrands] = useState<number[]>([]);
+  const [draftPriceMin, setDraftPriceMin] = useState('');
+  const [draftPriceMax, setDraftPriceMax] = useState('');
+  const [draftDiscount, setDraftDiscount] = useState(false);
+  const [draftSortKey, setDraftSortKey] = useState<SortKey>('default');
+
+  const activeFilterCount =
+    filterCategories.length +
+    filterBrands.length +
+    (filterPriceMin || filterPriceMax ? 1 : 0) +
+    (filterDiscount ? 1 : 0);
+
+  // ── Brands for filter sheet — direct from getBrands API ──────────────────
+  const allBrandsFromSheet = sheetBrands;
+
+  // ── Fetch categories + brands once per session — skip if already cached ──
+  useEffect(() => {
+    let active = true;
+    if (!_cachedCategories.length) {
+      getCategories()
+        .then(res => {
+          if (!active) return;
+          if (res?.statusCode === 1 && Array.isArray(res.result)) {
+            _cachedCategories = res.result as CategoryInterface[];
+            setSheetCategories(_cachedCategories);
+          }
+        })
+        .catch(() => {});
+    }
+    if (!_cachedBrands.length) {
+      getBrands()
+        .then(res => {
+          if (!active) return;
+          const list = res?.result ?? [];
+          _cachedBrands = list.map((b: GetBrandItem) => ({
+            id: Number(b.BrandId),
+            name: b.BrandName,
+          }));
+          setSheetBrands(_cachedBrands);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // ── Open sheet — sync draft from committed state ───────────────────────────
+  const openSheet = useCallback(() => {
+    setDraftCategories(filterCategories);
+    setDraftBrands(filterBrands);
+    setDraftPriceMin(filterPriceMin);
+    setDraftPriceMax(filterPriceMax);
+    setDraftDiscount(filterDiscount);
+    setDraftSortKey(sortKey);
+    setIsSheetOpen(true);
+  }, [
+    filterCategories,
+    filterBrands,
+    filterPriceMin,
+    filterPriceMax,
+    filterDiscount,
+    sortKey,
+  ]);
+
+  // ── Shared mapper: allProducts API response → ProductByCategoryProductDetails
+  interface RawProduct {
+    ItemID:       string;
+    Name:         string;
+    MinPrice:     number;
+    MaxComparePrice: number;
+    Description:  string;
+    SubcategoryID:string;
+    Images:       string;
+    CreatedDate:  string;
+    BrandID:      string;
+    BrandName:    string;
+    CategoryID:   string;
+    CategoryName: string;
+    CategoryImage:string;
+    SCName:       string;
+    Variants?:    { InventoryID: string; Variant: string; Stock: number }[];
+  }
+
+  const mapProducts = (raw: RawProduct[]): ProductByCategoryProductDetails[] =>
+    raw.map(p => ({
+      Item_Id: Number(p.ItemID),
+      Name: p.Name,
+      Price: p.MinPrice,
+      ComparePrice: p.MaxComparePrice,
+      Description: p.Description,
+      SubCategory_Id: Number(p.SubcategoryID),
+      Images: p.Images,
+      Date_Created: p.CreatedDate,
+      Brand_Id: Number(p.BrandID),
+      ApprovedBy: null,
+      ApprovedOn: null,
+      VendorID: 0,
+      Brand_Name: p.BrandName,
+      Category_Id: Number(p.CategoryID),
+      CategoryName: p.CategoryName,
+      CategoryImage: p.CategoryImage,
+      SCName: p.SCName,
+      Inventory_Id: p.Variants?.[0] ? Number(p.Variants[0].InventoryID) : 0,
+      Variant: p.Variants?.[0]?.Variant ?? '',
+      Count: p.Variants?.[0]?.Stock ?? 0,
+      Date_Updated: p.CreatedDate,
+    }));
+
+  // ── Build allProducts payload from current filter + route state ───────────
+  const buildPayload = useCallback(
+    (
+      page: number,
+      opts?: {
+        cats?: number[];
+        brands?: number[];
+        priceMin?: string;
+        priceMax?: string;
+        discount?: boolean;
+        query?: string;
+        sort?: SortKey;
+      },
+    ) => {
+      const cats = opts?.cats ?? filterCategories;
+      const brands = opts?.brands ?? filterBrands;
+      const priceMin = opts?.priceMin ?? filterPriceMin;
+      const priceMax = opts?.priceMax ?? filterPriceMax;
+      const discount = opts?.discount ?? filterDiscount;
+      const serverSort = toServerSortBy(opts?.sort ?? sortKey);
+
+      const effectiveBrands =
+        brands.length > 0 ? brands : brandId != null ? [Number(brandId)] : [];
+      const effectiveCategories =
+        cats.length > 0 ? cats : categoryId != null ? [Number(categoryId)] : [];
+
+      return {
+        brands: effectiveBrands,
+        categories: effectiveCategories,
+        subCategories: [],
+        searchQuery: opts?.query ?? searchQueryParam ?? '%',
+        priceRange: {
+          from: priceMin !== '' ? Number(priceMin) : null,
+          to: priceMax !== '' ? Number(priceMax) : null,
+        },
+        discount: discount || isFlashDeals ? 1 : null,
+        sortBy: serverSort,
+        pagination: { pageNumber: page, pageSize: PAGE_SIZE },
+      };
+      // isFlashDeals intentionally included — buildPayload must re-close when route params change
+    },
+    [
+      filterCategories,
+      filterBrands,
+      filterPriceMin,
+      filterPriceMax,
+      filterDiscount,
+      sortKey,
+      brandId,
+      categoryId,
+      searchQueryParam,
+      isFlashDeals,
+    ],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Initial / filter-reset fetch (page 1, replaces list) ─────────────────
   const fetchProducts = useCallback(
-    (cancelled?: { current: boolean }) =>
-      run(async () => {
-        if (isFlashDeals) {
-          const data = await getAllProducts();
-          if (data?.statusCode === 1) {
-            const discounted = (data.result || []).filter(
-              (p: any) => p.ComparePrice > p.Price,
-            ) as unknown as ProductByCategoryProductDetails[];
-            return deduplicateProducts(discounted);
-          }
-          return [];
-        } else {
-          const data = await getProductsByCategory(categoryId ?? '');
-          if (data?.statusCode === 1) {
-            return deduplicateProducts(data.result.productsDetails || []);
-          }
-          return [];
-        }
-      }, cancelled),
-    [run, categoryId, isFlashDeals],
+    (opts?: {
+      cats?: number[];
+      brands?: number[];
+      priceMin?: string;
+      priceMax?: string;
+      discount?: boolean;
+      query?: string;
+      sort?: SortKey;
+      cancelled?: { current: boolean };
+    }) => {
+      setPageNumber(1);
+      setHasMore(true);
+      setAllProducts([]);
+      return run(async () => {
+        const payload = buildPayload(1, opts);
+        const response = await axiosInstance.post(
+          productEndpoints.allProducts,
+          payload,
+        );
+        const page = deduplicateProducts(
+          mapProducts(response.data?.result?.Products ?? []),
+        );
+        if (page.length < PAGE_SIZE) setHasMore(false);
+        setAllProducts(page);
+        return page;
+      }, opts?.cancelled);
+    },
+    [run, buildPayload],
+  );
+
+  // ── Load next page — appends to list ─────────────────────────────────────
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || loading) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = pageNumber + 1;
+      const payload = buildPayload(nextPage);
+      const response = await axiosInstance.post(
+        productEndpoints.allProducts,
+        payload,
+      );
+      const page = deduplicateProducts(
+        mapProducts(response.data?.result?.Products ?? []),
+      );
+      if (page.length < PAGE_SIZE) setHasMore(false);
+      if (page.length > 0) {
+        setAllProducts(prev => deduplicateProducts([...prev, ...page]));
+        setPageNumber(nextPage);
+      }
+    } catch {}
+    setLoadingMore(false);
+  }, [loadingMore, hasMore, loading, pageNumber, buildPayload]);
+
+  // ── Scroll-near-bottom detection ──────────────────────────────────────────
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+      const distanceFromBottom =
+        contentSize.height - contentOffset.y - layoutMeasurement.height;
+      if (distanceFromBottom < 400 && !loadingMore && hasMore && !loading) {
+        loadMore();
+      }
+    },
+    [loadMore, loadingMore, hasMore, loading],
   );
 
   useEffect(() => {
     const cancelled = { current: false };
-    fetchProducts(cancelled);
-    return () => { cancelled.current = true; };
-  }, [fetchProducts]);
+    fetchProducts({ cancelled });
+    return () => {
+      cancelled.current = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const deduplicated = products ?? [];
-  const heroProduct  = deduplicated[0] ?? null;
+  // ── Apply handler (called from sheet) ─────────────────────────────────────
+  const handleApply = useCallback(() => {
+    setIsSheetOpen(false);
+    setFilterCategories(draftCategories);
+    setFilterBrands(draftBrands);
+    setFilterPriceMin(draftPriceMin);
+    setFilterPriceMax(draftPriceMax);
+    setFilterDiscount(draftDiscount);
+    setSortKey(draftSortKey);
+    fetchProducts({
+      cats: draftCategories,
+      brands: draftBrands,
+      priceMin: draftPriceMin,
+      priceMax: draftPriceMax,
+      discount: draftDiscount,
+      sort: draftSortKey,
+    });
+  }, [
+    draftCategories,
+    draftBrands,
+    draftPriceMin,
+    draftPriceMax,
+    draftDiscount,
+    draftSortKey,
+    fetchProducts,
+  ]);
+
+  // ── Clear all draft state ──────────────────────────────────────────────────
+  const handleClearAll = useCallback(() => {
+    setDraftCategories([]);
+    setDraftBrands([]);
+    setDraftPriceMin('');
+    setDraftPriceMax('');
+    setDraftDiscount(false);
+    setDraftSortKey('default');
+  }, []);
+
+  const toggleDraftCategory = useCallback(
+    (id: number) => {
+      haptic.light();
+      setDraftCategories(prev =>
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+      );
+    },
+    [haptic],
+  );
+
+  const toggleDraftBrand = useCallback(
+    (id: number) => {
+      haptic.light();
+      setDraftBrands(prev =>
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+      );
+    },
+    [haptic],
+  );
+
+  // ── Price bounds derived from all loaded products ─────────────────────────
+  // Price bounds persist across fetches — never reset to 0/10000 mid-session
+  const priceBoundsRef = useRef<{ floor: number; ceiling: number } | null>(null);
+  useEffect(() => {
+    if (allProducts.length === 0) return;
+    const lo = Math.floor(allProducts.reduce((m, p) => Math.min(m, p.Price), Infinity));
+    const hi = Math.ceil(allProducts.reduce((m, p) => Math.max(m, p.Price), -Infinity));
+    priceBoundsRef.current = {
+      floor:   priceBoundsRef.current ? Math.min(priceBoundsRef.current.floor, lo) : lo,
+      ceiling: priceBoundsRef.current ? Math.max(priceBoundsRef.current.ceiling, hi) : hi,
+    };
+  }, [allProducts]);
+  const priceFloor   = priceBoundsRef.current?.floor   ?? 0;
+  const priceCeiling = priceBoundsRef.current?.ceiling ?? 10000;
+
+  // ── Rendered product list (sort applied client-side, driven by allProducts) ─
+  const deduplicated = useMemo(
+    () => applySort(allProducts, sortKey),
+    [allProducts, sortKey],
+  );
+  const heroProduct = deduplicated[0] ?? null;
   const gridProducts = deduplicated.slice(1);
 
   const rows: Array<
-    | { type: 'pair'; left: ProductByCategoryProductDetails; right?: ProductByCategoryProductDetails; leftIdx: number; rightIdx?: number }
+    | {
+        type: 'pair';
+        left: ProductByCategoryProductDetails;
+        right?: ProductByCategoryProductDetails;
+        leftIdx: number;
+        rightIdx?: number;
+      }
     | { type: 'span'; product: ProductByCategoryProductDetails; idx: number }
   > = [];
 
@@ -367,35 +860,116 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       pairIdx = 0;
       continue;
     }
-    const left  = gridProducts[i];
+    const left = gridProducts[i];
     const right = gridProducts[i + 1];
-    rows.push({ type: 'pair', left, right, leftIdx: i, rightIdx: right ? i + 1 : undefined });
+    rows.push({
+      type: 'pair',
+      left,
+      right,
+      leftIdx: i,
+      rightIdx: right ? i + 1 : undefined,
+    });
     i += right ? 2 : 1;
     pairIdx++;
   }
 
   const navigateToProduct = useCallback(
-    (inventoryId: number) => navigation.navigate('Product', { product: inventoryId }),
+    (itemId: number) => navigation.navigate('Product', { product: itemId }),
     [navigation],
+  );
+
+  const filterButton = (
+    <TouchableOpacity
+      onPress={() => {
+        haptic.light();
+        openSheet();
+      }}
+      activeOpacity={0.75}
+      style={styles.filterPill}
+    >
+      <Icon
+        name="options-outline"
+        size={13}
+        color={activeFilterCount > 0 ? Colors.accent : 'rgba(255,255,255,0.70)'}
+      />
+      <Text
+        style={[
+          styles.filterPillText,
+          activeFilterCount > 0 && styles.filterPillTextActive,
+        ]}
+      >
+        Filter
+      </Text>
+      {activeFilterCount > 0 && <View style={styles.filterDot} />}
+    </TouchableOpacity>
   );
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={Colors.ink1}
+        translucent
+      />
 
       <Animated.View style={[styles.headerWrap, headerAnim]}>
         <DarkHeader
-          eyebrow="COLLECTION"
+          eyebrow={
+            searchQueryParam
+              ? 'SEARCH'
+              : categoryName === 'All Products'
+              ? 'BROWSE'
+              : 'COLLECTION'
+          }
           title={categoryName}
           onBack={() => navigation.goBack()}
           paddingTop={insets.top + Space[2]}
-          rightSlot={
-            !loading && deduplicated.length > 0
-              ? <Text style={styles.headerCount}>{deduplicated.length}</Text>
-              : undefined
-          }
+          rightSlot={filterButton}
         />
       </Animated.View>
+
+      <View style={styles.searchBand}>
+        <SearchBar
+          value={localQuery}
+          onChangeText={setLocalQuery}
+          placeholder="Search products, brands…"
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+          onSubmit={() => {
+            const q = localQuery.trim();
+            if (!q) return;
+            saveRecentSearch(q);
+            navigation.navigate('Result', {
+              searchQuery: q,
+              categoryName: `"${q}"`,
+            });
+          }}
+        />
+      </View>
+
+      {searchFocused && localQuery.trim() === '' && recentSearches.length > 0 && (
+        <View style={styles.recentWrap}>
+          <Text style={styles.recentLabel}>RECENT</Text>
+          <View style={styles.recentChips}>
+            {recentSearches.map(term => (
+              <TouchableOpacity
+                key={term}
+                style={styles.recentChip}
+                onPress={() => {
+                  setLocalQuery(term);
+                  saveRecentSearch(term);
+                  navigation.navigate('Result', {
+                    searchQuery: term,
+                    categoryName: `"${term}"`,
+                  });
+                }}
+              >
+                <Text style={styles.recentChipText}>{term}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -404,14 +978,16 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           styles.scrollContent,
           { paddingBottom: insets.bottom + Space[10] },
         ]}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         {loading ? (
           <ResultSkeleton />
         ) : isError ? (
           <View style={styles.stateWrap}>
             <ErrorState
-              title="Couldn't load products"
-              message={error ?? 'Something went wrong.'}
+              title="Couldn't load products."
+              message={error ?? 'Tap retry to try again.'}
               onRetry={() => fetchProducts()}
               retryLoading={loading}
             />
@@ -430,12 +1006,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
               <Animated.View style={heroAnim}>
                 <HeroCard
                   product={heroProduct}
-                  onPress={() => navigateToProduct(heroProduct.Inventory_Id)}
+                  onPress={() => navigateToProduct(heroProduct.Item_Id)}
                 />
               </Animated.View>
             )}
 
-            {/* Hairline divider — breath between hero and grid */}
             <View style={styles.gridDivider} />
 
             {rows.map((row, rowIndex) => {
@@ -445,26 +1020,26 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                   <SpanCard
                     key={`span-${row.idx}`}
                     product={row.product}
-                    onPress={() => navigateToProduct(row.product.Inventory_Id)}
+                    onPress={() => navigateToProduct(row.product.Item_Id)}
                     delay={delay}
                   />
                 );
               }
 
-              const leftDelay  = Math.min(180 + rowIndex * 35, 400);
+              const leftDelay = Math.min(180 + rowIndex * 35, 400);
               const rightDelay = Math.min(180 + rowIndex * 35 + 55, 440);
 
               return (
                 <View key={`pair-${row.leftIdx}`} style={styles.gridRow}>
                   <GridTile
                     product={row.left}
-                    onPress={() => navigateToProduct(row.left.Inventory_Id)}
+                    onPress={() => navigateToProduct(row.left.Item_Id)}
                     delay={leftDelay}
                   />
                   {row.right ? (
                     <GridTile
                       product={row.right}
-                      onPress={() => navigateToProduct(row.right!.Inventory_Id)}
+                      onPress={() => navigateToProduct(row.right!.Item_Id)}
                       delay={rightDelay}
                     />
                   ) : (
@@ -475,246 +1050,45 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
             })}
           </>
         )}
+
+        {loadingMore && (
+          <ActivityIndicator
+            size="small"
+            color={Colors.ink3}
+            style={{ marginVertical: Space[6] }}
+          />
+        )}
+
+        {!hasMore && allProducts.length > 0 && !loading && (
+          <Text style={styles.endOfResults}>You've seen it all</Text>
+        )}
       </ScrollView>
+
+      <FilterSheet
+        visible={isSheetOpen}
+        onClose={() => setIsSheetOpen(false)}
+        onApply={handleApply}
+        draftSortKey={draftSortKey}
+        setDraftSortKey={setDraftSortKey}
+        draftCategories={draftCategories}
+        toggleDraftCategory={toggleDraftCategory}
+        draftBrands={draftBrands}
+        toggleDraftBrand={toggleDraftBrand}
+        draftPriceMin={draftPriceMin}
+        setDraftPriceMin={setDraftPriceMin}
+        draftPriceMax={draftPriceMax}
+        setDraftPriceMax={setDraftPriceMax}
+        draftDiscount={draftDiscount}
+        setDraftDiscount={setDraftDiscount}
+        onClearAll={handleClearAll}
+        sheetCategories={sheetCategories}
+        allBrandsFromSheet={allBrandsFromSheet}
+        hideBrands={brandId != null}
+        priceFloor={priceFloor}
+        priceCeiling={priceCeiling}
+      />
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.ink1,
-  },
-
-  // ── Header ──────────────────────────────────────────────────────────────────
-  headerWrap: {
-    zIndex: 2,
-  },
-  headerCount: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      11,
-    color:         'rgba(255,255,255,0.28)',
-    letterSpacing: 0.5,
-  },
-
-  // ── Scroll canvas ────────────────────────────────────────────────────────────
-  scroll: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-  },
-  scrollContent: {
-    paddingHorizontal: Space.screenH,
-    paddingTop: Space[5],
-  },
-
-  // ── Hero card ────────────────────────────────────────────────────────────────
-  heroCard: {
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceDeep,
-    marginBottom: Space[1],
-  },
-  heroImgWrap: {
-    width: '100%',
-    height: HERO_IMG_H,
-    backgroundColor: Colors.surfaceDeep,
-  },
-  heroBadgeWrap: {
-    position: 'absolute',
-    top: Space[3],
-    left: Space[3],
-  },
-  heroFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Space[5],
-    paddingBottom: Space[5],
-    paddingTop: Space[4],
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  heroFooterLeft: {
-    flex: 1,
-    gap: 4,
-    paddingRight: Space[4],
-  },
-  heroCardBrand: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.46)',
-  },
-  heroCardName: {
-    fontFamily: FontFamily.serif,
-    fontSize:   20,
-    fontWeight: '400',
-    color:      '#FFFFFF',
-    letterSpacing: -0.3,
-    lineHeight: 20 * 1.2,
-  },
-  heroPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Space[2],
-    marginTop: 2,
-  },
-  heroCardPrice: {
-    fontFamily: FontFamily.serif,
-    fontSize:   18,
-    fontWeight: '400',
-    color:      '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  heroCardWas: {
-    fontFamily: FontFamily.mono,
-    fontSize:   12,
-    color:      'rgba(255,255,255,0.36)',
-    textDecorationLine: 'line-through',
-  },
-  // Underlined text link — matches frozen secondary action pattern
-  heroViewLink: {
-    alignItems: 'center',
-    paddingBottom: 2,
-  },
-  heroViewLinkText: {
-    ...Type.caption,
-    color: 'rgba(255,255,255,0.72)',
-    letterSpacing: 0.2,
-  },
-  heroViewLinkUnderline: {
-    height: 1,
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.32)',
-    marginTop: 2,
-  },
-
-  // ── Ember discount badge ──────────────────────────────────────────────────────
-  discountBadge: {
-    backgroundColor: Colors.accentTint,
-    borderWidth: 1,
-    borderColor: Colors.accent,
-    borderRadius: Radius.xs,
-    paddingVertical: 2,
-    paddingHorizontal: Space[2],
-  },
-  discountBadgeText: {
-    ...Type.label,
-    color: Colors.accent,
-    letterSpacing: 0.8,
-  },
-
-  // ── Grid divider ─────────────────────────────────────────────────────────────
-  gridDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.rule,
-    marginVertical: Space[6],
-  },
-
-  // ── Grid row ──────────────────────────────────────────────────────────────────
-  gridRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Space[6],
-  },
-
-  // ── Grid tile ─────────────────────────────────────────────────────────────────
-  gridTile: {
-    width: COL_W,
-  },
-  gridImgWrap: {
-    width: COL_W,
-    height: GRID_IMG_H,
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceDeep,
-  },
-  gridImg: {
-    width: '100%',
-    height: '100%',
-  },
-  gridBadgeWrap: {
-    position: 'absolute',
-    top: Space[2],
-    left: Space[2],
-  },
-  gridInfo: {
-    paddingTop: Space[2],
-    paddingHorizontal: 1,
-    gap: 3,
-  },
-  gridBrand: {
-    ...Type.label,
-    color: Colors.ink4,
-  },
-  gridName: {
-    fontFamily: FontFamily.serif,
-    fontSize:   14,
-    fontWeight: '400',
-    color:      Colors.ink1,
-    letterSpacing: -0.1,
-    lineHeight: 14 * 1.35,
-  },
-
-  // ── Span card ─────────────────────────────────────────────────────────────────
-  spanCard: {
-    width: SPAN_W,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceDeep,
-    marginBottom: Space[6],
-  },
-  spanImgWrap: {
-    width: '100%',
-    height: SPAN_IMG_H,
-    backgroundColor: Colors.surfaceDeep,
-  },
-  spanBadgeWrap: {
-    position: 'absolute',
-    top: Space[3],
-    left: Space[4],
-  },
-  spanFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Space[5],
-    paddingBottom: Space[5],
-    gap: 3,
-  },
-  spanBrand: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.44)',
-  },
-  spanName: {
-    fontFamily: FontFamily.serif,
-    fontSize:   18,
-    fontWeight: '400',
-    color:      '#FFFFFF',
-    letterSpacing: -0.3,
-    lineHeight: 18 * 1.2,
-  },
-  // White-on-dark — inline price required (no Price component)
-  spanPrice: {
-    fontFamily: FontFamily.serif,
-    fontSize:   15,
-    fontWeight: '400',
-    color:      'rgba(255,255,255,0.75)',
-    letterSpacing: -0.2,
-    marginTop: 2,
-  },
-
-  // ── Skeleton ──────────────────────────────────────────────────────────────────
-  skeletonWrap: {
-    paddingTop: Space[2],
-  },
-
-  // ── State wrappers ────────────────────────────────────────────────────────────
-  stateWrap: {
-    flex: 1,
-    paddingTop: Space[12] + Space[6],
-  },
-});
 
 export default ResultScreen;

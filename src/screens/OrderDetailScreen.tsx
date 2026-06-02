@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import { postCnfOrderDetail } from '../api/services';
+import { postCnfOrderDetail } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { Skeleton, SkeletonRow, StatusBadge, DarkHeader } from '../components/ui';
@@ -22,14 +22,14 @@ import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { formatDate } from '../utils/formatDate';
 import { orderStatusLabel } from '../utils/orderStatus';
-import type { OrderDetail, OrderDetailResponse } from '../api/interfaces';
+import type { OrderDetailItemExtendedInterface, OrderDetailResponseInterface } from '../api/interfaces';
 
 // 4:5 portrait — canonical card ratio
 const IMG_W = 88;
 const IMG_H = 110;
 
 type OrderDetailScreenRouteParams = {
-  orderItem: OrderDetail;
+  orderItem: OrderDetailItemExtendedInterface;
 };
 
 type OrderDetailScreenProps = {
@@ -90,10 +90,10 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const insets = useSafeAreaInsets();
   const route  = useRoute<RouteProp<{ params: OrderDetailScreenRouteParams }, 'params'>>();
   const orderItem   = route.params?.orderItem;
-  const orderNumber = orderItem?.orderNumber;
+  const orderNumber = orderItem?.OrderNumber;
 
   const { data: orderDetails, loading, isError, error, run } =
-    useAsyncState<OrderDetailResponse>(null);
+    useAsyncState<OrderDetailResponseInterface>(null);
 
   const fetchOrderDetails = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -156,8 +156,8 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         {Header}
         <View style={styles.stateWrap}>
           <ErrorState
-            title="Couldn't load order"
-            message={error ?? 'Something went wrong.'}
+            title="Couldn't load this order."
+            message={error ?? 'Tap retry to try again.'}
             onRetry={() => fetchOrderDetails()}
             retryLoading={loading}
           />
@@ -166,13 +166,13 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     );
   }
 
-  const order    = orderItem ?? orderDetails?.orderDetails[0];
-  const delivery = orderDetails?.deliveryDetail[0];
-  const firstImg = order?.images[0] ?? '';
-  const status   = order ? orderStatusLabel(order.status) : undefined;
+  const order    = orderItem ?? orderDetails?.OrderDetails[0];
+  const delivery = orderDetails?.DeliveryDetail[0];
+  const firstImg = order?.Images?.split(';').filter(Boolean)[0] ?? '';
+  const status   = order ? orderStatusLabel(order.OrderStatus) : undefined;
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
-  if (!order || !delivery) {
+  if (!order) {
     return (
       <View style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
@@ -238,17 +238,17 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             </View>
           ) : null}
           <View style={styles.productMeta}>
-            {order.brand ? (
-              <Text style={styles.brand}>{order.brand.toUpperCase()}</Text>
+            {order.Brand_Name ? (
+              <Text style={styles.brand}>{order.Brand_Name.toUpperCase()}</Text>
             ) : null}
-            <Text style={styles.productName} numberOfLines={3}>{order.name}</Text>
-            {order.variant ? (
-              <Text style={styles.variant}>{order.variant}</Text>
+            <Text style={styles.productName} numberOfLines={3}>{order.Name}</Text>
+            {order.Variant ? (
+              <Text style={styles.variant}>{order.Variant}</Text>
             ) : null}
             <View style={styles.amountRow}>
-              <Text style={styles.amount}>${order.amount.toFixed(2)}</Text>
-              {order.quantity > 1 ? (
-                <Text style={styles.qty}>× {order.quantity}</Text>
+              <Text style={styles.amount}>Rs {(order.Amount ?? 0).toFixed(0)}</Text>
+              {order.Quantity > 1 ? (
+                <Text style={styles.qty}>× {order.Quantity}</Text>
               ) : null}
             </View>
           </View>
@@ -257,13 +257,13 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         {/* ── Order details section ── */}
         <Animated.View style={[styles.section, orderAnim]}>
           <Text style={styles.sectionEyebrow}>ORDER</Text>
-          {order.orderNumber ? (
-            <DetailRow label="NUMBER" value={`#${order.orderNumber}`} />
+          {order.OrderNumber ? (
+            <DetailRow label="NUMBER" value={`#${order.OrderNumber}`} />
           ) : null}
-          {order.createdDate ? (
-            <DetailRow label="DATE" value={formatDate(order.createdDate)} />
+          {order.CreatedDate ? (
+            <DetailRow label="DATE" value={formatDate(order.CreatedDate)} />
           ) : null}
-          <DetailRow label="QUANTITY" value={String(order.quantity)} />
+          <DetailRow label="QUANTITY" value={String(order.Quantity)} />
           {status ? (
             <DetailRow
               label="STATUS"
@@ -271,17 +271,19 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
               isLast
             />
           ) : (
-            <DetailRow label="STATUS" value={String(order.status)} isLast />
+            <DetailRow label="STATUS" value={String(order.OrderStatus)} isLast />
           )}
         </Animated.View>
 
-        {/* ── Delivery section ── */}
-        <Animated.View style={[styles.section, deliveryAnim]}>
-          <Text style={styles.sectionEyebrow}>DELIVERY</Text>
-          <DetailRow label="NAME"    value={delivery.customerName} />
-          <DetailRow label="MOBILE"  value={delivery.mobile} />
-          <DetailRow label="ADDRESS" value={delivery.fullAddress} isLast />
-        </Animated.View>
+        {/* ── Delivery section — hidden until getOrderStatus is wired ── */}
+        {delivery ? (
+          <Animated.View style={[styles.section, deliveryAnim]}>
+            <Text style={styles.sectionEyebrow}>DELIVERY</Text>
+            <DetailRow label="NAME"    value={delivery.CustomerName} />
+            <DetailRow label="MOBILE"  value={String(delivery.MobileNumber)} />
+            <DetailRow label="ADDRESS" value={[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).join(', ')} isLast />
+          </Animated.View>
+        ) : null}
       </ScrollView>
     </View>
   );

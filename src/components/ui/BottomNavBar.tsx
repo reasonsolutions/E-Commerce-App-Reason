@@ -1,15 +1,20 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, FontSize, FontWeight, Radius, Shadow } from '../../theme';
 import { useHaptic } from '../../hooks/useHaptic';
+import { isLoggedIn } from '../../utils/auth';
+import { LoginPromptSheet, type LoginPromptContext } from './LoginPromptSheet';
 
 export type NavTab = 'Home' | 'Orders' | 'Wishlist' | 'Cart' | 'Profile';
+
+const PROTECTED_TABS: NavTab[] = ['Orders', 'Wishlist', 'Profile'];
 
 interface BottomNavBarProps {
   activeTab: NavTab;
   onNavigate: (route: NavTab) => void;
+  onNavigateToAuth?: (screen: 'Login' | 'Register') => void;
   cartCount?: number;
 }
 
@@ -89,22 +94,53 @@ const NavItem: React.FC<{
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   activeTab,
   onNavigate,
+  onNavigateToAuth,
   cartCount,
 }) => {
   const insets = useSafeAreaInsets();
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [promptContext, setPromptContext] = useState<LoginPromptContext>('general');
+
+  const handleTabPress = useCallback(async (route: NavTab) => {
+    if (route === activeTab) return;
+    if (PROTECTED_TABS.includes(route)) {
+      const loggedIn = await isLoggedIn();
+      if (!loggedIn) {
+        const ctx: LoginPromptContext =
+          route === 'Orders'   ? 'orders' :
+          route === 'Wishlist' ? 'wishlist' :
+          route === 'Profile'  ? 'profile' : 'general';
+        setPromptContext(ctx);
+        setShowPrompt(true);
+        return;
+      }
+    }
+    onNavigate(route);
+  }, [activeTab, onNavigate]);
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Space[2]) }]}>
-      {TABS.map((tab) => (
-        <NavItem
-          key={tab.route}
-          tab={tab}
-          isActive={tab.route === activeTab}
-          onPress={() => { if (tab.route !== activeTab) onNavigate(tab.route); }}
-          cartCount={cartCount}
+    <>
+      <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Space[2]) }]}>
+        {TABS.map((tab) => (
+          <NavItem
+            key={tab.route}
+            tab={tab}
+            isActive={tab.route === activeTab}
+            onPress={() => handleTabPress(tab.route)}
+            cartCount={cartCount}
+          />
+        ))}
+      </View>
+
+      {showPrompt && (
+        <LoginPromptSheet
+          context={promptContext}
+          onClose={() => setShowPrompt(false)}
+          onSignIn={() => { setShowPrompt(false); onNavigateToAuth?.('Login'); }}
+          onRegister={() => { setShowPrompt(false); onNavigateToAuth?.('Register'); }}
         />
-      ))}
-    </View>
+      )}
+    </>
   );
 };
 

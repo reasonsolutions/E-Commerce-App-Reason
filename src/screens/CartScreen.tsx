@@ -12,20 +12,23 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { SavedCartItemInterface } from '../api/interfaces';
-import { EmptyState } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius, Shadow } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
-import { getSavedCartItems, quantityIncrement, quantityDecrement, postDeleteCartItem } from '../api/services';
+import { getSavedCartItems, postDeleteCartItem, updateCartItemQuantity, getGuestCart, updateGuestCartItem, removeFromGuestCart, clearGuestCart } from '../api/cart';
+import type { GuestCartItem } from '../api/cart';
+import { isLoggedIn } from '../utils/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useCart } from '../context/CartContext';
-import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
+import { useAppToast } from '../hooks/useAppToast';
+import { useAuthGuard } from '../hooks/useAuthGuard';
+import { LoginPromptSheet } from '../components/ui/LoginPromptSheet';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -37,14 +40,22 @@ type CartScreenProps = {
 };
 
 // ── Cart row ──────────────────────────────────────────────────────────────────
-const CartRow: React.FC<{
+const CartRow = React.memo<{
   item: SavedCartItemInterface;
   onUpdateQuantity: (item: SavedCartItemInterface, qty: number) => void;
   onRemove: (item: SavedCartItemInterface) => void;
   delay: number;
-}> = ({ item, onUpdateQuantity, onRemove, delay }) => {
-  const anim       = useEntrance(delay, false, 10);
+}>(({ item, onUpdateQuantity, onRemove, delay }) => {
   const haptic     = useHaptic();
+  const animOpacity    = useRef(new Animated.Value(0)).current;
+  const animTranslateY = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(animOpacity,    { toValue: 1, duration: Motion.duration.settle, delay, useNativeDriver: true }),
+      Animated.timing(animTranslateY, { toValue: 0, duration: Motion.duration.settle, delay, useNativeDriver: true }),
+    ]).start();
+  }, [animOpacity, animTranslateY, delay]);
+  const anim = { opacity: animOpacity, transform: [{ translateY: animTranslateY }] };
   const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const onLoad = useCallback(() => {
@@ -56,8 +67,9 @@ const CartRow: React.FC<{
     }).start();
   }, [imgOpacity]);
 
-  const lineTotal   = item.Price * item.Quantity;
-  const hasDiscount = item.ComparePrice > item.Price;
+  const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
+  const lineTotal    = item.Price * item.Quantity;
+  const hasDiscount  = comparePrice > item.Price;
 
   const handleDecrement = useCallback(() => {
     haptic.light();
@@ -91,8 +103,8 @@ const CartRow: React.FC<{
         {/* Top: meta + dismiss */}
         <View style={styles.cartTop}>
           <View style={styles.cartMeta}>
-            {item.Brand_Name ? (
-              <Text style={styles.cartBrand}>{item.Brand_Name}</Text>
+            {item.BrandName ? (
+              <Text style={styles.cartBrand}>{item.BrandName}</Text>
             ) : null}
             <Text style={styles.cartName} numberOfLines={2}>{item.Name}</Text>
             {item.Variant ? (
@@ -139,10 +151,10 @@ const CartRow: React.FC<{
 
           {/* Price block — line total primary, unit "was" subordinate */}
           <View style={styles.cartPriceBlock}>
-            <Text style={styles.cartLineTotal}>${lineTotal.toFixed(2)}</Text>
+            <Text style={styles.cartLineTotal}>Rs {lineTotal.toFixed(0)}</Text>
             {hasDiscount && (
               <Text style={styles.cartUnitWas}>
-                was ${item.ComparePrice.toFixed(2)} ea
+                Rs {comparePrice.toFixed(0)}
               </Text>
             )}
           </View>
@@ -150,101 +162,260 @@ const CartRow: React.FC<{
       </View>
     </Animated.View>
   );
-};
+});
+
+// ── Guest cart row ────────────────────────────────────────────────────────────
+const GuestCartRow = React.memo<{
+  item: GuestCartItem;
+  onUpdateQuantity: (qty: number) => void;
+  onRemove: () => void;
+  delay: number;
+}>(({ item, onUpdateQuantity, onRemove, delay }) => {
+  const haptic = useHaptic();
+  const animOpacity    = useRef(new Animated.Value(0)).current;
+  const animTranslateY = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(animOpacity,    { toValue: 1, duration: Motion.duration.settle, delay, useNativeDriver: true }),
+      Animated.timing(animTranslateY, { toValue: 0, duration: Motion.duration.settle, delay, useNativeDriver: true }),
+    ]).start();
+  }, [animOpacity, animTranslateY, delay]);
+  const anim = { opacity: animOpacity, transform: [{ translateY: animTranslateY }] };
+  const imgOpacity = useRef(new Animated.Value(0)).current;
+  const onLoad = useCallback(() => {
+    Animated.timing(imgOpacity, { toValue: 1, duration: Motion.duration.settle, easing: Motion.easing.out, useNativeDriver: true }).start();
+  }, [imgOpacity]);
+
+  const hasDiscount = item.comparePrice > item.price;
+
+  return (
+    <Animated.View style={[styles.cartRow, anim]}>
+      <View style={styles.cartImgWrap}>
+        <Animated.Image
+          source={{ uri: item.image }}
+          style={[styles.cartImg, { opacity: imgOpacity }]}
+          resizeMode="cover"
+          onLoad={onLoad}
+        />
+      </View>
+      <View style={styles.cartContent}>
+        <View style={styles.cartTop}>
+          <View style={styles.cartMeta}>
+            {item.brandName ? <Text style={styles.cartBrand}>{item.brandName}</Text> : null}
+            <Text style={styles.cartName} numberOfLines={2}>{item.name}</Text>
+            {item.variant ? <Text style={styles.cartVariant}>{item.variant}</Text> : null}
+          </View>
+          <TouchableOpacity onPress={() => { haptic.light(); onRemove(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Text style={styles.removeGlyph}>×</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.cartBottom}>
+          <View style={styles.qtyControl}>
+            <TouchableOpacity onPress={() => { haptic.light(); if (item.quantity > 1) onUpdateQuantity(item.quantity - 1); }} disabled={item.quantity <= 1} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnDisabled]}>−</Text>
+            </TouchableOpacity>
+            <Text style={styles.qtyValue}>{item.quantity}</Text>
+            <TouchableOpacity onPress={() => { haptic.light(); onUpdateQuantity(item.quantity + 1); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.qtyBtn}>+</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.cartPriceBlock}>
+            <Text style={styles.cartLineTotal}>Rs {(item.price * item.quantity).toFixed(0)}</Text>
+            {hasDiscount && <Text style={styles.cartUnitWas}>Rs {item.comparePrice.toFixed(0)}</Text>}
+          </View>
+        </View>
+      </View>
+    </Animated.View>
+  );
+});
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { setCartCount } = useCart();
   const checkoutTactile = useTactile();
+  const toast = useAppToast();
+  const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
-  const [cartItems, setCartItems] = useState<SavedCartItemInterface[]>([]);
+  const [optimistic, setOptimistic] = useState<SavedCartItemInterface[] | null>(null);
+  const [guestItems, setGuestItems] = useState<GuestCartItem[]>([]);
+  const [clearing, setClearing] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
 
-  useEffect(() => {
-    if (fetched !== null) {
-      setCartItems(fetched);
-      const total = fetched.reduce((sum, item) => sum + item.Quantity, 0);
-      setCartCount(total);
-    }
-  }, [fetched, setCartCount]);
+  const cartItems = optimistic ?? fetched ?? [];
 
   const fetchCart = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
-        const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-        if (!userData) return [];
-        const user = JSON.parse(userData);
-        const response = await getSavedCartItems(user.CustomerProfileCode);
+        const loggedIn = await isLoggedIn();
+        if (!loggedIn) {
+          setIsGuest(true);
+          const items = await getGuestCart();
+          setGuestItems(items);
+          setHasFetched(true);
+          setCartCount(items.reduce((s, i) => s + i.quantity, 0));
+          return [];
+        }
+        setIsGuest(false);
+        // Read fresh from storage — avoids race condition and stale data after account switch
+        const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+        const code = raw ? JSON.parse(raw).CustomerProfileCode : null;
+        if (!code) return [];
+        const response = await getSavedCartItems(code);
         return response.result || [];
       }, cancelled),
-    [run],
+    [run, setCartCount],
   );
+
+  // Sync cart badge whenever server data arrives
+  useEffect(() => {
+    if (fetched !== null && !isGuest) {
+      setHasFetched(true);
+      setOptimistic(null);
+      const total = fetched.reduce((sum, item) => sum + item.Quantity, 0);
+      setCartCount(total);
+    }
+  }, [fetched, setCartCount, isGuest]);
 
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
+      setHasFetched(false);
+      setOptimistic(null);
       fetchCart(cancelled);
       return () => { cancelled.current = true; };
     }, [fetchCart]),
   );
 
-  const headerAnim  = useEntrance(40, false, 12);
-  const summaryDelay = Math.min(140 + cartItems.length * 50, 480);
-  const summaryAnim  = useEntrance(summaryDelay, false, 10);
+  const headerOpacity    = useRef(new Animated.Value(0)).current;
+  const headerTranslateY = useRef(new Animated.Value(12)).current;
+  const summaryOpacity    = useRef(new Animated.Value(0)).current;
+  const summaryTranslateY = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(headerOpacity,    { toValue: 1, duration: Motion.duration.settle, delay: 20, useNativeDriver: true }),
+      Animated.timing(headerTranslateY, { toValue: 0, duration: Motion.duration.settle, delay: 20, useNativeDriver: true }),
+    ]).start();
+  }, [headerOpacity, headerTranslateY]);
+  useEffect(() => {
+    if (!hasFetched) return;
+    Animated.parallel([
+      Animated.timing(summaryOpacity,    { toValue: 1, duration: Motion.duration.settle, delay: 40, useNativeDriver: true }),
+      Animated.timing(summaryTranslateY, { toValue: 0, duration: Motion.duration.settle, delay: 40, useNativeDriver: true }),
+    ]).start();
+  }, [hasFetched, summaryOpacity, summaryTranslateY]);
+  const headerAnim  = { opacity: headerOpacity,  transform: [{ translateY: headerTranslateY }] };
+  const summaryAnim = { opacity: summaryOpacity, transform: [{ translateY: summaryTranslateY }] };
 
-  const subtotal  = cartItems.reduce((sum, item) => sum + item.Price * item.Quantity, 0);
-  const itemCount = cartItems.reduce((sum, item) => sum + item.Quantity, 0);
+  const subtotal = isGuest
+    ? guestItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
+    : cartItems.reduce((sum, item) => sum + item.Price * item.Quantity, 0);
+  const itemCount = isGuest
+    ? guestItems.reduce((sum, i) => sum + i.quantity, 0)
+    : cartItems.reduce((sum, item) => sum + item.Quantity, 0);
+  const originalTotal = isGuest
+    ? guestItems.reduce((sum, i) => sum + (i.comparePrice > i.price ? i.comparePrice : i.price) * i.quantity, 0)
+    : cartItems.reduce((sum, item) => {
+        const compare = item.PriceDetails?.ComparePrice ?? 0;
+        return sum + (compare > item.Price ? compare : item.Price) * item.Quantity;
+      }, 0);
+  const totalSavings = originalTotal - subtotal;
 
   const handleUpdateQuantity = useCallback(async (item: SavedCartItemInterface, quantity: number) => {
     const delta = quantity - item.Quantity;
     if (delta === 0) return;
-
-    setCartItems(prev =>
-      prev.map(ci =>
+    setOptimistic(prev =>
+      (prev ?? fetched ?? []).map(ci =>
         ci.CartDetailsCode === item.CartDetailsCode ? { ...ci, Quantity: quantity } : ci,
       ),
     );
     setCartCount((prev: number) => prev + delta);
-
     try {
-      if (delta > 0) {
-        await quantityIncrement(item.CartDetailsCode, item.Inventory_Id);
-      } else {
-        await quantityDecrement(item.CartDetailsCode, item.Inventory_Id);
-      }
+      await updateCartItemQuantity(item.CartDetailsCode, item.InventoryId, quantity);
     } catch {
       fetchCart();
     }
-  }, [setCartCount, fetchCart]);
+  }, [setCartCount, fetchCart, fetched]);
+
+  const handleUpdateGuestQuantity = useCallback(async (inventoryId: number, oldQty: number, newQty: number) => {
+    const delta = newQty - oldQty;
+    if (delta === 0) return;
+    const updated = await updateGuestCartItem(inventoryId, newQty);
+    setGuestItems(updated);
+    setCartCount((prev: number) => prev + delta);
+  }, [setCartCount]);
 
   const handleRemoveItem = useCallback(async (item: SavedCartItemInterface) => {
-    setCartItems(prev => prev.filter(ci => ci.CartDetailsCode !== item.CartDetailsCode));
+    setOptimistic(prev =>
+      (prev ?? fetched ?? []).filter(ci => ci.CartDetailsCode !== item.CartDetailsCode),
+    );
     setCartCount((prev: number) => Math.max(0, prev - item.Quantity));
-
     try {
       await postDeleteCartItem(item.CartDetailsCode);
     } catch {
       fetchCart();
     }
-  }, [setCartCount, fetchCart]);
+  }, [setCartCount, fetchCart, fetched]);
 
-  const handleCheckout = useCallback(() => {
-    navigation.navigate('Address', { cartItems });
-  }, [navigation, cartItems]);
-
-  const clearCart = useCallback(() => {
-    setCartItems([]);
-    setCartCount(0);
+  const handleRemoveGuestItem = useCallback(async (inventoryId: number, qty: number) => {
+    const updated = await removeFromGuestCart(inventoryId);
+    setGuestItems(updated);
+    setCartCount((prev: number) => Math.max(0, prev - qty));
   }, [setCartCount]);
 
+  const handleCheckout = useCallback(() => {
+    guard(() => navigation.navigate('Address', { cartItems }));
+  }, [guard, navigation, cartItems]);
+
+  const clearCart = useCallback(async () => {
+    setClearing(true);
+    try {
+      if (isGuest) {
+        await clearGuestCart();
+        setGuestItems([]);
+        setCartCount(0);
+      } else {
+        for (const item of cartItems) {
+          await postDeleteCartItem(item.CartDetailsCode);
+        }
+        setOptimistic([]);
+        setCartCount(0);
+      }
+    } catch {
+      toast.error({ title: 'Error', description: 'Failed to clear cart. Please try again.' });
+      if (!isGuest) fetchCart();
+    } finally {
+      setClearing(false);
+    }
+  }, [isGuest, cartItems, guestItems, setCartCount, fetchCart]);
+
   const renderBody = () => {
+    if (!hasFetched && !isError) {
+      return (
+        <View style={[styles.fillWrap, { paddingHorizontal: Space.screenH, paddingTop: Space[4] }]}>
+          {[0, 1, 2].map(i => (
+            <View key={i} style={styles.skeletonRow}>
+              <View style={styles.skeletonImg} />
+              <View style={styles.skeletonContent}>
+                <View style={[styles.skeletonLine, { width: '40%' }]} />
+                <View style={[styles.skeletonLine, { width: '70%', marginTop: Space[2] }]} />
+                <View style={[styles.skeletonLine, { width: '55%', marginTop: Space[1] }]} />
+                <View style={[styles.skeletonLine, { width: '30%', marginTop: Space[4] }]} />
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
     if (isError) {
       return (
         <View style={styles.fillWrap}>
           <ErrorState
-            title="Couldn't load your bag"
-            message={error ?? 'An unexpected error occurred.'}
+            title="Couldn't load your bag."
+            message={error ?? 'Tap retry to try again.'}
             onRetry={() => fetchCart()}
             retryLoading={loading}
             icon={<Icon name="bag-outline" size={32} color={Colors.ink3} />}
@@ -253,63 +424,95 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       );
     }
 
-    if (cartItems.length === 0 && !loading) {
+    if (isGuest && guestItems.length === 0 && hasFetched) {
       return (
         <View style={styles.fillWrap}>
-          <EmptyState
-            icon={<Icon name="bag-outline" size={32} color={Colors.ink4} />}
-            title="Nothing saved yet."
-            body="Add something you love and it'll appear here."
-            action={
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Home')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.emptyLink}>Continue Shopping</Text>
-              </TouchableOpacity>
-            }
-          />
+          <View style={styles.emptyContent}>
+            <View style={styles.emptyIllustration}>
+              <Icon name="bag-outline" size={52} color={Colors.ink3} />
+            </View>
+            <Text style={styles.emptyTitle}>Your bag is empty.</Text>
+            <Text style={styles.emptyBody}>Add something you love to get started.</Text>
+          </View>
+          <View style={styles.emptyFooter}>
+            <TouchableOpacity
+              style={styles.emptyCTA}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <Text style={styles.emptyCTAText}>Browse the collection</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    if (cartItems.length === 0 && !loading && hasFetched && !isGuest) {
+      return (
+        <View style={styles.fillWrap}>
+          <View style={styles.emptyContent}>
+            <View style={styles.emptyIllustration}>
+              <Icon name="bag-outline" size={52} color={Colors.ink3} />
+            </View>
+            <Text style={styles.emptyTitle}>Your bag is empty.</Text>
+            <Text style={styles.emptyBody}>Add something you love to get started.</Text>
+          </View>
+          <View style={styles.emptyFooter}>
+            <TouchableOpacity
+              style={styles.emptyCTA}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <Text style={styles.emptyCTAText}>Browse the collection</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
 
     return (
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + Space[6] },
-        ]}
-      >
-        {/* ── Items — hairline-separated, no card ───────────────────── */}
-        <View style={styles.itemsSection}>
-          {cartItems.map((item, index) => (
-            <React.Fragment key={`${item.CartDetailsCode}-${index}`}>
-              {index > 0 && <View style={styles.itemDivider} />}
-              <CartRow
-                item={item}
-                onUpdateQuantity={handleUpdateQuantity}
-                onRemove={handleRemoveItem}
-                delay={Math.min(80 + index * 55, 360)}
-              />
-            </React.Fragment>
-          ))}
-        </View>
+      <View style={styles.bodyWrap}>
+        {/* ── Items scroll ─────────────────────────────────────────────── */}
+        <ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.itemsSection}>
+            {isGuest
+              ? guestItems.map((item, index) => (
+                  <React.Fragment key={`guest-${item.inventoryId}`}>
+                    {index > 0 && <View style={styles.itemDivider} />}
+                    <GuestCartRow
+                      item={item}
+                      onUpdateQuantity={(newQty: number) => handleUpdateGuestQuantity(item.inventoryId, item.quantity, newQty)}
+                      onRemove={() => handleRemoveGuestItem(item.inventoryId, item.quantity)}
+                      delay={Math.min(80 + index * 55, 360)}
+                    />
+                  </React.Fragment>
+                ))
+              : cartItems.map((item, index) => (
+                  <React.Fragment key={`${item.CartDetailsCode}-${index}`}>
+                    {index > 0 && <View style={styles.itemDivider} />}
+                    <CartRow
+                      item={item}
+                      onUpdateQuantity={handleUpdateQuantity}
+                      onRemove={handleRemoveItem}
+                      delay={Math.min(80 + index * 55, 360)}
+                    />
+                  </React.Fragment>
+                ))
+            }
+          </View>
+        </ScrollView>
 
-        {/* ── Summary panel — surfaceDeep, flush ────────────────────── */}
-        <Animated.View style={[styles.summaryPanel, summaryAnim]}>
+        {/* ── Summary panel — sticky at bottom ─────────────────────────── */}
+        <Animated.View style={[styles.summaryPanel, summaryAnim, { paddingBottom: insets.bottom + Space[4] }]}>
           <View style={styles.summaryRule} />
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>
-              Subtotal
-              {'  '}
-              <Text style={styles.summaryLabelMeta}>
-                {itemCount} {itemCount === 1 ? 'item' : 'items'}
-              </Text>
-            </Text>
-            <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryValue}>Rs {subtotal.toFixed(0)}</Text>
           </View>
 
           <View style={styles.summaryRow}>
@@ -317,14 +520,20 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             <Text style={styles.summaryFree}>Free</Text>
           </View>
 
+          {totalSavings > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.savingsLabel}>You save</Text>
+              <Text style={styles.savingsValue}>Rs {totalSavings.toFixed(0)}</Text>
+            </View>
+          )}
+
           <View style={styles.summaryTotalRule} />
 
           <View style={styles.summaryTotalRow}>
             <Text style={styles.summaryTotalLabel}>Total</Text>
-            <Text style={styles.summaryTotalValue}>${subtotal.toFixed(2)}</Text>
+            <Text style={styles.summaryTotalValue}>Rs {subtotal.toFixed(0)}</Text>
           </View>
 
-          {/* Checkout CTA */}
           <Animated.View style={checkoutTactile.animatedStyle}>
             <TouchableOpacity
               style={styles.checkoutBtn}
@@ -342,7 +551,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             Address & payment on the next step
           </Text>
         </Animated.View>
-      </ScrollView>
+      </View>
     );
   };
 
@@ -366,18 +575,21 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           <View style={styles.headerCenter}>
             <Text style={styles.headerEyebrow}>YOUR BAG</Text>
             <Text style={styles.headerTitle}>
-              {cartItems.length === 0
-                ? 'Empty'
-                : `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
+              {!hasFetched
+                ? 'Your Bag'
+                : cartItems.length === 0
+                  ? 'Empty'
+                  : `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
             </Text>
           </View>
 
           {cartItems.length > 0 ? (
             <TouchableOpacity
               onPress={clearCart}
+              disabled={clearing}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.clearBtn}>Clear</Text>
+              <Text style={styles.clearBtn}>{clearing ? '...' : 'Clear'}</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.headerSpacer} />
@@ -386,6 +598,14 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       </Animated.View>
 
       {renderBody()}
+
+      {showLoginPrompt && (
+        <LoginPromptSheet
+          onClose={dismissLoginPrompt}
+          onSignIn={() => { dismissLoginPrompt(); navigation.navigate('Login'); }}
+          onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
+        />
+      )}
     </View>
   );
 };
@@ -393,7 +613,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   root: {
     flex:            1,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.surface,
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
@@ -439,28 +659,89 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Fill wrappers (error / empty) ──────────────────────────────────────────
+  // ── Fill wrappers (error / empty / skeleton) ──────────────────────────────
   fillWrap: {
     flex:            1,
     backgroundColor: Colors.surface,
   },
-
-  // Empty state text link (subordinate to EmptyState component)
-  emptyLink: {
-    ...Type.caption,
-    color:              Colors.ink2,
-    textDecorationLine: 'underline',
-    letterSpacing:      0.2,
+  skeletonRow: {
+    flexDirection:   'row',
+    gap:             Space[3],
+    paddingVertical: Space[4],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  skeletonImg: {
+    width:           80,
+    height:          100,
+    borderRadius:    Radius.md,
+    backgroundColor: Colors.surfaceDeep,
+  },
+  skeletonContent: {
+    flex: 1,
+    paddingTop: Space[1],
+  },
+  skeletonLine: {
+    height:          10,
+    borderRadius:    Radius.xs,
+    backgroundColor: Colors.surfaceDeep,
   },
 
-  // ── Scroll ────────────────────────────────────────────────────────────────
+  // ── Empty state ───────────────────────────────────────────────────────────
+  emptyContent: {
+    flex:              1,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingHorizontal: Space[6],
+    gap:               Space[4],
+  },
+  emptyIllustration: {
+    width:           120,
+    height:          120,
+    borderRadius:    60,
+    backgroundColor: Colors.surfaceSoft,
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginBottom:    Space[2],
+  },
+  emptyTitle: {
+    ...Type.title,
+    textAlign: 'center',
+    color:     Colors.ink1,
+  },
+  emptyBody: {
+    ...Type.caption,
+    textAlign: 'center',
+    color:     Colors.ink3,
+    maxWidth:  260,
+  },
+  emptyFooter: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
+    paddingTop:        Space[4],
+  },
+  emptyCTA: {
+    backgroundColor: Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingVertical: Space[4],
+    alignItems:      'center',
+  },
+  emptyCTAText: {
+    ...Type.bodyStrong,
+    color: '#FFFFFF',
+  },
+
+  // ── Body layout — items scroll, summary sticky ────────────────────────────
+  bodyWrap: {
+    flex: 1,
+  },
   scroll: {
     flex:            1,
     backgroundColor: Colors.surface,
   },
   scrollContent: {
-    paddingTop: Space[4],
-    gap:        Space[5],
+    paddingTop:    Space[4],
+    paddingBottom: Space[4],
   },
 
   // ── Items section — hairline dividers, no card ────────────────────────────
@@ -600,10 +881,13 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.ink3,
   },
-  summaryLabelMeta: {
+  savingsLabel: {
     ...Type.caption,
-    color:    Colors.ink4,
-    fontSize: 12,
+    color: Colors.accent,
+  },
+  savingsValue: {
+    ...Type.caption,
+    color: Colors.accent,
   },
   summaryValue: {
     ...Type.caption,

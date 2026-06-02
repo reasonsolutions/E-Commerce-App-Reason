@@ -17,11 +17,15 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
-import { heroBanner } from '../data/mockData';
 import CategoryItem from '../components/CategoryItem';
 import ProductCard from '../components/ProductCard';
-import { CategoryInterface, ProductInterface } from '../api/interfaces';
-import { getAllProducts, getCategories } from '../api/services';
+import { CategoryInterface, ProductInterface, GetBrandItem, ProductByCategoryProductDetails } from '../api/interfaces';
+import { getProductsByCategory, getCategories, getBrands } from '../api/product';
+import { fallbackImageUrl } from '../utils/resolveImageUrl';
+import { useProductImage } from '../hooks/useProductImage';
+import { clearSession } from '../utils/auth';
+import axiosInstance from '../api/axiosInstance';
+import { productEndpoints } from '../api/endpoints';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -32,8 +36,178 @@ import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_H   = 300;
-const BRIDGE_H = 80;
+const HERO_H   = Math.round(SCREEN_W * 1.18);
+const BRIDGE_H = 64;
+
+const BRAND_DOMAINS: Record<string, string> = {
+  'nike':        'nike.com',
+  'casio':       'casio.com',
+  'van heusen':  'vanheusen.com',
+  'allen solly': 'pvhcorp.com',
+  'arrow':       'arrowshirts.com',
+  'parle':       'parle.com',
+  'lakme':       'lakmeindia.com',
+  'fogg':        'vini.co.in',
+  'crocs':       'crocs.com',
+};
+
+function brandFaviconUrl(brandName: string): string {
+  const key    = brandName.toLowerCase().trim();
+  const domain = BRAND_DOMAINS[key] ?? `${key.replace(/\s+/g, '')}.com`;
+  return `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=256`;
+}
+
+const FALLBACK_COLORS = [
+  Colors.ink2, Colors.ink3, Colors.accent,
+  Colors.ink1, Colors.ink3, Colors.ink2,
+  Colors.accent, Colors.ink1,
+];
+
+// ── Brand tile: favicon with letter fallback ─────────────────────────────────
+const BrandTile: React.FC<{ uri: string; name: string; fallbackColor: string }> = ({ uri, name, fallbackColor }) => {
+  const [failed, setFailed] = useState(false);
+  return (
+    <View style={styles.brandLogoWrap}>
+      {failed ? (
+        <Text style={[styles.brandFallbackLetter, { color: fallbackColor }]}>
+          {name.charAt(0).toUpperCase()}
+        </Text>
+      ) : (
+        <Image
+          source={{ uri }}
+          style={styles.brandLogo}
+          resizeMode="contain"
+          onError={() => setFailed(true)}
+        />
+      )}
+    </View>
+  );
+};
+
+
+
+// ── Hero slide — extracted so hooks can be called per item ───────────────────
+const HeroSlide: React.FC<{ item: ProductInterface; onPress: (id: number) => void }> = ({ item, onPress }) => {
+  const { uri, loading } = useProductImage(item.Name, item.BrandName, 'portrait');
+  const imgOpacity = useRef(new Animated.Value(0)).current;
+
+  const onImageLoad = useCallback(() => {
+    Animated.timing(imgOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  }, [imgOpacity]);
+
+  const hasDiscount = item.MaxComparePrice > item.MinPrice;
+  const discountPct = hasDiscount
+    ? Math.round(((item.MaxComparePrice - item.MinPrice) / item.MaxComparePrice) * 100)
+    : 0;
+
+  return (
+    <TouchableOpacity style={styles.heroSlide} activeOpacity={0.97} onPress={() => onPress(item.ItemID)}>
+      {/* Shimmer background while loading */}
+      {loading && <Skeleton height={HERO_H} radius={0} style={StyleSheet.absoluteFillObject} />}
+      {/* Fade in once URI is ready */}
+      {uri ? (
+        <Animated.Image
+          source={{ uri }}
+          style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+          resizeMode="cover"
+          onLoad={onImageLoad}
+        />
+      ) : null}
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.92)']}
+        locations={[0.25, 0.52, 0.78, 1]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+      {hasDiscount && (
+        <View style={styles.heroSlideBadge}>
+          <Text style={styles.heroSlideBadgeText}>−{discountPct}%</Text>
+        </View>
+      )}
+      <View style={styles.heroSlideFooter}>
+        {item.BrandName ? (
+          <Text style={styles.heroSlideBrand}>{item.BrandName.toUpperCase()}</Text>
+        ) : null}
+        <Text style={styles.heroSlideName} numberOfLines={2}>{item.Name}</Text>
+        <View style={styles.heroSlidePriceRow}>
+          {item.MinPrice > 0 && <Text style={styles.heroSlidePrice}>Rs {item.MinPrice.toFixed(0)}</Text>}
+          {hasDiscount && <Text style={styles.heroSlidePriceWas}>Rs {item.MaxComparePrice.toFixed(0)}</Text>}
+        </View>
+        <View style={styles.heroSlideShopRow}>
+          <Text style={styles.heroSlideShopText}>Shop now</Text>
+          <Icon name="arrow-forward" size={13} color="rgba(255,255,255,0.75)" />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// ── Hero carousel ────────────────────────────────────────────────────────────
+const HeroCarousel: React.FC<{
+  products: ProductInterface[] | null;
+  onPress: (itemId: number) => void;
+}> = ({ products, onPress }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+  const autoTimer   = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const slides = products ?? [];
+
+  const startAutoAdvance = useCallback(() => {
+    if (autoTimer.current) clearInterval(autoTimer.current);
+    if (slides.length < 2) return;
+    autoTimer.current = setInterval(() => {
+      setActiveIndex(prev => {
+        const next = (prev + 1) % slides.length;
+        flatListRef.current?.scrollToIndex({ index: next, animated: true });
+        return next;
+      });
+    }, 3500);
+  }, [slides.length]);
+
+  useEffect(() => {
+    startAutoAdvance();
+    return () => { if (autoTimer.current) clearInterval(autoTimer.current); };
+  }, [startAutoAdvance]);
+
+  if (!products) {
+    return <Skeleton height={HERO_H} radius={0} />;
+  }
+
+  if (slides.length === 0) {
+    return <View style={[styles.heroBg, { height: HERO_H }]} />;
+  }
+
+  return (
+    <View style={styles.heroBg}>
+      <FlatList
+        ref={flatListRef}
+        data={slides}
+        keyExtractor={(item) => String(item.ItemID)}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onMomentumScrollBegin={() => {
+          if (autoTimer.current) clearInterval(autoTimer.current);
+        }}
+        onMomentumScrollEnd={(e) => {
+          const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+          setActiveIndex(idx);
+          startAutoAdvance();
+        }}
+        renderItem={({ item }) => <HeroSlide item={item} onPress={onPress} />}
+      />
+      {slides.length > 1 && (
+        <View style={styles.heroDots}>
+          {slides.map((_, i) => (
+            <View key={i} style={[styles.heroDot, i === activeIndex && styles.heroDotActive]} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -61,8 +235,8 @@ function useCustomBackHandler(navigation: NavigationProp) {
                 {
                   text: 'Yes',
                   onPress: async () => {
-                    await AsyncStorage.clear();
-                    navigation.navigate('Login');
+                    await clearSession();
+                    navigation.navigate('Home');
                   },
                 },
               ],
@@ -102,8 +276,64 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
   const { cartCount: cartItemsCount } = useCart();
-  const [searchQuery, setSearchQuery] = useState('');
-  const heroImgOpacity = useRef(new Animated.Value(0)).current;
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [suggestions, setSuggestions]         = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchFocused, setSearchFocused]     = useState(false);
+  const [recentSearches, setRecentSearches]   = useState<string[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEYS.recentSearches).then(raw => {
+      if (raw) try { setRecentSearches(JSON.parse(raw)); } catch {}
+    });
+  }, []);
+
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (text.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const response = await axiosInstance.post(productEndpoints.allProducts, {
+          brands: [],
+          categories: [],
+          subCategories: [],
+          searchQuery: text.trim(),
+          priceRange: { from: null, to: null },
+          discount: null,
+          pagination: { pageNumber: 1, pageSize: 6 },
+        });
+        const names: string[] = Array.from(
+          new Set<string>(
+            (response.data?.result?.Products ?? [])
+              .map((p: ProductByCategoryProductDetails) => p.Name)
+              .filter(Boolean),
+          ),
+        );
+        setSuggestions(names);
+        setShowSuggestions(names.length > 0);
+      } catch {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
+  }, []);
+
+  const commitSearch = useCallback(async (query: string) => {
+    const q = query.trim();
+    if (!q) return;
+    setShowSuggestions(false);
+    setSearchFocused(false);
+    const updated = [q, ...recentSearches.filter(s => s !== q)].slice(0, 8);
+    setRecentSearches(updated);
+    await AsyncStorage.setItem(STORAGE_KEYS.recentSearches, JSON.stringify(updated));
+    navigation.navigate('Result', { searchQuery: q, categoryName: `"${q}"` });
+  }, [navigation, recentSearches]);
 
   const {
     data: categories,
@@ -115,44 +345,95 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     run: runProducts,
   } = useAsyncState<ProductInterface[]>(null);
 
-  const heroAnim  = useEntrance(60, true);
-  const catAnim   = useEntrance(200);
-  const featAnim  = useEntrance(300);
-  const shelfAnim = useEntrance(380);
-  const editAnim  = useEntrance(460);
+  const {
+    data: brands,
+    run: runBrands,
+  } = useAsyncState<GetBrandItem[]>(null);
+
+  const heroAnim   = useEntrance(60, true);
+  const catAnim    = useEntrance(200);
+  const brandsAnim = useEntrance(260);
+  const featAnim   = useEntrance(320);
+  const shelfAnim  = useEntrance(400);
+  const editAnim   = useEntrance(480);
 
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
-      runCategories(() => getCategories().then((d) => d.result), cancelled);
-      runProducts(() => getAllProducts().then((d) => d.result), cancelled);
+      const categoriesPromise = getCategories().then((d) => d.result as CategoryInterface[]);
+      runCategories(() => categoriesPromise, cancelled);
+      runProducts(async () => {
+        const catRes = await categoriesPromise;
+        if (!catRes?.length) return [];
+        const ids = catRes.map((c) => c.CategoryId);
+        const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
+        const merged = results.flat();
+        const seen = new Set<number>();
+        const deduped: ProductInterface[] = [];
+        for (const p of merged) {
+          if (!seen.has(p.Item_Id)) {
+            seen.add(p.Item_Id);
+            deduped.push({
+              ItemID:          p.Item_Id,
+              Name:            p.Name,
+              Description:     p.Description,
+              SubcategoryID:   String(p.SubCategory_Id),
+              Images:          p.Images,
+              CreatedDate:     p.Date_Created,
+              BrandID:         String(p.Brand_Id),
+              BrandName:       p.Brand_Name,
+              SCName:          p.SCName,
+              CategoryID:      String(p.Category_Id),
+              CategoryName:    p.CategoryName,
+              CategoryImage:   p.CategoryImage,
+              MinPrice:              p.Price ?? 0,
+              MaxComparePrice:       p.ComparePrice ?? 0,
+              OrganisationId:        '',
+              OrganisationName:      '',
+              RelatedProducts:       null,
+              DiscountPct:           0,
+              ComplianceInfo:        { AgeRestrictedInfo: { IsAgeRestricted: false, MinimumAge: null, PrescriptionRequired: false }, HazardousInfo: { IsHazardous: false, HazardClasses: null, UnNumber: null, HazardLabels: null, HandlingInstructions: null, SafetyDataSheetURL: null }, RestrictedRegion: [], SaleHours: null },
+              ProductClassification: { IsDigital: false, IsVirtual: false, IsDownloadable: false, CountryOfOrigin: null, HSCode: null, Manufacturer: null, ManufacturerPartNumber: null },
+              Marketing:             { Tags: [], MetaTitle: null, MetaDescription: null },
+              PolicyInfo:            { IsReturnable: false, ReturnWindow: null, ReturnPolicy: null, HasWarranty: false, WarrantyPeriod: null, WarrantyType: null, WarrantyDetails: null },
+              AdditionalInfo:        { VideoUrl: null, SizeChart: null, CareInstructions: null, MaterialComposition: null, Color: null, Season: null },
+              ShippingInfo:          { FreeShipping: false, SeparateShippingRequired: false, EstimatedDeliveryDays: null, CanShipInternational: false, RestrictedCountries: null },
+              Variants:              [],
+            });
+          }
+        }
+        return deduped;
+      }, cancelled);
+      runBrands(
+        () => getBrands().then((d) => {
+          const list: GetBrandItem[] = d?.result ?? [];
+          return list.slice(0, 8);
+        }),
+        cancelled,
+      );
       return () => { cancelled.current = true; };
-    }, [runCategories, runProducts]),
+    }, [runCategories, runProducts, runBrands]),
   );
 
   const deduplicatedProducts = products
-    ? Array.from(new Map(products.map((p) => [p.Item_Id, p])).values())
+    ? Array.from(new Map(products.filter(p => p.ItemID != null).map((p) => [p.ItemID, p])).values())
     : null;
 
   const featuredProduct = deduplicatedProducts?.[0] ?? null;
   const flashDealProducts = deduplicatedProducts
-    ? deduplicatedProducts.filter((p, i) => i > 0 && p.ComparePrice > p.Price)
+    ? deduplicatedProducts.filter((p, i) =>
+        i > 0 && p.MaxComparePrice > 0 && p.MinPrice > 0 && p.MaxComparePrice !== p.MinPrice,
+      )
     : null;
   const shelfProducts = flashDealProducts?.length
     ? flashDealProducts
     : (deduplicatedProducts?.slice(1) ?? null);
 
-  const handleHeroImageLoad = useCallback(() => {
-    Animated.timing(heroImgOpacity, {
-      toValue: 1, duration: 900, useNativeDriver: true,
-    }).start();
-  }, [heroImgOpacity]);
-
   const renderProduct = useCallback(
     ({ item, index }: { item: ProductInterface; index: number }) => (
       <ProductCard
         product={item}
-        onPress={() => navigation.navigate('Product', { product: item.Inventory_Id })}
+        onPress={() => navigation.navigate('Product', { product: item.ItemID })}
         tall={index === 0}
       />
     ),
@@ -163,7 +444,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     ({ item }: { item: CategoryInterface }) => (
       <CategoryItem
         category={item}
-        onPress={() => navigation.navigate('Result', { categoryId: item.Category_Id, categoryName: item.CategoryName })}
+        onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
+
       />
     ),
     [navigation],
@@ -195,62 +477,69 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </View>
       </View>
 
+      {/* ── Search band + dropdown — outside ScrollView so dropdown overlays content ── */}
+      <View style={styles.searchBandWrap}>
+        <View style={styles.searchBand}>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            placeholder="Search products, brands…"
+            onSubmit={() => commitSearch(searchQuery)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => { setShowSuggestions(false); setSearchFocused(false); }, 180)}
+          />
+        </View>
+        {showSuggestions && suggestions.length > 0 && (
+          <View style={styles.suggestionBox}>
+            {suggestions.map((s, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[styles.suggestionRow, i < suggestions.length - 1 && styles.suggestionDivider]}
+                onPress={() => {
+                  setSearchQuery(s);
+                  commitSearch(s);
+                }}
+                activeOpacity={0.7}
+              >
+                <Icon name="search-outline" size={14} color={Colors.ink4} />
+                <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {searchFocused && searchQuery.trim() === '' && recentSearches.length > 0 && (
+          <View style={styles.suggestionBox}>
+            <Text style={styles.recentLabel}>RECENT</Text>
+            {recentSearches.map((s, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[styles.suggestionRow, i < recentSearches.length - 1 && styles.suggestionDivider]}
+                onPress={() => {
+                  setSearchQuery(s);
+                  commitSearch(s);
+                }}
+                activeOpacity={0.7}
+              >
+                <Icon name="time-outline" size={14} color={Colors.ink4} />
+                <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        stickyHeaderIndices={[0]}
       >
-        {/* ── Sticky search band ─────────────────────────────────────────── */}
-        <View style={styles.searchBand}>
-          <SearchBar
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search products, brands…"
-          />
-        </View>
 
-        {/* ── Hero ──────────────────────────────────────────────────────── */}
+        {/* ── Hero carousel ─────────────────────────────────────────────── */}
         <Animated.View style={heroAnim}>
-          <View style={styles.heroBg}>
-            <View style={styles.heroInner}>
-              {/* Text column */}
-              <View style={styles.heroTextCol}>
-                <Text style={styles.heroEyebrow}>NEW SEASON</Text>
-                <Text style={styles.heroTitle} numberOfLines={3}>
-                  {heroBanner.title}
-                </Text>
-                {/* Underline-text CTA — editorial, not pill */}
-                <TouchableOpacity
-                  style={styles.heroCTA}
-                  activeOpacity={0.7}
-                  onPress={() => navigation.navigate('Result', { flashDeals: true, categoryName: 'New In' })}
-                >
-                  <Text style={styles.heroCTAText}>Shop the edit</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Image column — bleeds to right edge */}
-              <View style={styles.heroImgCol}>
-                <Animated.Image
-                  source={{ uri: heroBanner.images[0] }}
-                  style={[styles.heroImg, { opacity: heroImgOpacity }]}
-                  resizeMode="cover"
-                  onLoad={handleHeroImageLoad}
-                />
-                {/* Left-edge veil blends image into dark bg */}
-                <LinearGradient
-                  colors={[Colors.ink1, 'transparent']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0.32, y: 0 }}
-                  style={StyleSheet.absoluteFillObject}
-                  pointerEvents="none"
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Tonal bridge: ink → surface */}
+          <HeroCarousel
+            products={deduplicatedProducts?.slice(0, 5) ?? null}
+            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+          />
           <LinearGradient
             colors={[Colors.ink1, Colors.surface]}
             style={styles.tonalBridge}
@@ -266,7 +555,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <FlatList
               data={categories}
               renderItem={renderCategory}
-              keyExtractor={(item) => String(item.Category_Id)}
+              keyExtractor={(item) => String(item.CategoryId)}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoryRail}
@@ -281,16 +570,46 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           )}
         </Animated.View>
 
+        {/* ── Brands rail ────────────────────────────────────────────────── */}
+        {brands && brands.length > 0 && (
+          <Animated.View style={[styles.brandsSection, brandsAnim]}>
+            <View style={styles.shelfHead}>
+              <Text style={styles.shelfTitle}>Brands</Text>
+            </View>
+            <FlatList
+              data={brands}
+              keyExtractor={(item) => String(item.BrandId)}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.brandsRail}
+              renderItem={({ item, index }) => {
+                const faviconUri = brandFaviconUrl(item.BrandName);
+                const fallbackColor = FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+                return (
+                  <TouchableOpacity
+                    style={styles.brandChip}
+                    activeOpacity={0.75}
+                    onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
+                  >
+                    <BrandTile uri={faviconUri} name={item.BrandName} fallbackColor={fallbackColor} />
+                    <Text style={styles.brandLabel} numberOfLines={1}>{item.BrandName}</Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </Animated.View>
+        )}
+
         {/* ── Featured card ──────────────────────────────────────────────── */}
         {deduplicatedProducts !== null && featuredProduct && (
           <Animated.View style={[styles.section, featAnim]}>
             <TouchableOpacity
               style={styles.featCard}
               activeOpacity={0.88}
-              onPress={() => navigation.navigate('Product', { product: featuredProduct.Inventory_Id })}
+              onPress={() => navigation.navigate('Product', { product: featuredProduct.ItemID })}
             >
               <Image
-                source={{ uri: featuredProduct.Images?.split(';')[0] || '' }}
+                source={{ uri: fallbackImageUrl(featuredProduct.ItemID + 100, 600, 520) }}
                 style={styles.featImage}
                 resizeMode="cover"
               />
@@ -301,32 +620,32 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               />
 
               {/* Ember badge — replaces red danger chip */}
-              {featuredProduct.ComparePrice > featuredProduct.Price && (
+              {featuredProduct.MaxComparePrice > featuredProduct.MinPrice && (
                 <View style={styles.featBadge}>
                   <Text style={styles.featBadgeText}>
-                    -{Math.round(((featuredProduct.ComparePrice - featuredProduct.Price) / featuredProduct.ComparePrice) * 100)}%
+                    -{Math.round(((featuredProduct.MaxComparePrice - featuredProduct.MinPrice) / featuredProduct.MaxComparePrice) * 100)}%
                   </Text>
                 </View>
               )}
 
               <View style={styles.featFooter}>
                 <View style={styles.featFooterLeft}>
-                  {featuredProduct.Brand_Name ? (
-                    <Text style={styles.featBrand}>{featuredProduct.Brand_Name}</Text>
+                  {featuredProduct.BrandName ? (
+                    <Text style={styles.featBrand}>{featuredProduct.BrandName}</Text>
                   ) : null}
                   <Text style={styles.featName} numberOfLines={1}>
                     {featuredProduct.Name}
                   </Text>
                   <View style={styles.featPriceRow}>
-                    <Text style={styles.featPrice}>${featuredProduct.Price.toFixed(2)}</Text>
-                    {featuredProduct.ComparePrice > featuredProduct.Price && (
-                      <Text style={styles.featWas}>${featuredProduct.ComparePrice.toFixed(2)}</Text>
+                    <Text style={styles.featPrice}>Rs {featuredProduct.MinPrice.toFixed(0)}</Text>
+                    {featuredProduct.MaxComparePrice > featuredProduct.MinPrice && (
+                      <Text style={styles.featWas}>Rs {featuredProduct.MaxComparePrice.toFixed(0)}</Text>
                     )}
                   </View>
                 </View>
                 {/* Text-link CTA — no pill, more editorial */}
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('Product', { product: featuredProduct.Inventory_Id })}
+                  onPress={() => navigation.navigate('Product', { product: featuredProduct.ItemID })}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={styles.featLink}>View →</Text>
@@ -347,27 +666,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         {/* ── Flash Deals shelf ──────────────────────────────────────────── */}
         <Animated.View style={[styles.shelfSection, shelfAnim]}>
           <View style={styles.shelfHead}>
-            <Text style={styles.shelfTitle}>Flash Deals</Text>
+            <Text style={styles.shelfTitle}>{flashDealProducts?.length ? 'Flash Deals' : 'New Arrivals'}</Text>
             <TouchableOpacity
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              onPress={() => navigation.navigate('Result', { flashDeals: true, categoryName: 'Flash Deals' })}
+              onPress={() => navigation.navigate('Result', { categoryName: 'Flash Deals' })}
             >
               <Text style={styles.seeAll}>See all</Text>
             </TouchableOpacity>
           </View>
 
-          {shelfProducts !== null ? (
-            <FlatList
-              data={shelfProducts}
-              renderItem={renderProduct}
-              keyExtractor={(item: ProductInterface) => String(item.Item_Id)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.shelfRail}
-              snapToInterval={180 + Space[4]}
-              decelerationRate="fast"
-            />
-          ) : (
+          {shelfProducts === null ? (
             <SkeletonRow gap={Space[4]} style={styles.shelfRail}>
               {[0, 1, 2].map((i) => (
                 <View key={i} style={{ width: 180 }}>
@@ -378,6 +686,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </View>
               ))}
             </SkeletonRow>
+          ) : shelfProducts.length === 0 ? (
+            <View style={styles.shelfEmpty}>
+              <Text style={styles.shelfEmptyText}>No deals right now.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={shelfProducts}
+              renderItem={renderProduct}
+              keyExtractor={(item: ProductInterface) => String(item.ItemID)}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.shelfRail}
+              snapToInterval={180 + Space[4]}
+              decelerationRate="fast"
+            />
           )}
         </Animated.View>
 
@@ -386,10 +709,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <TouchableOpacity
             style={styles.editCard}
             activeOpacity={0.88}
-            onPress={() =>
-              categories?.[0] &&
-              navigation.navigate('Result', { categoryId: categories[0].Category_Id })
-            }
+            onPress={() => navigation.navigate('Result', { categoryName: 'All Products' })}
           >
             {/* Left text column */}
             <View style={styles.editLeft}>
@@ -403,7 +723,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             {/* Right image column */}
             <View style={styles.editImgCol}>
               <Image
-                source={{ uri: heroBanner.images[1] ?? heroBanner.images[0] }}
+                source={{ uri: fallbackImageUrl((deduplicatedProducts?.[1]?.ItemID ?? deduplicatedProducts?.[0]?.ItemID ?? 99) + 200, 300, 440) }}
                 style={styles.editImg}
                 resizeMode="cover"
               />
@@ -422,6 +742,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <BottomNavBar
         activeTab="Home"
         onNavigate={(route) => navigation.navigate(route)}
+        onNavigateToAuth={(screen) => navigation.navigate(screen)}
         cartCount={cartItemsCount > 0 ? cartItemsCount : undefined}
       />
     </SafeAreaView>
@@ -487,12 +808,55 @@ const styles = StyleSheet.create({
     paddingBottom: Space[10],
   },
 
-  // ── Sticky search band ──────────────────────────────────────────────────────
+  // ── Search band + dropdown ───────────────────────────────────────────────────
+  searchBandWrap: {
+    backgroundColor: Colors.ink1,
+    zIndex:          20,
+  },
   searchBand: {
-    backgroundColor:   Colors.ink1,
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[1],
     paddingBottom:     Space[3],
+  },
+  suggestionBox: {
+    position:         'absolute',
+    top:              '100%',
+    left:             Space.screenH,
+    right:            Space.screenH,
+    backgroundColor:  Colors.surface,
+    borderRadius:     Radius.md,
+    borderWidth:      StyleSheet.hairlineWidth,
+    borderColor:      Colors.rule,
+    shadowColor:      '#000',
+    shadowOffset:     { width: 0, height: 4 },
+    shadowOpacity:    0.10,
+    shadowRadius:     12,
+    elevation:        8,
+    overflow:         'hidden',
+    zIndex:           20,
+  },
+  suggestionRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               Space[3],
+    paddingHorizontal: Space[4],
+    paddingVertical:   Space[3] + 2,
+  },
+  suggestionDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  suggestionText: {
+    ...Type.body,
+    color:   Colors.ink1,
+    flex:    1,
+  },
+  recentLabel: {
+    ...Type.label,
+    color:             Colors.ink4,
+    paddingHorizontal: Space[4],
+    paddingTop:        Space[3],
+    paddingBottom:     Space[1],
   },
 
   // ── Hero ────────────────────────────────────────────────────────────────────
@@ -501,51 +865,102 @@ const styles = StyleSheet.create({
     height:          HERO_H,
     overflow:        'hidden',
   },
-  heroInner: {
-    flex:      1,
-    flexDirection: 'row',
+  // ── Carousel slide ────────────────────────────────────────────────────────────
+  heroSlide: {
+    width:           SCREEN_W,
+    height:          HERO_H,
+    backgroundColor: Colors.surfaceDeep,
+    overflow:        'hidden',
   },
-  heroTextCol: {
-    flex:            1,
-    paddingLeft:     Space.screenH,
-    paddingTop:      Space[6],
-    paddingRight:    Space[2],
-    justifyContent:  'center',
-    gap:             Space[4],
+  heroSlideBadge: {
+    position:          'absolute',
+    top:               Space[4],
+    left:              Space.screenH,
+    backgroundColor:   Colors.accentTint,
+    borderRadius:      Radius.xs,
+    paddingVertical:   3,
+    paddingHorizontal: Space[2],
+    borderWidth:       0.5,
+    borderColor:       Colors.accent,
   },
-  heroEyebrow: {
+  heroSlideBadgeText: {
     ...Type.label,
-    color:         'rgba(255,255,255,0.32)',
-    letterSpacing: 2.0,
+    color:         Colors.accent,
+    letterSpacing: 0.4,
   },
-  // Serif italic display title — cinematic, not bold sans
-  heroTitle: {
+  heroSlideFooter: {
+    position:          'absolute',
+    bottom:            0,
+    left:              0,
+    right:             0,
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
+  },
+  heroSlideBrand: {
+    ...Type.label,
+    color:         'rgba(255,255,255,0.55)',
+    letterSpacing: 1.8,
+    marginBottom:  Space[1],
+  },
+  heroSlideName: {
     fontFamily:    FontFamily.serifItalic,
-    fontSize:      38,
+    fontSize:      32,
     fontWeight:    '400',
     color:         '#FFFFFF',
-    letterSpacing: -1.2,
-    lineHeight:    40,
+    letterSpacing: -0.8,
+    lineHeight:    38,
   },
-  // Underline text CTA — editorial restraint, not an outlined pill
-  heroCTA: {
-    alignSelf: 'flex-start',
+  heroSlidePriceRow: {
+    flexDirection: 'row',
+    alignItems:    'baseline',
+    gap:           Space[2],
+    marginTop:     4,
   },
-  heroCTAText: {
-    ...Type.bodyStrong,
-    color:             'rgba(255,255,255,0.80)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.35)',
-    paddingBottom:     2,
+  heroSlidePrice: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      20,
+    fontWeight:    '400',
+    color:         '#FFFFFF',
+    letterSpacing: -0.4,
   },
-  heroImgCol: {
-    width:    SCREEN_W * 0.44,
-    height:   HERO_H,
-    position: 'relative',
+  heroSlidePriceWas: {
+    fontFamily:         FontFamily.sans,
+    fontSize:           13,
+    color:              'rgba(255,255,255,0.45)',
+    textDecorationLine: 'line-through',
   },
-  heroImg: {
-    width:  '100%',
-    height: '100%',
+  heroSlideShopRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Space[1],
+    marginTop:     Space[3],
+  },
+  heroSlideShopText: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      13,
+    fontWeight:    '500',
+    color:         'rgba(255,255,255,0.75)',
+    letterSpacing: 0.2,
+  },
+  // ── Dot indicators ────────────────────────────────────────────────────────────
+  heroDots: {
+    position:       'absolute',
+    bottom:         Space[3],
+    left:           0,
+    right:          0,
+    flexDirection:  'row',
+    justifyContent: 'center',
+    gap:            Space[1] + 2,
+  },
+  heroDot: {
+    width:           5,
+    height:          5,
+    borderRadius:    3,
+    backgroundColor: 'rgba(255,255,255,0.30)',
+  },
+  heroDotActive: {
+    width:           16,
+    backgroundColor: '#FFFFFF',
   },
   tonalBridge: {
     height:    BRIDGE_H,
@@ -690,6 +1105,57 @@ const styles = StyleSheet.create({
     paddingBottom:     Space[2],
     gap:               Space[4],
     alignItems:        'flex-start',   // was 'center' — caused top-misaligned mixed heights
+  },
+  shelfEmpty: {
+    paddingHorizontal: Space.screenH,
+    paddingVertical:   Space[6],
+  },
+  shelfEmptyText: {
+    ...Type.caption,
+    color: Colors.ink4,
+  },
+
+  // ── Brands rail ─────────────────────────────────────────────────────────────
+  brandsSection: {
+    marginTop: Space[6],
+  },
+  brandsRail: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[2],
+    gap:               Space[3],
+  },
+  brandChip: {
+    alignItems: 'center',
+    width:      88,
+    gap:        Space[2],
+  },
+  brandLogoWrap: {
+    width:           80,
+    height:          80,
+    borderRadius:    40,
+    backgroundColor: '#FFFFFF',
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 1 },
+    shadowOpacity:   0.08,
+    shadowRadius:    4,
+    elevation:       2,
+    alignItems:      'center',
+    justifyContent:  'center',
+    overflow:        'hidden',
+  },
+  brandLogo: {
+    width:  56,
+    height: 56,
+  },
+  brandLabel: {
+    ...Type.caption,
+    color:     Colors.ink2,
+    textAlign: 'center',
+  },
+  brandFallbackLetter: {
+    fontFamily: FontFamily.serifItalic,
+    fontSize:   28,
+    lineHeight: 32,
   },
 
   // ── Editorial card ──────────────────────────────────────────────────────────

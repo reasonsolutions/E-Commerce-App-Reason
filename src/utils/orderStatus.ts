@@ -1,14 +1,17 @@
 import type { OrderStatus } from '../components/ui';
-
-export type OrderStatusCode = 1 | 2 | 3 | 4;
+import { OrderStatusCode } from '../api/interfaces';
 
 const STATUS_MAP: Record<OrderStatusCode, OrderStatus> = {
-  1: 'Confirmed',
-  2: 'Shipped',
-  3: 'Delivered',
-  4: 'Cancelled',
+  [OrderStatusCode.New]:        'New',
+  [OrderStatusCode.Confirmed]:  'Confirmed',
+  [OrderStatusCode.Processing]: 'Processing',
+  [OrderStatusCode.Fulfilled]:  'Fulfilled',
+  [OrderStatusCode.Shipped]:    'Shipped',
+  [OrderStatusCode.Delivered]:  'Delivered',
+  [OrderStatusCode.Cancelled]:  'Cancelled',
+  [OrderStatusCode.Returned]:   'Returned',
 };
 
-export function orderStatusLabel(code: OrderStatusCode): OrderStatus {
-  return STATUS_MAP[code];
+export function orderStatusLabel(code: number): OrderStatus {
+  return STATUS_MAP[code as OrderStatusCode] ?? 'New';
 }

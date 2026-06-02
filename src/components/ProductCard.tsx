@@ -8,6 +8,8 @@ import {
   GestureResponderEvent,
 } from 'react-native';
 import { ProductInterface } from '../api/interfaces';
+import { useProductImage } from '../hooks/useProductImage';
+import { Skeleton } from './ui';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -24,6 +26,7 @@ interface ProductCardProps {
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = false }) => {
   const imgOpacity = useRef(new Animated.Value(0)).current;
+  const { uri: imgSrc, loading: imgLoading } = useProductImage(product.Name, product.BrandName);
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -31,9 +34,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = fals
     }).start();
   }, [imgOpacity]);
 
-  const hasDiscount = product.ComparePrice > product.Price;
+  const hasDiscount = product.MaxComparePrice > product.MinPrice;
   const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
+    ? Math.round(((product.MaxComparePrice - product.MinPrice) / product.MaxComparePrice) * 100)
     : 0;
 
   // 4:5 portrait ratio per spec B12. Tall variant for first card in shelf.
@@ -43,8 +46,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = fals
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.86}>
       {/* surfaceDeep bg so transparent product images don't dissolve */}
       <View style={[styles.imgWrap, { height: imgH }]}>
+        {imgLoading && <Skeleton height={imgH} radius={Radius.md} style={StyleSheet.absoluteFillObject} />}
         <Animated.Image
-          source={{ uri: product.Images?.split(';')[0] || '' }}
+          source={{ uri: imgSrc }}
           style={[styles.img, { opacity: imgOpacity }]}
           resizeMode="cover"
           onLoad={onLoad}
@@ -59,14 +63,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, tall = fals
       </View>
 
       <View style={styles.info}>
-        {product.Brand_Name ? (
-          <Text style={styles.brand} numberOfLines={1}>{product.Brand_Name}</Text>
+        {product.BrandName ? (
+          <Text style={styles.brand} numberOfLines={1}>{product.BrandName}</Text>
         ) : null}
         <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
         <View style={styles.priceRow}>
-          <Text style={styles.price}>${product.Price.toFixed(2)}</Text>
+          <Text style={styles.price}>Rs {product.MinPrice.toFixed(0)}</Text>
           {hasDiscount && (
-            <Text style={styles.was}>${product.ComparePrice.toFixed(2)}</Text>
+            <Text style={styles.was}>Rs {product.MaxComparePrice.toFixed(0)}</Text>
           )}
         </View>
       </View>

@@ -17,8 +17,11 @@ import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { getDeliveryAddresses, postCreateDeliveryAddress, postPlacedMultipleOrder } from '../api/services';
-import { postPlacedMultipleOrderInterface, SavedCartItemInterface } from '../api/interfaces';
+import { getDeliveryAddresses, postCreateDeliveryAddress } from '../api/address';
+import { placeOrder } from '../api/order';
+import { getOrgIdForInventory } from '../api/product';
+import { useCart } from '../context/CartContext';
+import { PlaceOrderInterface, SavedCartItemInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -30,10 +33,15 @@ export interface DeliveryAddress {
   OrderDeliveryAddressCode: number;
   CustomerName: string;
   MobileNumber: number | string;
-  FullAddress: string;
   CustomerProfileCode: number;
   CreatedDate: string;
   UpdatedDate: string | null;
+  Address: string | null;
+  StreetName: string | null;
+  City: string | null;
+  Landmark: string | null;
+  Zipcode: string | null;
+  IsPrimary: boolean;
 }
 
 type AddressScreenProps = {
@@ -51,8 +59,8 @@ type AddressScreenProps = {
   };
 };
 
-const EMPTY_FORM = { CustomerName: '', MobileNumber: '', FullAddress: '' };
-const EMPTY_ERRORS = { CustomerName: '', MobileNumber: '', FullAddress: '' };
+const EMPTY_FORM = { CustomerName: '', MobileNumber: '', Address: '', StreetName: '', City: '', Landmark: '', Zipcode: '' };
+const EMPTY_ERRORS = { CustomerName: '', MobileNumber: '', Address: '', StreetName: '', City: '', Landmark: '', Zipcode: '' };
 
 // ── Single address row ────────────────────────────────────────────────────────
 const AddressRow: React.FC<{
@@ -82,11 +90,22 @@ const AddressRow: React.FC<{
             <Text style={[styles.addressName, isSelected && styles.addressNameSelected]}>
               {item.CustomerName}
             </Text>
-            <Text style={styles.addressLine}>{item.FullAddress}</Text>
+            {(item.Address || item.StreetName) ? (
+              <Text style={styles.addressLine}>
+                {[item.Address, item.StreetName].filter(Boolean).join(', ')}
+              </Text>
+            ) : null}
+            {(item.City || item.Zipcode) ? (
+              <Text style={styles.addressLine}>
+                {[item.City, item.Zipcode].filter(Boolean).join(' — ')}
+              </Text>
+            ) : null}
+            {item.Landmark ? (
+              <Text style={styles.addressLineMuted}>{item.Landmark}</Text>
+            ) : null}
             <Text style={styles.addressMobile}>{String(item.MobileNumber)}</Text>
           </View>
 
-          {/* Radio mark */}
           <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
             {isSelected && <View style={styles.radioInner} />}
           </View>
@@ -127,6 +146,7 @@ const PlaceOrderButton: React.FC<{
 const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
 
+  const { setCartCount } = useCart();
   const { data: addresses, loading: fetchLoading, isError: fetchError, error: fetchErrorMsg, run } =
     useAsyncState<DeliveryAddress[]>([]);
 
@@ -182,7 +202,11 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     const errors = {
       CustomerName: form.CustomerName.trim() ? '' : 'Name is required',
       MobileNumber: form.MobileNumber.trim() ? '' : 'Mobile number is required',
-      FullAddress:  form.FullAddress.trim()  ? '' : 'Address is required',
+      Address:      form.Address.trim()      ? '' : 'Address is required',
+      StreetName:   form.StreetName.trim()   ? '' : 'Street name is required',
+      City:         form.City.trim()         ? '' : 'City is required',
+      Landmark:     '',
+      Zipcode:      form.Zipcode.trim()      ? '' : 'Zipcode is required',
     };
     setFormErrors(errors);
     return !Object.values(errors).some(Boolean);
@@ -196,18 +220,19 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       const response = await postCreateDeliveryAddress({
         CustomerName:        form.CustomerName.trim(),
         MobileNumber:        form.MobileNumber.trim(),
-        FullAddress:         form.FullAddress.trim(),
+        Address:             form.Address.trim(),
+        StreetName:          form.StreetName.trim(),
+        City:                form.City.trim(),
+        Landmark:            form.Landmark.trim(),
+        Zipcode:             form.Zipcode.trim(),
+        IsPrimary:           '0',
         CustomerProfileCode: profileCode,
       });
       if (response.statusCode === 1) {
-        const refreshed = await getDeliveryAddresses(profileCode);
-        if (refreshed.statusCode === 1) {
-          const list: DeliveryAddress[] = refreshed.result || [];
-          // Update addresses in state via re-run
-          await fetchAddresses();
-          if (list.length > 0) {
-            setSelectedAddressCode(list[list.length - 1].OrderDeliveryAddressCode);
-          }
+        const list: DeliveryAddress[] = response.result || [];
+        run(async () => list);
+        if (list.length > 0) {
+          setSelectedAddressCode(list[list.length - 1].OrderDeliveryAddressCode);
         }
         setForm(EMPTY_FORM);
         setFormErrors(EMPTY_ERRORS);
@@ -215,7 +240,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         setAddError('Failed to save address. Please try again.');
       }
     } catch {
-      setAddError('Something went wrong. Please try again.');
+      setAddError("Couldn't save your address. Tap retry to try again.");
     } finally {
       setSubmitting(false);
     }
@@ -244,33 +269,71 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       return;
     }
 
+    const total = cartItems.reduce((sum: number, item: SavedCartItemInterface) => sum + item.Price * item.Quantity, 0);
+
+    // Group items by OrganisationId — use field from cart API, fall back to product cache
+    const orgMap = new Map<string, SavedCartItemInterface[]>();
+    for (const item of cartItems) {
+      const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId);
+      if (!orgMap.has(orgId)) orgMap.set(orgId, []);
+      orgMap.get(orgId)!.push(item);
+    }
+
+    const orderDetails = Array.from(orgMap.entries()).map(([orgId, items]) => ({
+      OrganisationID: orgId,
+      ItemDetails: items.map((item: SavedCartItemInterface) => ({
+        InventoryId:        item.InventoryId,
+        Quantity:           item.Quantity,
+        Amount:             item.Price * item.Quantity,
+        DeliveryCharges:    0,
+        DeliveryChargesVAT: 0,
+        ItemCharges:        0,
+        ItemChargesVAT:     0,
+        Discount:           0,
+        VAT:                0,
+        OrderStatus:        1,
+        Taxes:              (item.PriceDetails?.Taxes ?? []).map(t => ({
+          TaxId:   t.TaxId,
+          TaxName: '',
+          TaxType: t.TaxType,
+          TaxRate: t.TaxRate,
+          Reason:  '',
+        })),
+      })),
+    }));
+
+    const payload: PlaceOrderInterface = {
+      CustomerProfileCode:       profileCode,
+      OrderDeliveryAddressCode:  selectedAddressCode,
+      CartMasterCode:            cartItems[0].CartMasterCode,
+      TotalAmountBeforeDiscount: total,
+      TotalAmountAfterDiscount:  total,
+      OrderDetails:              orderDetails,
+      PaymentDetails: {
+        PaymentModes:   1,
+        Remark:         'Cash on delivery',
+        ModeOfPayments: [
+          {
+            CashOnDelivery: {
+              ExpectedAmount:      total,
+              CurrencyCode:        'MUR',
+              CollectionReference: `COD-${cartItems[0].CartMasterCode}`,
+            },
+          },
+        ],
+      },
+    };
+
     setSubmitting(true);
     try {
-      const transformedArray = cartItems.map((item: SavedCartItemInterface) => ({
-        Inventory_Id:      item.Inventory_Id,
-        Quantity:          item.Quantity,
-        Amount:            item.Price * item.Quantity,
-        DeliveryCharges:   0,
-        DeliveryChargesVAT: 0,
-        ItemCharges:       0,
-        ItemChargesVAT:    0,
-        Discount:          0,
-        VAT:               0,
-        OrderStatus:       1,
-      }));
-
-      const payload: postPlacedMultipleOrderInterface = {
-        CustomerProfileCode:     profileCode,
-        OrderDeliveryAddressCode: selectedAddressCode,
-        BranchCode:              'NULL',
-        CountryCode:             'NULL',
-        CartMasterCode:          cartItems[0].CartMasterCode,
-        OrderDetails:            transformedArray,
-      };
-
-      const response = await postPlacedMultipleOrder(payload);
-      navigation.navigate('OrderSuccess', { orderNumber: response.result.OrderNumber });
-    } catch {
+      const response = await placeOrder(payload);
+      if (response?.statusCode !== 1) {
+        setOrderError(response?.userMessage || 'Could not place your order. Please try again.');
+        return;
+      }
+      setCartCount(0);
+      navigation.navigate('OrderSuccess', { orderNumber: response.result?.OrderNumber ?? '' });
+    } catch (err: any) {
       setOrderError('Could not place your order. Please try again.');
     } finally {
       setSubmitting(false);
@@ -286,8 +349,8 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       {fetchError ? (
         <View style={styles.fetchErrorWrap}>
           <ErrorState
-            title="Couldn't load addresses"
-            message={fetchErrorMsg ?? 'Something went wrong.'}
+            title="Couldn't load your addresses."
+            message={fetchErrorMsg ?? 'Tap retry to try again.'}
             onRetry={() => fetchAddresses()}
             retryLoading={fetchLoading}
           />
@@ -317,13 +380,43 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
           returnKeyType="next"
         />
         <FloatingLabelInput
-          label="Full address"
-          value={form.FullAddress}
-          onChangeText={text => handleChange('FullAddress', text)}
-          error={formErrors.FullAddress || null}
+          label="Address"
+          value={form.Address}
+          onChangeText={text => handleChange('Address', text)}
+          error={formErrors.Address || null}
           autoCapitalize="sentences"
+          returnKeyType="next"
+        />
+        <FloatingLabelInput
+          label="Street name"
+          value={form.StreetName}
+          onChangeText={text => handleChange('StreetName', text)}
+          error={formErrors.StreetName || null}
+          autoCapitalize="sentences"
+          returnKeyType="next"
+        />
+        <FloatingLabelInput
+          label="City"
+          value={form.City}
+          onChangeText={text => handleChange('City', text)}
+          error={formErrors.City || null}
+          autoCapitalize="words"
+          returnKeyType="next"
+        />
+        <FloatingLabelInput
+          label="Landmark (optional)"
+          value={form.Landmark}
+          onChangeText={text => handleChange('Landmark', text)}
+          autoCapitalize="sentences"
+          returnKeyType="next"
+        />
+        <FloatingLabelInput
+          label="Zipcode"
+          value={form.Zipcode}
+          onChangeText={text => handleChange('Zipcode', text)}
+          error={formErrors.Zipcode || null}
+          keyboardType="numeric"
           returnKeyType="done"
-          multiline
         />
       </View>
       {addError ? (
@@ -530,11 +623,25 @@ const styles = StyleSheet.create({
     color:      Colors.ink3,
     lineHeight: 13 * 1.5,
   },
+  addressLineMuted: {
+    ...Type.caption,
+    color:      Colors.ink4,
+    lineHeight: 13 * 1.5,
+  },
   addressMobile: {
     fontFamily:    FontFamily.mono,
     fontSize:      11,
     color:         Colors.ink4,
     letterSpacing: 0.2,
+  },
+  addressRight: {
+    flexDirection:  'column',
+    alignItems:     'center',
+    gap:            Space[2],
+    flexShrink:     0,
+  },
+  deleteBtn: {
+    padding: 2,
   },
   radioOuter: {
     width:         18,

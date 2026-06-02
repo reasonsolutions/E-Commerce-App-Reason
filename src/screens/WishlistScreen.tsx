@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,17 +12,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/storageKeys';
-import { getWishlist, removeFromWishlist } from '../api/services';
-import { WishlistItemInterface } from '../api/mock/mockData';
-import { EmptyState, BottomNavBar, Price, DarkHeader, FadeImage } from '../components/ui';
+import { useProfileCode } from '../hooks/useProfileCode';
+import { getWishlist, removeFromWishlist } from '../api/wishlist';
+import type { WishlistItemInterface } from '../api/interfaces';
+import { BottomNavBar, Price, DarkHeader } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
+import { Motion } from '../theme/motion';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 
@@ -35,7 +35,6 @@ type WishlistScreenProps = {
   navigation: NavigationProp;
 };
 
-// Image dimensions — 4:5 portrait, matching the canonical card ratio
 const IMG_W = 80;
 const IMG_H = 100;
 
@@ -50,7 +49,16 @@ const WishlistRow: React.FC<{
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const hasDiscount = item.ComparePrice > item.Price;
+  const imgOpacity = useRef(new Animated.Value(0)).current;
+  const price       = item.PriceDetails?.Price ?? 0;
+  const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
+  const hasDiscount  = comparePrice > price;
+  const isOutOfStock = item.IsInStock === 0;
+  const imageUri     = item.Images?.[0] ?? '';
+
+  const onImageLoad = useCallback(() => {
+    Animated.timing(imgOpacity, { toValue: 1, duration: Motion.duration.settle, useNativeDriver: true }).start();
+  }, [imgOpacity]);
 
   return (
     <Animated.View style={entrance}>
@@ -59,38 +67,51 @@ const WishlistRow: React.FC<{
           {...handlers}
           style={styles.row}
           activeOpacity={1}
-          onPress={() => { haptic.light(); onPress(item.Inventory_Id); }}
+          onPress={() => { haptic.light(); onPress(item.InventoryID); }}
         >
-          {/* Portrait image */}
-          <FadeImage
-            uri={item.Images.split(';')[0]}
-            width={IMG_W}
-            height={IMG_H}
-            borderRadius={Radius.sm}
-          />
+          {/* Product image — fade in when loaded, brand initial fallback */}
+          <View style={styles.imgWrap}>
+            {imageUri ? (
+              <Animated.Image
+                source={{ uri: imageUri }}
+                style={[styles.img, { opacity: imgOpacity }]}
+                resizeMode="cover"
+                onLoad={onImageLoad}
+              />
+            ) : (
+              <Text style={styles.imgPlaceholderLetter}>
+                {(item.BrandName ?? item.Name).charAt(0).toUpperCase()}
+              </Text>
+            )}
+            {isOutOfStock && (
+              <View style={styles.outOfStockOverlay}>
+                <Text style={styles.outOfStockText}>Sold out</Text>
+              </View>
+            )}
+          </View>
 
           {/* Content */}
           <View style={styles.content}>
-            {item.Brand_Name ? (
-              <Text style={styles.brand}>{item.Brand_Name.toUpperCase()}</Text>
+            {item.BrandName ? (
+              <Text style={styles.brand}>{item.BrandName.toUpperCase()}</Text>
             ) : null}
             <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
-            {item.Variant && item.Variant !== 'ONESIZE' ? (
-              <Text style={styles.variant}>{item.Variant}</Text>
+            {item.SKU ? (
+              <Text style={styles.variant}>{item.SKU}</Text>
             ) : null}
             <View style={styles.priceRow}>
               <Price
-                value={item.Price}
-                was={hasDiscount ? item.ComparePrice : undefined}
+                value={price}
+                was={hasDiscount ? comparePrice : undefined}
                 size="base"
               />
             </View>
           </View>
 
-          {/* Remove — plain × glyph, no circle background (CartScreen pattern) */}
+          {/* Remove */}
           <TouchableOpacity
             style={styles.removeBtn}
-            onPress={() => { haptic.light(); onRemove(item.WishlistItemCode); }}
+            onPress={() => { haptic.light(); onRemove(item.WishlistCode); }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Text style={styles.removeGlyph}>×</Text>
@@ -98,7 +119,6 @@ const WishlistRow: React.FC<{
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Hairline divider — not shown after last item */}
       {!isLast && <View style={styles.divider} />}
     </Animated.View>
   );
@@ -109,29 +129,32 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<WishlistItemInterface[]>([]);
-  const [items, setItems] = useState<WishlistItemInterface[]>([]);
-  const [profileCode, setProfileCode] = useState<number | null>(null);
+  const [items, setItems]                               = useState<WishlistItemInterface[]>([]);
+  const hasFetched = useRef(false);
+  const profileCode = useProfileCode();
 
   useEffect(() => {
-    if (fetched !== null) setItems(fetched);
+    if (!fetched) return;
+    if (fetched.length > 0) setItems(fetched);
   }, [fetched]);
 
   const fetchWishlist = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
-        const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
-        if (!userData) return [];
-        const user = JSON.parse(userData);
-        setProfileCode(user.CustomerProfileCode);
-        const response = await getWishlist(user.CustomerProfileCode);
-        return response.statusCode === 1 ? (response.result || []) : [];
+        if (!profileCode) return [];
+        const response = await getWishlist(profileCode);
+        const result = response.statusCode === 1 ? (response.result || []) : [];
+        hasFetched.current = true;
+        return result;
       }, cancelled),
-    [run],
+    [run, profileCode],
   );
 
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
+      hasFetched.current = false;
+      setItems([]);
       fetchWishlist(cancelled);
       return () => { cancelled.current = true; };
     }, [fetchWishlist]),
@@ -139,7 +162,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   const handleRemove = async (wishlistItemCode: number) => {
     if (!profileCode) return;
-    setItems(prev => prev.filter(i => i.WishlistItemCode !== wishlistItemCode));
+    setItems(prev => prev.filter(i => i.WishlistCode !== wishlistItemCode));
     await removeFromWishlist(profileCode, wishlistItemCode);
   };
 
@@ -147,27 +170,34 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     <WishlistRow
       item={item}
       onRemove={handleRemove}
-      onPress={(id) => navigation.navigate('Product', { product: String(id) })}
+      onPress={(inventoryId) => {
+        const item = items.find(i => i.InventoryID === inventoryId);
+        if (item?.ItemID) navigation.navigate('Product', { product: String(item.ItemID) });
+      }}
       delay={Math.min(index * 55, 320)}
       isLast={index === items.length - 1}
     />
   );
 
   const renderEmpty = () => (
-    <EmptyState
-      icon={<Icon name="heart-outline" size={26} color={Colors.ink4} />}
-      title="Nothing saved yet."
-      body="Save items as you browse — they'll appear here."
-      action={
+    <View style={styles.emptyWrap}>
+      <View style={styles.emptyContent}>
+        <View style={styles.emptyIllustration}>
+          <Icon name="heart-outline" size={52} color={Colors.ink3} />
+        </View>
+        <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
+        <Text style={styles.emptyBody}>Save items as you browse — they'll appear here.</Text>
+      </View>
+      <View style={styles.emptyFooter}>
         <TouchableOpacity
+          style={styles.emptyCTA}
+          activeOpacity={0.88}
           onPress={() => navigation.navigate('Home')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.emptyLink}>Browse the collection</Text>
-          <View style={styles.emptyLinkUnderline} />
+          <Text style={styles.emptyCTAText}>Browse the collection</Text>
         </TouchableOpacity>
-      }
-    />
+      </View>
+    </View>
   );
 
   const itemCount = items.length;
@@ -177,11 +207,32 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       return (
         <View style={styles.stateWrap}>
           <ErrorState
-            title="Couldn't load wishlist"
-            message={error ?? 'Something went wrong.'}
+            title="Couldn't load your wishlist."
+            message={error ?? 'Tap retry to try again.'}
             onRetry={() => fetchWishlist()}
             retryLoading={loading}
           />
+        </View>
+      );
+    }
+
+    if (!hasFetched.current && !isError) {
+      return (
+        <View style={[styles.stateWrap, { paddingHorizontal: Space.screenH, paddingTop: Space[4] }]}>
+          {[0, 1, 2, 3].map(i => (
+            <View key={i}>
+              <View style={styles.skeletonRow}>
+                <View style={styles.skeletonImg} />
+                <View style={styles.skeletonContent}>
+                  <View style={[styles.skeletonLine, { width: '35%' }]} />
+                  <View style={[styles.skeletonLine, { width: '65%', marginTop: Space[2] }]} />
+                  <View style={[styles.skeletonLine, { width: '45%', marginTop: Space[1] }]} />
+                  <View style={[styles.skeletonLine, { width: '25%', marginTop: Space[4] }]} />
+                </View>
+              </View>
+              {i < 3 && <View style={styles.divider} />}
+            </View>
+          ))}
         </View>
       );
     }
@@ -190,13 +241,13 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       <FlatList
         data={items}
         renderItem={renderItem}
-        keyExtractor={item => String(item.WishlistItemCode)}
+        keyExtractor={item => String(item.WishlistCode)}
         contentContainerStyle={[
           styles.listContent,
           items.length === 0 && styles.listContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={loading ? null : renderEmpty}
+        ListEmptyComponent={hasFetched.current && !loading ? renderEmpty : null}
         style={styles.list}
       />
     );
@@ -218,6 +269,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       <BottomNavBar
         activeTab="Wishlist"
         onNavigate={(route) => navigation.navigate(route)}
+        onNavigateToAuth={(screen) => navigation.navigate(screen)}
       />
     </View>
   );
@@ -285,6 +337,40 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  // ── Image ─────────────────────────────────────────────────────────────────────
+  imgWrap: {
+    width:           IMG_W,
+    height:          IMG_H,
+    borderRadius:    8,
+    backgroundColor: Colors.surfaceDeep,
+    alignItems:      'center',
+    justifyContent:  'center',
+    flexShrink:      0,
+    overflow:        'hidden',
+  },
+  img: {
+    width:  '100%',
+    height: '100%',
+  },
+  imgPlaceholderLetter: {
+    fontFamily:    FontFamily.serifItalic,
+    fontSize:      32,
+    color:         Colors.ink3,
+    lineHeight:    36,
+  },
+  outOfStockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(248,247,244,0.72)',
+    alignItems:      'center',
+    justifyContent:  'flex-end',
+    paddingBottom:   Space[2],
+  },
+  outOfStockText: {
+    ...Type.label,
+    color:         Colors.ink3,
+    letterSpacing: 0.4,
+  },
+
   // ── Remove — plain × glyph (CartScreen frozen pattern) ───────────────────────
   removeBtn: {
     flexShrink: 0,
@@ -297,17 +383,74 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // ── Empty state CTA — text link, no Button component ─────────────────────────
-  emptyLink: {
-    ...Type.caption,
-    color:     Colors.ink3,
-    textAlign: 'center',
+  // ── Skeleton ──────────────────────────────────────────────────────────────────
+  skeletonRow: {
+    flexDirection:   'row',
+    gap:             Space[4],
+    paddingVertical: Space[4],
   },
-  emptyLinkUnderline: {
-    height:          1,
-    backgroundColor: Colors.ink4,
-    marginTop:       3,
-    width:           '100%',
+  skeletonImg: {
+    width:           IMG_W,
+    height:          IMG_H,
+    borderRadius:    Radius.md,
+    backgroundColor: Colors.surfaceDeep,
+    flexShrink:      0,
+  },
+  skeletonContent: {
+    flex:       1,
+    paddingTop: Space[1],
+  },
+  skeletonLine: {
+    height:          10,
+    borderRadius:    Radius.xs,
+    backgroundColor: Colors.surfaceDeep,
+  },
+
+  // ── Empty state ───────────────────────────────────────────────────────────────
+  emptyWrap: {
+    flex: 1,
+  },
+  emptyContent: {
+    flex:              1,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingHorizontal: Space[6],
+    gap:               Space[4],
+  },
+  emptyIllustration: {
+    width:           120,
+    height:          120,
+    borderRadius:    60,
+    backgroundColor: Colors.surfaceSoft,
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginBottom:    Space[2],
+  },
+  emptyTitle: {
+    ...Type.title,
+    textAlign: 'center',
+    color:     Colors.ink1,
+  },
+  emptyBody: {
+    ...Type.caption,
+    textAlign: 'center',
+    color:     Colors.ink3,
+    maxWidth:  260,
+  },
+  emptyFooter: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
+    paddingTop:        Space[4],
+  },
+  emptyCTA: {
+    backgroundColor: Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingVertical: Space[4],
+    alignItems:      'center',
+  },
+  emptyCTAText: {
+    ...Type.bodyStrong,
+    color: '#FFFFFF',
   },
 });
 

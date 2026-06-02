@@ -7,7 +7,9 @@ import {
   Animated,
   StyleSheet,
   TouchableWithoutFeedback,
+  TouchableOpacity,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space } from '../../theme/tokens';
 import { Type } from '../../theme/typography';
 import { Motion } from '../../theme/motion';
@@ -17,6 +19,7 @@ interface FloatingLabelInputProps extends Omit<TextInputProps, 'style'> {
   value: string;
   error?: string | null;
   activeColor?: string;
+  showToggle?: boolean;
 }
 
 // Static-label input — label is always visible above the field at caption scale.
@@ -27,11 +30,13 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
   value,
   error,
   activeColor = Colors.ink1,
+  showToggle = false,
   onFocus,
   onBlur,
   ...rest
 }) => {
   const [focused, setFocused] = useState(false);
+  const [visible, setVisible] = useState(false);
   const underlineAnim = useRef(new Animated.Value(0)).current;
   const inputRef = useRef<TextInput>(null);
 
@@ -83,16 +88,32 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
           {label}
         </Text>
 
-        {/* Input text */}
-        <TextInput
-          ref={inputRef}
-          value={value}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          style={styles.input}
-          placeholderTextColor="transparent"
-          {...rest}
-        />
+        {/* Input text + optional show/hide toggle */}
+        <View style={styles.inputRow}>
+          <TextInput
+            ref={inputRef}
+            value={value}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            style={styles.input}
+            placeholderTextColor="transparent"
+            secureTextEntry={showToggle ? !visible : rest.secureTextEntry}
+            {...rest}
+          />
+          {showToggle && (
+            <TouchableOpacity
+              onPress={() => setVisible(v => !v)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel={visible ? 'Hide password' : 'Show password'}
+            >
+              <Icon
+                name={visible ? 'eye-off-outline' : 'eye-outline'}
+                size={18}
+                color={Colors.ink3}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Underline — only interactive element, weight animated on focus */}
         <Animated.View
@@ -127,8 +148,13 @@ const styles = StyleSheet.create({
     color:        Colors.ink3,  // overridden inline per focus/error state
     marginBottom: Space[2],     // 8px — enough air between label and value
   },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+  },
   input: {
     ...Type.body,
+    flex:               1,
     color:              Colors.ink1,
     height:             38,
     paddingVertical:    0,
