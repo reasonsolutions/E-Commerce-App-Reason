@@ -17,8 +17,10 @@ import OTPVerificationScreen from '../screens/OTPVerificationScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import WishlistScreen from '../screens/WishlistScreen';
 import AddressManagementScreen from '../screens/AddressManagementScreen';
+import SearchScreen from '../screens/SearchScreen';
 import { getInitialRoute } from '../utils/auth';
 import { Colors } from '../theme';
+import { CardStyleInterpolators } from '@react-navigation/stack';
 
 const Stack = createStackNavigator();
 
@@ -44,9 +46,13 @@ const AppNavigator = () => {
         screenOptions={{
           headerShown: false,
         }}>
-        <Stack.Screen name="Login" component={Login} />
-        <Stack.Screen name="Register" component={RegisterScreen} />
-        <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
+        <Stack.Screen
+          name="Login"
+          component={Login}
+          options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }}
+        />
+        <Stack.Screen name="Register" component={RegisterScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
+        <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Product" component={ProductScreen} />
         <Stack.Screen name="Cart" component={CartScreen} />
@@ -58,6 +64,7 @@ const AppNavigator = () => {
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Wishlist" component={WishlistScreen} />
         <Stack.Screen name="AddressManagement" component={AddressManagementScreen} />
+        <Stack.Screen name="Search" component={SearchScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

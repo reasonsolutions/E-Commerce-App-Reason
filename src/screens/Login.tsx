@@ -24,7 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { setTokenCache } from '../api/axiosInstance';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, Space, Radius } from '../theme';
@@ -37,6 +37,7 @@ import { useHaptic } from '../hooks/useHaptic';
 type RootStackParamList = {
   Home: undefined;
   Register: undefined;
+  Login: { skipEntrance?: boolean } | undefined;
 };
 
 // ── Hero atmospheric composition ─────────────────────────────────────────────
@@ -134,6 +135,8 @@ const Login: React.FC = () => {
   const { height: screenHeight } = useWindowDimensions();
   const navigation =
     useNavigation<StackNavigationProp<RootStackParamList, 'Home'>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Login'>>();
+  const skipEntrance = route.params?.skipEntrance ?? false;
   const haptic = useHaptic();
   const { setCartCount } = useCart();
 
@@ -143,11 +146,9 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
 
-  // ── Entrance animation values ───────────────────────────────────────────────
+  // ── Entrance animation values — hero only, fields/CTA always visible ─────────
   const wordmarkAnim = useRef(new Animated.Value(0)).current;
   const taglineAnim = useRef(new Animated.Value(0)).current;
-  const fieldsAnim = useRef(new Animated.Value(0)).current;
-  const ctaAnim = useRef(new Animated.Value(0)).current;
 
   // ── Loading dots ─────────────────────────────────────────────────────────────
   const dot1 = useRef(new Animated.Value(0.3)).current;
@@ -157,8 +158,10 @@ const Login: React.FC = () => {
   // ── Button shake (failure) ───────────────────────────────────────────────────
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
-  // ── Mount: fire staggered entrance ─────────────────────────────────────────
+  // ── Mount: fire staggered entrance only when not arriving from registration ──
   useEffect(() => {
+    if (skipEntrance) return;
+
     const makeEntrance = (val: Animated.Value, delay: number) =>
       Animated.spring(val, {
         toValue: 1,
@@ -169,8 +172,6 @@ const Login: React.FC = () => {
     Animated.parallel([
       makeEntrance(wordmarkAnim, ENTRANCE_DELAYS.wordmark),
       makeEntrance(taglineAnim, ENTRANCE_DELAYS.tagline),
-      makeEntrance(fieldsAnim, ENTRANCE_DELAYS.fields),
-      makeEntrance(ctaAnim, ENTRANCE_DELAYS.cta),
     ]).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -297,9 +298,16 @@ const Login: React.FC = () => {
           );
           await clearGuestCart();
         }
-        const cartRes = await getSavedCartItems(userData.CustomerProfileCode).catch(() => null);
+        const cartRes = await getSavedCartItems(
+          userData.CustomerProfileCode,
+        ).catch(() => null);
         if (cartRes?.statusCode === 1) {
-          setCartCount((cartRes.result ?? []).reduce((sum: number, item: any) => sum + item.Quantity, 0));
+          setCartCount(
+            (cartRes.result ?? []).reduce(
+              (sum: number, item: any) => sum + item.Quantity,
+              0,
+            ),
+          );
         }
       }
       setLoading(false);
@@ -316,18 +324,22 @@ const Login: React.FC = () => {
   // ── Derived layout ──────────────────────────────────────────────────────────
   const heroHeight = Math.round(screenHeight * 0.39);
 
-  // Entrance → translateY + opacity for each block
-  const entranceStyle = (anim: Animated.Value, initialY = 14) => ({
-    opacity: anim,
-    transform: [
-      {
-        translateY: anim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [initialY, 0],
-        }),
-      },
-    ],
-  });
+  // Entrance → translateY + opacity — hero only. No-op when skipEntrance is true
+  // so the native layer never sees opacity:0 on the first frame.
+  const entranceStyle = (anim: Animated.Value, initialY = 14) =>
+    skipEntrance
+      ? {}
+      : {
+          opacity: anim,
+          transform: [
+            {
+              translateY: anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [initialY, 0],
+              }),
+            },
+          ],
+        };
 
   return (
     <View style={styles.root}>
@@ -336,7 +348,6 @@ const Login: React.FC = () => {
         translucent
         backgroundColor="transparent"
       />
-
       {/* ── Dark atelier hero — absolutely positioned, excluded from keyboard resize ── */}
       <View style={[styles.hero, { height: heroHeight }]} pointerEvents="none">
         <HeroArt heroHeight={heroHeight} />
@@ -353,8 +364,7 @@ const Login: React.FC = () => {
           </Text>
         </Animated.View>
       </View>
-
-      {/* ── Light form panel — sits below hero, scrolls above keyboard ── */}
+      {/* ── Light form panel — sits below hero ── */}
       <KeyboardAvoidingView
         style={[styles.formPanel, { marginTop: heroHeight }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -367,9 +377,7 @@ const Login: React.FC = () => {
           bounces={false}
         >
           {/* Fields */}
-          <Animated.View
-            style={[styles.fieldsBlock, entranceStyle(fieldsAnim)]}
-          >
+          <View style={styles.fieldsBlock}>
             <FloatingLabelInput
               label="Username"
               value={username}
@@ -389,14 +397,13 @@ const Login: React.FC = () => {
               activeColor={Colors.ink1}
               error={fieldError}
             />
-          </Animated.View>
+          </View>
 
           {/* CTA */}
           <Animated.View
             style={[
               styles.ctaBlock,
               { transform: [{ translateX: shakeAnim }] },
-              entranceStyle(ctaAnim),
             ]}
           >
             <TouchableOpacity
@@ -431,6 +438,16 @@ const Login: React.FC = () => {
                 Don't have an account?{' '}
                 <Text style={styles.registerTextBold}>Sign up</Text>
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() =>
+                navigation.reset({ index: 0, routes: [{ name: 'Home' }] })
+              }
+              activeOpacity={0.7}
+              style={styles.guestLink}
+            >
+              <Text style={styles.guestText}>Continue as guest</Text>
             </TouchableOpacity>
           </Animated.View>
         </ScrollView>
@@ -535,6 +552,14 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.ink1,
     fontWeight: '600',
+  },
+  guestLink: {
+    marginTop: Space[3],
+    alignItems: 'center',
+  },
+  guestText: {
+    ...Type.caption,
+    color: Colors.ink4,
   },
 });
 

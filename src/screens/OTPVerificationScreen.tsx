@@ -7,6 +7,7 @@ import {
   StatusBar,
   TouchableOpacity,
   TextInput,
+  Keyboard,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -20,7 +21,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 type RootStackParamList = {
-  Login: undefined;
+  Login: { skipEntrance?: boolean };
   OTPVerification: {
     CustomerName: string;
     EmailID: string;
@@ -115,7 +116,8 @@ const OTPVerificationScreen: React.FC = () => {
       }
 
       haptic.success();
-      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+      Keyboard.dismiss();
+      navigation.reset({ index: 0, routes: [{ name: 'Login', params: { skipEntrance: true } }] });
     } catch (err: any) {
       setLoading(false);
       setError(err?.message ?? 'Something went wrong. Please try again.');
@@ -131,7 +133,6 @@ const OTPVerificationScreen: React.FC = () => {
   }, [handleVerify]);
 
   const entranceStyle = {
-    opacity: contentAnim,
     transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
   };
 

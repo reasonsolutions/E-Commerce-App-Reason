@@ -101,49 +101,6 @@ const styles = StyleSheet.create({
     color:       Colors.accent,
   },
 
-  // ── Search suggestions ───────────────────────────────────────────────────────
-  suggestionBox: {
-    position:         'absolute',
-    top:              0, // overridden via layout — sits below TopBar via zIndex
-    left:             Space.screenH,
-    right:            Space.screenH,
-    backgroundColor:  Colors.surface,
-    borderRadius:     Radius.md,
-    borderWidth:      StyleSheet.hairlineWidth,
-    borderColor:      Colors.rule,
-    shadowColor:      '#000',
-    shadowOffset:     { width: 0, height: 4 },
-    shadowOpacity:    0.10,
-    shadowRadius:     12,
-    elevation:        12,
-    overflow:         'hidden',
-    zIndex:           50,
-    marginTop:        0,
-  },
-  suggestionRow: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               Space[3],
-    paddingHorizontal: Space[4],
-    paddingVertical:   Space[3] + 2,
-  },
-  suggestionDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.rule,
-  },
-  suggestionText: {
-    ...Type.body,
-    color: Colors.ink1,
-    flex:  1,
-  },
-  recentLabel: {
-    ...Type.label,
-    color:             Colors.ink4,
-    paddingHorizontal: Space[4],
-    paddingTop:        Space[3],
-    paddingBottom:     Space[1],
-  },
-
   // ── Scroll ───────────────────────────────────────────────────────────────────
   scroll: {
     flex:            1,

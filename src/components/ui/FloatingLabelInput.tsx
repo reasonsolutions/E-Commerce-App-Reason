@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TextInputProps,
-  Animated,
   StyleSheet,
   TouchableWithoutFeedback,
   TouchableOpacity,
@@ -12,7 +11,6 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space } from '../../theme/tokens';
 import { Type } from '../../theme/typography';
-import { Motion } from '../../theme/motion';
 
 interface FloatingLabelInputProps extends Omit<TextInputProps, 'style'> {
   label: string;
@@ -37,36 +35,20 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
 }) => {
   const [focused, setFocused] = useState(false);
   const [visible, setVisible] = useState(false);
-  const underlineAnim = useRef(new Animated.Value(0)).current;
   const inputRef = useRef<TextInput>(null);
-
-  const animateUnderline = useCallback((toValue: number) => {
-    Animated.timing(underlineAnim, {
-      toValue,
-      duration:        Motion.duration.tap,
-      easing:          Motion.easing.out,
-      useNativeDriver: false,
-    }).start();
-  }, [underlineAnim]);
 
   const handleFocus = useCallback((e: any) => {
     setFocused(true);
-    animateUnderline(1);
     onFocus?.(e);
-  }, [animateUnderline, onFocus]);
+  }, [onFocus]);
 
   const handleBlur = useCallback((e: any) => {
     setFocused(false);
-    animateUnderline(0);
     onBlur?.(e);
-  }, [animateUnderline, onBlur]);
-
-  const underlineHeight = underlineAnim.interpolate({
-    inputRange:  [0, 1],
-    outputRange: [1, 2],
-  });
+  }, [onBlur]);
 
   const underlineColor = error ? Colors.danger : focused ? activeColor : Colors.ink4;
+  const underlineHeight = focused ? 2 : 1;
 
   return (
     <TouchableWithoutFeedback onPress={() => inputRef.current?.focus()}>
@@ -115,8 +97,8 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
           )}
         </View>
 
-        {/* Underline — only interactive element, weight animated on focus */}
-        <Animated.View
+        {/* Underline — weight and color respond to focus state */}
+        <View
           style={[
             styles.underline,
             {

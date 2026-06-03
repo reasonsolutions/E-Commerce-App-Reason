@@ -17,12 +17,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
-import { CategoryInterface, ProductInterface, GetBrandItem, ProductByCategoryProductDetails } from '../api/interfaces';
+import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interfaces';
 import { getProductsByCategory, getCategories, getBrands } from '../api/product';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
-import axiosInstance from '../api/axiosInstance';
-import { productEndpoints } from '../api/endpoints';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -287,25 +285,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { cartCount } = useCart();
 
-  // ── Search state ─────────────────────────────────────────────────────────────
-  const [searchQuery, setSearchQuery]         = useState('');
-  const [suggestions, setSuggestions]         = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchFocused, setSearchFocused]     = useState(false);
-  const [recentSearches, setRecentSearches]   = useState<string[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // ── Recently viewed ───────────────────────────────────────────────────────────
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
 
   // ── Resume cart cue ───────────────────────────────────────────────────────────
   const [showResumeCue, setShowResumeCue] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEYS.recentSearches).then(raw => {
-      if (raw) try { setRecentSearches(JSON.parse(raw)); } catch {}
-    });
-  }, []);
 
   // ── Data fetches ──────────────────────────────────────────────────────────────
   const { data: categories, run: runCategories } = useAsyncState<CategoryInterface[]>(null);
@@ -370,53 +354,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       return () => { cancelled.current = true; };
     }, [runCategories, runProducts, runBrands]),
   );
-
-  // ── Search handlers ───────────────────────────────────────────────────────────
-  const handleSearchChange = useCallback((text: string) => {
-    setSearchQuery(text);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (text.trim().length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const response = await axiosInstance.post(productEndpoints.allProducts, {
-          brands: [],
-          categories: [],
-          subCategories: [],
-          searchQuery: text.trim(),
-          priceRange: { from: null, to: null },
-          discount: null,
-          pagination: { pageNumber: 1, pageSize: 6 },
-        });
-        const names: string[] = Array.from(
-          new Set<string>(
-            (response.data?.result?.Products ?? [])
-              .map((p: ProductByCategoryProductDetails) => p.Name)
-              .filter(Boolean),
-          ),
-        );
-        setSuggestions(names);
-        setShowSuggestions(names.length > 0);
-      } catch {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    }, 300);
-  }, []);
-
-  const commitSearch = useCallback(async (query: string) => {
-    const q = query.trim();
-    if (!q) return;
-    setShowSuggestions(false);
-    setSearchFocused(false);
-    const updated = [q, ...recentSearches.filter(s => s !== q)].slice(0, 8);
-    setRecentSearches(updated);
-    await AsyncStorage.setItem(STORAGE_KEYS.recentSearches, JSON.stringify(updated));
-    navigation.navigate('Result', { searchQuery: q, categoryName: `"${q}"` });
-  }, [navigation, recentSearches]);
 
   // ── Derived data ──────────────────────────────────────────────────────────────
   const deduped = products
@@ -542,17 +479,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
-        {/* Search bar inside dark TopBar */}
-        <View style={styles.searchWrap}>
+        {/* Search bar — tapping navigates to SearchScreen */}
+        <TouchableOpacity
+          style={styles.searchWrap}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Search')}
+        >
           <SearchBar
-            value={searchQuery}
-            onChangeText={handleSearchChange}
+            value=""
+            onChangeText={() => {}}
             placeholder="Search products, brands…"
-            onSubmit={() => commitSearch(searchQuery)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setTimeout(() => { setShowSuggestions(false); setSearchFocused(false); }, 180)}
+            editable={false}
           />
-        </View>
+        </TouchableOpacity>
+
         {/* Resume cart cue */}
         {showResumeCue && cartCount > 0 && (
           <TouchableOpacity
@@ -574,39 +514,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         )}
       </View>
 
-      {/* ── Search suggestion dropdown — outside ScrollView ───────────────────── */}
-      {(showSuggestions && suggestions.length > 0) || (searchFocused && searchQuery.trim() === '' && recentSearches.length > 0) ? (
-        <View style={styles.suggestionBox}>
-          {showSuggestions && suggestions.length > 0 ? (
-            suggestions.map((s, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.suggestionRow, i < suggestions.length - 1 && styles.suggestionDivider]}
-                onPress={() => { setSearchQuery(s); commitSearch(s); }}
-                activeOpacity={0.7}
-              >
-                <Icon name="search-outline" size={14} color={Colors.ink4} />
-                <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <>
-              <Text style={styles.recentLabel}>RECENT</Text>
-              {recentSearches.map((s, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[styles.suggestionRow, i < recentSearches.length - 1 && styles.suggestionDivider]}
-                  onPress={() => { setSearchQuery(s); commitSearch(s); }}
-                  activeOpacity={0.7}
-                >
-                  <Icon name="time-outline" size={14} color={Colors.ink4} />
-                  <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </>
-          )}
-        </View>
-      ) : null}
 
       {/* ── Scrollable content ────────────────────────────────────────────────── */}
       <ScrollView

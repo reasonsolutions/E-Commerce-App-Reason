@@ -111,7 +111,6 @@ const RegisterScreen: React.FC = () => {
   }, [loading, name, email, mobile, password, navigation, shake]);
 
   const entranceStyle = {
-    opacity: contentAnim,
     transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
   };
 
