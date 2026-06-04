@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -355,33 +355,41 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }, [runCategories, runProducts, runBrands]),
   );
 
-  // ── Derived data ──────────────────────────────────────────────────────────────
-  const deduped = products
-    ? Array.from(new Map(products.filter(p => p.ItemID != null).map(p => [p.ItemID, p])).values())
-    : null;
+  // ── Derived data (memoised — recomputes only when source data changes) ────────
+  const deduped = useMemo(
+    () => products
+      ? Array.from(new Map(products.filter(p => p.ItemID != null).map(p => [p.ItemID, p])).values())
+      : null,
+    [products],
+  );
 
-  // Group products by category for per-category rails
-  const byCategory = deduped
-    ? deduped.reduce<Record<string, ProductInterface[]>>((acc, p) => {
-        const key = p.CategoryName || 'Other';
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(p);
-        return acc;
-      }, {})
-    : null;
+  const byCategory = useMemo(
+    () => deduped
+      ? deduped.reduce<Record<string, ProductInterface[]>>((acc, p) => {
+          const key = p.CategoryName || 'Other';
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(p);
+          return acc;
+        }, {})
+      : null,
+    [deduped],
+  );
 
-  const categoryRailKeys = byCategory ? Object.keys(byCategory).slice(0, 2) : [];
+  const categoryRailKeys = useMemo(
+    () => byCategory ? Object.keys(byCategory).slice(0, 2) : [],
+    [byCategory],
+  );
 
-  // Smart buys — products with a genuine discount
-  const smartBuys = deduped
-    ? deduped.filter(p => p.MaxComparePrice > p.MinPrice && p.MinPrice > 0)
-    : null;
+  const smartBuys = useMemo(
+    () => deduped
+      ? deduped.filter(p => p.MaxComparePrice > p.MinPrice && p.MinPrice > 0)
+      : null,
+    [deduped],
+  );
 
-  // Spotlights derived from real data
-  const spotlights: Spotlight[] | null = (() => {
+  const spotlights: Spotlight[] | null = useMemo(() => {
     if (!deduped || !categories) return null;
     const result: Spotlight[] = [];
-    // Product spotlight — first product with a real discount
     const discounted = deduped.find(p => p.MaxComparePrice > p.MinPrice);
     if (discounted) {
       const pct = calcDiscount(discounted.MinPrice, discounted.MaxComparePrice);
@@ -396,7 +404,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         itemId:   discounted.ItemID,
       });
     } else if (deduped.length > 0) {
-      // Fallback: first available product
       const p = deduped[0];
       result.push({
         kind:     'product',
@@ -409,7 +416,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         itemId:   p.ItemID,
       });
     }
-    // Category spotlight — first category with an image
     const catWithImg = categories.find(c => c.CategoryImage);
     if (catWithImg) {
       result.push({
@@ -424,13 +430,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       });
     }
     return result;
-  })();
+  }, [deduped, categories]);
 
-  // Category spotlight card — second category with image, different from spotlights one
-  const spotlightCatId = spotlights?.find(s => s.kind === 'category')?.categoryId;
-  const featureCategory = categories
-    ? categories.find(c => c.CategoryImage && c.CategoryId !== spotlightCatId) ?? categories[0]
-    : null;
+  const featureCategory = useMemo(() => {
+    if (!categories) return null;
+    const spotlightCatId = spotlights?.find(s => s.kind === 'category')?.categoryId;
+    return categories.find(c => c.CategoryImage && c.CategoryId !== spotlightCatId) ?? categories[0];
+  }, [categories, spotlights]);
 
   const handleBannerPress = useCallback((spot: Spotlight) => {
     if (spot.kind === 'product' && spot.itemId) {
@@ -447,7 +453,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor="#16130F" translucent />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
       {/* ── TopBar ────────────────────────────────────────────────────────────── */}
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
@@ -461,14 +467,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               onPress={() => navigation.navigate('Wishlist')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Icon name="heart-outline" size={22} color="#FFFFFF" />
+              <Icon name="heart-outline" size={22} color={Colors.ink1} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={() => navigation.navigate('Cart')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Icon name="bag-outline" size={22} color="#FFFFFF" />
+              <Icon name="bag-outline" size={22} color={Colors.ink1} />
               {cartCount > 0 && (
                 <View style={styles.cartBadge}>
                   <Text style={styles.cartBadgeText}>

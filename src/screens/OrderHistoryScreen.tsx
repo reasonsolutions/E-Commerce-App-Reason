@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { postOrderHistory } from '../api/order';
+import { postSaveCartItems } from '../api/cart';
 import type { OrderHistoryFilters } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -21,7 +22,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   StatusBadge,
   BottomNavBar,
-  DarkHeader,
   FadeImage,
   Skeleton,
   OrderFilterSheet,
@@ -34,9 +34,13 @@ import { FontFamily } from '../theme/fonts';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
+import { useAuthGuard } from '../hooks/useAuthGuard';
+import { useCart } from '../context/CartContext';
 import { formatDate } from '../utils/formatDate';
 import { orderStatusLabel } from '../utils/orderStatus';
-import type { OrderHistoryItemInterface } from '../api/interfaces';
+import { OrderStatusCode, type OrderHistoryItemInterface } from '../api/interfaces';
+import { toastEmitter } from '../utils/toastEmitter';
+import { LoginPromptSheet } from '../components/ui';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -47,82 +51,379 @@ type OrderHistoryScreenProps = {
   navigation: NavigationProp;
 };
 
-// 4:5 portrait — canonical card ratio
-const IMG_W = 64;
-const IMG_H = 80;
+const IMG_W = 56;
+const IMG_H = 70;
 
+// Progress steps for active orders (not terminal states)
+const PROGRESS_STEPS: OrderStatusCode[] = [
+  OrderStatusCode.New,
+  OrderStatusCode.Confirmed,
+  OrderStatusCode.Processing,
+  OrderStatusCode.Fulfilled,
+  OrderStatusCode.Shipped,
+  OrderStatusCode.Delivered,
+];
 
-// ── Single order row ──────────────────────────────────────────────────────────
-const OrderRow: React.FC<{
-  item: OrderHistoryItemInterface;
-  onPress: (item: OrderHistoryItemInterface) => void;
-  delay: number;
-  isLast: boolean;
-}> = ({ item, onPress, delay, isLast }) => {
-  const haptic    = useHaptic();
-  const entrance  = useEntrance(delay);
-  const { animatedStyle: pressStyle, handlers } = useTactile();
-  const status     = orderStatusLabel(item.OrderStatus);
+const ACTIVE_STATUSES = new Set([
+  OrderStatusCode.New,
+  OrderStatusCode.Confirmed,
+  OrderStatusCode.Processing,
+  OrderStatusCode.Fulfilled,
+  OrderStatusCode.Shipped,
+]);
+
+interface OrderGroup {
+  orderNumber: string;
+  orderedDate: string;
+  items: OrderHistoryItemInterface[];
+  totalAmount: number;
+  // Use the status of the first item (all items in a group share the same status)
+  status: OrderStatusCode;
+}
+
+function groupOrders(items: OrderHistoryItemInterface[]): OrderGroup[] {
+  const map = new Map<string, OrderGroup>();
+  for (const item of items) {
+    const key = item.OrderNumber;
+    if (!map.has(key)) {
+      map.set(key, {
+        orderNumber: item.OrderNumber,
+        orderedDate: item.OrderedDate,
+        items: [],
+        totalAmount: 0,
+        status: item.OrderStatus,
+      });
+    }
+    const group = map.get(key)!;
+    group.items.push(item);
+    group.totalAmount += item.Amount ?? 0;
+  }
+  return Array.from(map.values());
+}
+
+// ── Order progress bar ────────────────────────────────────────────────────────
+const OrderProgressBar: React.FC<{ status: OrderStatusCode }> = ({ status }) => {
+  const currentIdx = PROGRESS_STEPS.indexOf(status);
+  if (currentIdx < 0) return null;
+
+  return (
+    <View style={progStyles.container}>
+      {PROGRESS_STEPS.map((step, i) => {
+        const filled = i <= currentIdx;
+        const isActive = i === currentIdx;
+        return (
+          <View key={step} style={progStyles.stepWrap}>
+            <View
+              style={[
+                progStyles.segment,
+                filled && progStyles.segmentFilled,
+                isActive && progStyles.segmentActive,
+              ]}
+            />
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+const progStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    gap: 3,
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  stepWrap: {
+    flex: 1,
+  },
+  segment: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: Colors.rule,
+  },
+  segmentFilled: {
+    backgroundColor: Colors.ink3,
+  },
+  segmentActive: {
+    backgroundColor: Colors.accent,
+  },
+});
+
+// ── Single item row within a card ─────────────────────────────────────────────
+const OrderItemRow: React.FC<{ item: OrderHistoryItemInterface; isLast: boolean }> = ({
+  item,
+  isLast,
+}) => {
   const firstImage = item.Images?.split(';').filter(Boolean)[0] ?? '';
 
   return (
-    <Animated.View style={entrance}>
+    <View style={[itemStyles.row, !isLast && itemStyles.rowBorder]}>
+      <FadeImage
+        uri={firstImage}
+        width={IMG_W}
+        height={IMG_H}
+        borderRadius={Radius.sm}
+      />
+      <View style={itemStyles.meta}>
+        {item.Brand_Name ? (
+          <Text style={itemStyles.brand}>{item.Brand_Name.toUpperCase()}</Text>
+        ) : null}
+        <Text style={itemStyles.name} numberOfLines={2}>{item.Name}</Text>
+        {item.Variant ? (
+          <Text style={itemStyles.variant}>{item.Variant}</Text>
+        ) : null}
+        <View style={itemStyles.qtyPriceRow}>
+          <Text style={itemStyles.qty}>Qty {item.Quantity}</Text>
+          <Text style={itemStyles.price}>Rs {(item.Amount ?? 0).toFixed(0)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const itemStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: Space[3],
+    paddingVertical: Space[3],
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  meta: {
+    flex: 1,
+    gap: 3,
+  },
+  brand: {
+    ...Type.label,
+    color: Colors.ink4,
+  },
+  name: {
+    fontFamily: FontFamily.serif,
+    fontSize: 14,
+    fontWeight: '400',
+    color: Colors.ink1,
+    letterSpacing: -0.1,
+    lineHeight: 14 * 1.35,
+  },
+  variant: {
+    ...Type.caption,
+    color: Colors.ink4,
+  },
+  qtyPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  qty: {
+    fontFamily: FontFamily.mono,
+    fontSize: 10,
+    color: Colors.ink4,
+    letterSpacing: 0.2,
+  },
+  price: {
+    fontFamily: FontFamily.serif,
+    fontSize: 14,
+    fontWeight: '400',
+    color: Colors.ink1,
+    letterSpacing: -0.1,
+  },
+});
+
+// ── Order group card ──────────────────────────────────────────────────────────
+const OrderCard: React.FC<{
+  group: OrderGroup;
+  onPress: (item: OrderHistoryItemInterface) => void;
+  onReorder: (group: OrderGroup) => void;
+  delay: number;
+}> = ({ group, onPress, onReorder, delay }) => {
+  const haptic = useHaptic();
+  const entrance = useEntrance(delay);
+  const { animatedStyle: pressStyle, handlers } = useTactile();
+  const status = orderStatusLabel(group.status);
+  const isActive = ACTIVE_STATUSES.has(group.status);
+  const isCancelled = group.status === OrderStatusCode.Cancelled || group.status === OrderStatusCode.Returned;
+  const itemCount = group.items.length;
+
+  return (
+    <Animated.View style={[entrance, cardStyles.wrapper]}>
       <Animated.View style={pressStyle}>
         <TouchableOpacity
           {...handlers}
-          style={styles.row}
           activeOpacity={1}
-          onPress={() => { haptic.light(); onPress(item); }}
+          onPress={() => { haptic.light(); onPress(group.items[0]); }}
+          style={cardStyles.card}
         >
-          {/* Portrait image */}
-          <FadeImage
-            uri={firstImage}
-            width={IMG_W}
-            height={IMG_H}
-            borderRadius={Radius.sm}
+          {/* Left status strip */}
+          <View
+            style={[
+              cardStyles.strip,
+              isCancelled && cardStyles.stripCancelled,
+              isActive && cardStyles.stripActive,
+              group.status === OrderStatusCode.Delivered && cardStyles.stripDelivered,
+            ]}
           />
 
-          {/* Content */}
-          <View style={styles.content}>
-            {/* Top — brand + name + amount */}
-            <View style={styles.contentTop}>
-              <View style={styles.metaLeft}>
-                {item.Brand_Name ? (
-                  <Text style={styles.brand}>{item.Brand_Name.toUpperCase()}</Text>
-                ) : null}
-                <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
-                {item.Variant ? (
-                  <Text style={styles.variant}>{item.Variant}</Text>
-                ) : null}
+          <View style={cardStyles.body}>
+            {/* Card header */}
+            <View style={cardStyles.header}>
+              <View style={cardStyles.headerLeft}>
+                <Text style={cardStyles.orderNum}>#{group.orderNumber}</Text>
+                <Text style={cardStyles.orderDate}>
+                  {formatDate(group.orderedDate)} · {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                </Text>
               </View>
-              {/* Amount — right-aligned serif */}
-              <View style={styles.amountBlock}>
-                <Text style={styles.amount}>Rs {(item.Amount ?? 0).toFixed(0)}</Text>
-                <Icon name="chevron-forward" size={13} color={Colors.ink5} />
+              <View style={cardStyles.headerRight}>
+                <StatusBadge status={status} />
+                <Icon name="chevron-forward" size={13} color={Colors.ink5} style={{ marginTop: 2 }} />
               </View>
             </View>
 
-            {/* Bottom — order meta + status */}
-            <View style={styles.contentBottom}>
-              <View style={styles.orderMeta}>
-                {item.OrderNumber ? (
-                  <Text style={styles.orderNumber}>#{item.OrderNumber}</Text>
-                ) : null}
-                {item.OrderedDate ? (
-                  <Text style={styles.orderDate}>{formatDate(item.OrderedDate)}</Text>
-                ) : null}
-              </View>
-              {status ? <StatusBadge status={status} /> : null}
+            {/* Progress bar for active orders */}
+            {isActive ? <OrderProgressBar status={group.status} /> : null}
+
+            {/* Divider */}
+            <View style={cardStyles.divider} />
+
+            {/* Item rows */}
+            {group.items.map((item, i) => (
+              <OrderItemRow
+                key={`${item.Inventory_Id}-${i}`}
+                item={item}
+                isLast={i === group.items.length - 1}
+              />
+            ))}
+
+            {/* Card footer: total (only when 2+ items) + reorder */}
+            <View style={cardStyles.footer}>
+              {itemCount > 1 ? (
+                <View>
+                  <Text style={cardStyles.totalLabel}>ORDER TOTAL</Text>
+                  <Text style={cardStyles.totalAmount}>
+                    Rs {group.totalAmount.toFixed(0)}
+                  </Text>
+                </View>
+              ) : <View />}
+              <TouchableOpacity
+                style={cardStyles.reorderBtn}
+                activeOpacity={0.8}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  haptic.light();
+                  onReorder(group);
+                }}
+              >
+                <Text style={cardStyles.reorderBtnText}>Reorder</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
       </Animated.View>
-
-      {/* Hairline divider — suppressed after last item */}
-      {!isLast && <View style={styles.divider} />}
     </Animated.View>
   );
 };
+
+const cardStyles = StyleSheet.create({
+  wrapper: {
+    marginBottom: Space[3],
+  },
+  card: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.rule,
+    overflow: 'hidden',
+  },
+  strip: {
+    width: 4,
+    backgroundColor: Colors.ink5,
+  },
+  stripActive: {
+    backgroundColor: Colors.accent,
+  },
+  stripDelivered: {
+    backgroundColor: Colors.ink3,
+  },
+  stripCancelled: {
+    backgroundColor: Colors.danger,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: Space[4],
+    paddingTop: Space[3],
+    paddingBottom: Space[3],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flex: 1,
+    gap: 3,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space[1],
+  },
+  orderNum: {
+    fontFamily: FontFamily.mono,
+    fontSize: 11,
+    color: Colors.ink2,
+    letterSpacing: 0.4,
+  },
+  orderDate: {
+    fontFamily: FontFamily.mono,
+    fontSize: 10,
+    color: Colors.ink4,
+    letterSpacing: 0.2,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+    marginVertical: Space[2],
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Space[3],
+    paddingTop: Space[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.rule,
+  },
+  totalLabel: {
+    ...Type.label,
+    color: Colors.ink4,
+    marginBottom: 2,
+  },
+  totalAmount: {
+    fontFamily: FontFamily.serif,
+    fontSize: 17,
+    fontWeight: '400',
+    color: Colors.ink1,
+    letterSpacing: -0.2,
+  },
+  reorderBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.ink1,
+  },
+  reorderBtnText: {
+    fontFamily: FontFamily.sans,
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.ink1,
+    letterSpacing: 0.1,
+  },
+});
 
 const getProfileCode = async (): Promise<number | null> => {
   const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
@@ -134,6 +435,8 @@ const getProfileCode = async (): Promise<number | null> => {
 const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
+  const { setCartCount } = useCart();
 
   const [orders, setOrders]           = useState<OrderHistoryItemInterface[]>([]);
   const [hasMore, setHasMore]         = useState(true);
@@ -142,17 +445,16 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   const [loadingMore, setLoadingMore] = useState(false);
   const [fetchError, setFetchError]       = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [reorderError, setReorderError]   = useState<string | null>(null);
 
   const [filters, setFilters]             = useState<OrderHistoryFilters>({});
   const [filterVisible, setFilterVisible] = useState(false);
 
-  // Refs so closures always read current values without stale captures
   const fetchingRef  = useRef(false);
   const pageRef      = useRef(1);
   const filtersRef   = useRef<OrderHistoryFilters>({});
   filtersRef.current = filters;
 
-  // Fetch a specific page and append or replace
   const fetchPage = useCallback(async (
     pageNum: number,
     activeFilters: OrderHistoryFilters,
@@ -179,7 +481,6 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     }
   }, []);
 
-  // Reset + load page 1 on focus or filter change
   const reload = useCallback((activeFilters: OrderHistoryFilters) => {
     setHasFetched(false);
     setOrders([]);
@@ -221,20 +522,57 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     reload({});
   };
 
+  const handleReorder = (group: OrderGroup) => {
+    guard(async () => {
+      const code = await getProfileCode();
+      if (!code) return;
+      setReorderError(null);
+      try {
+        await Promise.all(
+          group.items.map(item =>
+            postSaveCartItems({
+              CustomerProfileCode: code,
+              InventoryId: item.Inventory_Id,
+              Quantity: item.Quantity ?? 1,
+              IsPurchased: false,
+            }),
+          ),
+        );
+        haptic.success();
+        setCartCount((prev: number) => prev + group.items.length);
+        toastEmitter.emit('success', `${group.items.length === 1 ? '1 item' : `${group.items.length} items`} added to cart`);
+      } catch (e: any) {
+        setReorderError(e?.message ?? 'Could not add items to cart.');
+      }
+    });
+  };
+
   const activeFilterCount = [
     filters.sortBy && filters.sortBy !== 'desc',
     filters.dateFrom,
     filters.dateTo,
+    filters.status && filters.status !== 'all',
   ].filter(Boolean).length;
 
-  const orderCount = orders.length;
+  const allGroups = groupOrders(orders);
 
-  const renderItem = ({ item, index }: ListRenderItemInfo<OrderHistoryItemInterface>) => (
-    <OrderRow
-      item={item}
-      onPress={(order) => navigation.navigate('OrderDetails', { orderItem: order })}
-      delay={Math.min(index * 55, 320)}
-      isLast={index === orderCount - 1 && !hasMore}
+  const groups = filters.status && filters.status !== 'all'
+    ? allGroups.filter(g => {
+        if (filters.status === 'delivered') return g.status === OrderStatusCode.Delivered;
+        if (filters.status === 'cancelled') return g.status === OrderStatusCode.Cancelled;
+        if (filters.status === 'returned')  return g.status === OrderStatusCode.Returned;
+        return true;
+      })
+    : allGroups;
+
+  const groupCount = groups.length;
+
+  const renderItem = ({ item, index }: ListRenderItemInfo<OrderGroup>) => (
+    <OrderCard
+      group={item}
+      onPress={(orderItem) => navigation.navigate('OrderDetails', { orderItem })}
+      onReorder={handleReorder}
+      delay={Math.min(index * 60, 300)}
     />
   );
 
@@ -260,7 +598,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     return null;
   };
 
-  const hasActiveFilters = !!(filters.sortBy && filters.sortBy !== 'desc') || !!filters.dateFrom || !!filters.dateTo;
+  const hasActiveFilters = !!(filters.sortBy && filters.sortBy !== 'desc') || !!filters.dateFrom || !!filters.dateTo || !!(filters.status && filters.status !== 'all');
 
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
@@ -302,30 +640,42 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     </View>
   );
 
-  const renderBody = () => {
-    if (!hasFetched) {
-      return (
-        <View style={styles.skeletonWrap}>
-          {[0, 1, 2, 3].map(i => (
-            <View key={i}>
-              <View style={styles.skeletonRow}>
-                <Skeleton width={IMG_W} height={IMG_H} radius={Radius.sm} />
-                <View style={styles.skeletonContent}>
-                  <Skeleton height={9}  width="35%" style={{ marginBottom: Space[2] }} />
-                  <Skeleton height={14} width="80%" style={{ marginBottom: Space[1] }} />
-                  <Skeleton height={12} width="55%" />
-                  <View style={styles.skeletonBottom}>
-                    <Skeleton height={10} width="40%" />
-                    <Skeleton height={18} width="22%" radius={Radius.pill} />
-                  </View>
-                </View>
-              </View>
-              {i < 3 && <View style={styles.divider} />}
+  const renderSkeleton = () => (
+    <View style={styles.skeletonWrap}>
+      {[0, 1, 2].map(i => (
+        <View key={i} style={styles.skeletonCard}>
+          {/* Card header skeleton */}
+          <View style={styles.skeletonHeader}>
+            <View style={{ gap: Space[1], flex: 1 }}>
+              <Skeleton height={11} width="40%" />
+              <Skeleton height={10} width="55%" />
             </View>
-          ))}
+            <Skeleton height={22} width={80} radius={Radius.pill} />
+          </View>
+          <View style={styles.skeletonDivider} />
+          {/* Item row skeleton */}
+          <View style={styles.skeletonRow}>
+            <Skeleton width={IMG_W} height={IMG_H} radius={Radius.sm} />
+            <View style={styles.skeletonMeta}>
+              <Skeleton height={9}  width="30%" style={{ marginBottom: Space[1] }} />
+              <Skeleton height={13} width="80%" style={{ marginBottom: Space[1] }} />
+              <Skeleton height={11} width="50%" />
+            </View>
+          </View>
+          {/* Footer skeleton */}
+          <View style={styles.skeletonDivider} />
+          <View style={styles.skeletonFooter}>
+            <Skeleton height={14} width={60} />
+            <Skeleton height={34} width={80} radius={Radius.pill} />
+          </View>
         </View>
-      );
-    }
+      ))}
+    </View>
+  );
+
+  const renderBody = () => {
+    if (!hasFetched) return renderSkeleton();
+
     if (fetchError) {
       return (
         <ErrorState
@@ -336,19 +686,27 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         />
       );
     }
-    if (orderCount === 0) {
-      return renderEmpty();
-    }
+
+    if (groupCount === 0) return renderEmpty();
+
     return (
       <FlatList
-        data={orders}
+        data={groups}
         renderItem={renderItem}
-        keyExtractor={(item, index) => `${item.Inventory_Id}-${index}`}
+        keyExtractor={(group) => group.orderNumber}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.3}
+        ListHeaderComponent={
+          reorderError ? (
+            <ErrorBanner
+              body={reorderError}
+              onRetry={() => setReorderError(null)}
+            />
+          ) : null
+        }
         ListFooterComponent={renderFooter}
         refreshControl={
           <RefreshControl
@@ -364,26 +722,37 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
-      <DarkHeader
-        eyebrow="YOUR ORDERS"
-        title="History"
-        onBack={() => navigation.goBack()}
-        paddingTop={insets.top + Space[2]}
-        rightSlot={
-          <TouchableOpacity
-            onPress={() => { haptic.light(); setFilterVisible(true); }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={styles.filterBtn}
-          >
-            <Icon name="options-outline" size={20} color="#FFFFFF" />
-            {activeFilterCount > 0 ? (
-              <View style={styles.filterDot} />
-            ) : null}
-          </TouchableOpacity>
-        }
-      />
+      {/* Inline light header */}
+      <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="arrow-back" size={22} color={Colors.ink1} />
+        </TouchableOpacity>
+
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>My Orders</Text>
+          {groupCount > 0 ? (
+            <Text style={styles.headerCount}>{groupCount} order{groupCount !== 1 ? 's' : ''}</Text>
+          ) : null}
+        </View>
+
+        <TouchableOpacity
+          onPress={() => { haptic.light(); setFilterVisible(true); }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.filterBtn}
+        >
+          <Icon name="options-outline" size={20} color={Colors.ink1} />
+          {activeFilterCount > 0 ? (
+            <View style={styles.filterDot} />
+          ) : null}
+        </TouchableOpacity>
+      </View>
+      <View style={styles.headerDivider} />
 
       {renderBody()}
 
@@ -394,6 +763,15 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         onClearAll={handleClearFilters}
         current={filters}
       />
+
+      {showLoginPrompt && (
+        <LoginPromptSheet
+          context="orders"
+          onClose={dismissLoginPrompt}
+          onSignIn={() => { dismissLoginPrompt(); navigation.navigate('Login'); }}
+          onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
+        />
+      )}
 
       <BottomNavBar
         activeTab="Orders"
@@ -410,7 +788,36 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
 
-  // ── Filter button ─────────────────────────────────────────────────────────────
+  header: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[4],
+    backgroundColor:   Colors.surface,
+  },
+  backBtn: {
+    marginRight: Space[3],
+  },
+  headerCenter: {
+    flex:      1,
+    gap:       2,
+  },
+  headerTitle: {
+    fontFamily:   FontFamily.serif,
+    fontSize:     22,
+    fontWeight:   '400',
+    color:        Colors.ink1,
+    letterSpacing: -0.3,
+  },
+  headerCount: {
+    ...Type.label,
+    color: Colors.ink4,
+  },
+  headerDivider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+  },
+
   filterBtn: {
     position: 'relative',
   },
@@ -424,7 +831,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
   },
 
-  // ── List ──────────────────────────────────────────────────────────────────────
   list: {
     flex: 1,
   },
@@ -438,107 +844,48 @@ const styles = StyleSheet.create({
     alignItems:      'center',
   },
 
-  // ── Row — no card boxing, hairline dividers ───────────────────────────────────
-  row: {
-    flexDirection:  'row',
-    alignItems:     'flex-start',
-    paddingVertical: Space[4],
-    gap:             Space[4],
-  },
-  divider: {
-    height:          StyleSheet.hairlineWidth,
-    backgroundColor: Colors.rule,
-  },
-
-  // ── Content ───────────────────────────────────────────────────────────────────
-  content: {
-    flex: 1,
-    gap:  Space[3],
-  },
-  contentTop: {
-    flexDirection: 'row',
-    alignItems:    'flex-start',
-    gap:           Space[2],
-  },
-  metaLeft: {
-    flex: 1,
-    gap:  3,
-  },
-  brand: {
-    ...Type.label,
-    color: Colors.ink4,
-  },
-  name: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      15,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.1,
-    lineHeight:    15 * 1.35,
-  },
-  variant: {
-    ...Type.caption,
-    color: Colors.ink4,
-  },
-  // Serif amount — right-aligned, restrained weight
-  amountBlock: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           2,
-    flexShrink:    0,
-    paddingTop:    1,
-  },
-  amount: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      16,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.2,
-  },
-  contentBottom: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-  },
-  // Mono order metadata
-  orderMeta: {
-    gap: 2,
-  },
-  orderNumber: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      11,
-    color:         Colors.ink3,
-    letterSpacing: 0.3,
-  },
-  orderDate: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      10,
-    color:         Colors.ink4,
-    letterSpacing: 0.2,
-  },
-
   // ── Skeleton ──────────────────────────────────────────────────────────────────
   skeletonWrap: {
-    flex:              1,
+    flex: 1,
     paddingHorizontal: Space.screenH,
-    paddingTop:        Space[5],
+    paddingTop: Space[5],
+    gap: Space[3],
+  },
+  skeletonCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.rule,
+    paddingHorizontal: Space[4],
+    paddingVertical: Space[3],
+    gap: Space[2],
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space[3],
+  },
+  skeletonDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+    marginVertical: Space[1],
   },
   skeletonRow: {
-    flexDirection:  'row',
-    alignItems:     'flex-start',
-    paddingVertical: Space[4],
-    gap:             Space[4],
+    flexDirection: 'row',
+    gap: Space[3],
+    paddingVertical: Space[2],
   },
-  skeletonContent: {
+  skeletonMeta: {
     flex: 1,
-    gap:  Space[2],
+    gap: Space[1],
     paddingTop: Space[1],
   },
-  skeletonBottom: {
-    flexDirection:  'row',
-    alignItems:     'center',
+  skeletonFooter: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop:      Space[2],
+    alignItems: 'center',
+    paddingTop: Space[2],
   },
 
   // ── Empty state ───────────────────────────────────────────────────────────────

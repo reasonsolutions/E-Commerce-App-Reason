@@ -37,9 +37,7 @@ import {
   Skeleton,
   Price,
   EmptyState,
-  DarkHeader,
   FilterSheet,
-  SearchBar,
 } from '../components/ui';
 import type { SortKey } from '../components/ui';
 import { ErrorState } from '../components/system';
@@ -140,10 +138,11 @@ const DiscountBadge: React.FC<{ pct: number }> = ({ pct }) => (
 const HeroCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onPress: () => void;
-}> = ({ product, onPress }) => {
+}> = React.memo(({ product, onPress }) => {
   const haptic = useHaptic();
   const { animatedStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
+  const firstImage = product.Images?.split(';').filter(Boolean)[0] ?? null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -172,9 +171,9 @@ const HeroCard: React.FC<{
         activeOpacity={1}
       >
         <View style={styles.heroImgWrap}>
-          {product.Images?.split(';').filter(Boolean)[0] ? (
+          {firstImage ? (
             <Animated.Image
-              source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+              source={{ uri: firstImage }}
               style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
               resizeMode="cover"
               onLoad={onLoad}
@@ -227,20 +226,21 @@ const HeroCard: React.FC<{
       </TouchableOpacity>
     </Animated.View>
   );
-};
+});
 
 // ── Standard 2-column grid tile ───────────────────────────────────────────────
 const GridTile: React.FC<{
   product: ProductByCategoryProductDetails;
   onPress: () => void;
   delay: number;
-}> = ({ product, onPress, delay }) => {
+}> = React.memo(({ product, onPress, delay }) => {
   const haptic = useHaptic();
   const { animatedStyle: entranceStyle } = {
     animatedStyle: useEntrance(delay, false, 12),
   };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
+  const firstImage = product.Images?.split(';').filter(Boolean)[0] ?? null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -270,9 +270,9 @@ const GridTile: React.FC<{
           activeOpacity={1}
         >
           <View style={styles.gridImgWrap}>
-            {product.Images?.split(';').filter(Boolean)[0] ? (
+            {firstImage ? (
               <Animated.Image
-                source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+                source={{ uri: firstImage }}
                 style={[styles.gridImg, { opacity: imgOpacity }]}
                 resizeMode="cover"
                 onLoad={onLoad}
@@ -304,18 +304,19 @@ const GridTile: React.FC<{
       </Animated.View>
     </Animated.View>
   );
-};
+});
 
 // ── Featured span card — full-width editorial break ───────────────────────────
 const SpanCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onPress: () => void;
   delay: number;
-}> = ({ product, onPress, delay }) => {
+}> = React.memo(({ product, onPress, delay }) => {
   const haptic = useHaptic();
   const entranceStyle = useEntrance(delay, false, 12);
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
+  const firstImage = product.Images?.split(';').filter(Boolean)[0] ?? null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -346,9 +347,9 @@ const SpanCard: React.FC<{
           style={{ flex: 1 }}
         >
           <View style={styles.spanImgWrap}>
-            {product.Images?.split(';').filter(Boolean)[0] ? (
+            {firstImage ? (
               <Animated.Image
-                source={{ uri: product.Images.split(';').filter(Boolean)[0] }}
+                source={{ uri: firstImage }}
                 style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
                 resizeMode="cover"
                 onLoad={onLoad}
@@ -382,7 +383,7 @@ const SpanCard: React.FC<{
       </Animated.View>
     </Animated.View>
   );
-};
+});
 
 // ── Skeleton — matches loaded layout shape ────────────────────────────────────
 const ResultSkeleton: React.FC = () => (
@@ -815,40 +816,42 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     [allProducts, sortKey],
   );
   const heroProduct = deduplicated[0] ?? null;
-  const gridProducts = deduplicated.slice(1);
 
-  const rows: Array<
-    | {
-        type: 'pair';
-        left: ProductByCategoryProductDetails;
-        right?: ProductByCategoryProductDetails;
-        leftIdx: number;
-        rightIdx?: number;
+  const rows = useMemo(() => {
+    const gridProducts = deduplicated.slice(1);
+    const result: Array<
+      | {
+          type: 'pair';
+          left: ProductByCategoryProductDetails;
+          right?: ProductByCategoryProductDetails;
+          leftIdx: number;
+          rightIdx?: number;
+        }
+      | { type: 'span'; product: ProductByCategoryProductDetails; idx: number }
+    > = [];
+    let i = 0;
+    let pairIdx = 0;
+    while (i < gridProducts.length) {
+      if (pairIdx > 0 && pairIdx % 2 === 0 && isFeaturedSpan(i)) {
+        result.push({ type: 'span', product: gridProducts[i], idx: i });
+        i++;
+        pairIdx = 0;
+        continue;
       }
-    | { type: 'span'; product: ProductByCategoryProductDetails; idx: number }
-  > = [];
-
-  let i = 0;
-  let pairIdx = 0;
-  while (i < gridProducts.length) {
-    if (pairIdx > 0 && pairIdx % 2 === 0 && isFeaturedSpan(i)) {
-      rows.push({ type: 'span', product: gridProducts[i], idx: i });
-      i++;
-      pairIdx = 0;
-      continue;
+      const left = gridProducts[i];
+      const right = gridProducts[i + 1];
+      result.push({
+        type: 'pair',
+        left,
+        right,
+        leftIdx: i,
+        rightIdx: right ? i + 1 : undefined,
+      });
+      i += right ? 2 : 1;
+      pairIdx++;
     }
-    const left = gridProducts[i];
-    const right = gridProducts[i + 1];
-    rows.push({
-      type: 'pair',
-      left,
-      right,
-      leftIdx: i,
-      rightIdx: right ? i + 1 : undefined,
-    });
-    i += right ? 2 : 1;
-    pairIdx++;
-  }
+    return result;
+  }, [deduplicated]);
 
   const navigateToProduct = useCallback(
     (itemId: number) => navigation.navigate('Product', { product: itemId }),
@@ -867,7 +870,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       <Icon
         name="options-outline"
         size={13}
-        color={activeFilterCount > 0 ? Colors.accent : 'rgba(255,255,255,0.70)'}
+        color={activeFilterCount > 0 ? Colors.accent : Colors.ink3}
       />
       <Text
         style={[
@@ -883,40 +886,26 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={Colors.ink1}
-        translucent
-      />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
-      <Animated.View style={[styles.headerWrap, headerAnim]}>
-        <DarkHeader
-          eyebrow={
-            searchQueryParam
-              ? 'SEARCH'
-              : categoryName === 'All Products'
-              ? 'BROWSE'
-              : 'COLLECTION'
-          }
-          title={categoryName}
-          onBack={() => navigation.goBack()}
-          paddingTop={insets.top + Space[2]}
-          rightSlot={filterButton}
-        />
+      {/* ── Light inline header ───────────────────────────────────────── */}
+      <Animated.View style={[styles.headerWrap, { paddingTop: insets.top }, headerAnim]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Icon name="arrow-back" size={22} color={Colors.ink1} />
+          </TouchableOpacity>
+
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{categoryName}</Text>
+          </View>
+
+          {filterButton}
+        </View>
+        <View style={styles.headerDivider} />
       </Animated.View>
-
-      <TouchableOpacity
-        style={styles.searchBand}
-        activeOpacity={0.85}
-        onPress={() => navigation.navigate('Search')}
-      >
-        <SearchBar
-          value={searchQueryParam ?? ''}
-          onChangeText={() => {}}
-          placeholder="Search products, brands…"
-          editable={false}
-        />
-      </TouchableOpacity>
 
       <ScrollView
         style={styles.scroll}

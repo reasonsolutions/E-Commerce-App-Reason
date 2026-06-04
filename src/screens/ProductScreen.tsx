@@ -1,41 +1,49 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  StatusBar,
+  View,
+  Text,
+  ScrollView,
   Animated,
   Dimensions,
-} from 'react-native';
-import {
-  Box,
-  Text,
-  HStack,
-  VStack,
-  Pressable,
-  ScrollView,
-  Divider,
+  StatusBar,
+  StyleSheet,
+  TouchableOpacity,
   Image,
-} from '../components/primitives';
-import { FlatList } from 'react-native';
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { ProductDetailInterface, PostCartSaveInterface, WishlistItemInterface, VariantInterface } from '../api/interfaces';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import {
+  ProductDetailInterface,
+  PostCartSaveInterface,
+  WishlistItemInterface,
+  VariantInterface,
+} from '../api/interfaces';
+import { ItemCondition } from '../config/enum_files/ItemCondition';
 import { postSaveCartItems } from '../api/cart';
 import { getProductByItemId } from '../api/product';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
+import { addToGuestCart } from '../api/cart';
+import { getOrgIdForInventory } from '../api/product';
+
 import {
-  QuantityStepper,
   Skeleton,
-  SkeletonRow,
   ErrorBanner,
   PrimaryButton,
-  TextLinkButton,
-  ProductIdentity,
-  HeroNavButton,
-  VariantSheet,
-  type VariantOption,
+  BreadcrumbRow,
+  DeliveryBand,
+  VariantChipGrid,
+  type VariantChipOption,
+  TrustCardRow,
+  ProductSpecs,
+  SellerCard,
+  LoginPromptSheet,
 } from '../components/ui';
+
 import { Colors, Space, Shadow } from '../theme';
-import { Type } from '../theme/typography';
+import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useCart } from '../context/CartContext';
@@ -43,22 +51,28 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useProfileCode } from '../hooks/useProfileCode';
 import { useAppToast } from '../hooks/useAppToast';
 import { useAuthGuard } from '../hooks/useAuthGuard';
-import { LoginPromptSheet } from '../components/ui/LoginPromptSheet';
-import { addToGuestCart } from '../api/cart';
-import { getOrgIdForInventory } from '../api/product';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const HERO_H = Math.round(SCREEN_H * 0.58);
+const { width: SCREEN_W } = Dimensions.get('window');
+const HERO_H = SCREEN_W * 0.85;
+const NAV_H  = 52;
 
-type ProductFetch = {
-  product: ProductDetailInterface;
-};
+// Design tokens local to this screen
+const INK     = Colors.ink1;
+const COND_BG = '#EDF7EE';
+const COND_FG = '#2E7D32';
+
+type ProductFetch = { product: ProductDetailInterface };
 
 type ProductScreenProps = {
   navigation: { goBack: () => void; navigate: (screen: string) => void };
   route: { params?: { product?: string } };
+};
+
+const CONDITION_LABELS: Record<number, string> = {
+  [ItemCondition.New]:         'NEW',
+  [ItemCondition.Used]:        'USED',
+  [ItemCondition.Refurbished]: 'REFURB',
 };
 
 const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
@@ -66,21 +80,40 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const { setCartCount } = useCart();
   const haptic = useHaptic();
   const toast = useAppToast();
-
-  const [selectedVariant, setSelectedVariant] = useState<string>('');
-  const [quantity, setQuantity] = useState<number>(1);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const profileCode = useProfileCode();
+  const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
+
+  // ── State ────────────────────────────────────────────────────────────────────
+  const [selectedVariantId, setSelectedVariantId] = useState<string>('');
+  const [quantity, setQuantity] = useState<number>(1);
+  const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [wishlisted, setWishlisted] = useState<boolean>(false);
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
-  const [variantSheetOpen, setVariantSheetOpen] = useState<boolean>(false);
-  const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
 
-  const plateAnim      = useRef(new Animated.Value(0)).current;
-  const heroImgOpacity = useRef(new Animated.Value(0)).current;
-  const badgeScale     = useRef(new Animated.Value(1)).current;
+  // ── Animated values ──────────────────────────────────────────────────────────
+  const scrollY     = useRef(new Animated.Value(0)).current;
+  const badgeScale  = useRef(new Animated.Value(1)).current;
+  const plateAnim   = useRef(new Animated.Value(0)).current;
 
+  // Nav background: transparent over hero, light surface once scrolled past
+  const navBgColor = scrollY.interpolate({
+    inputRange:  [HERO_H - 80, HERO_H],
+    outputRange: ['transparent', Colors.surface],
+    extrapolate: 'clamp',
+  });
+  const pillBg = scrollY.interpolate({
+    inputRange:  [0, HERO_H - 80],
+    outputRange: ['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.0)'],
+    extrapolate: 'clamp',
+  });
+  const navBorderOpacity = scrollY.interpolate({
+    inputRange:  [HERO_H - 80, HERO_H],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  // ── Data fetch ───────────────────────────────────────────────────────────────
   const { data, isError, error, run } = useAsyncState<ProductFetch>(null);
 
   const fetchProduct = useCallback(
@@ -98,20 +131,20 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     return () => { cancelled.current = true; };
   }, [fetchProduct]);
 
+  // Pre-select first in-stock variant on load + entrance animation
   useEffect(() => {
     if (!data) return;
     Animated.timing(plateAnim, {
       toValue: 1, duration: Motion.duration.settle, delay: 60,
       easing: Motion.easing.out, useNativeDriver: true,
     }).start();
-    // Pre-select first in-stock variant, or first variant if all are out of stock
     const variants = data.product?.Variants ?? [];
     const firstInStock = variants.find(v => v.StockStatus?.Description !== 'out_of_stock');
     const preselect = firstInStock ?? variants[0];
-    if (preselect) setSelectedVariant(String(preselect.InventoryId));
+    if (preselect) setSelectedVariantId(String(preselect.InventoryId));
   }, [data, plateAnim]);
 
-  // Risk 4 fix: recently viewed write isolated — only fires once per successful product load
+  // Recently viewed write
   useEffect(() => {
     if (!data?.product) return;
     const p = data.product;
@@ -123,7 +156,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         ItemID:          itemIdNum,
         Name:            p.Name,
         BrandName:       p.BrandName,
-        Images:          p.Images,
+        Images:          Array.isArray(p.Images)
+          ? (p.Images as unknown as string[]).join(';')
+          : p.Images,
         MinPrice:        preselect?.PriceDetails?.Price ?? 0,
         MaxComparePrice: preselect?.PriceDetails?.ComparePrice ?? 0,
         Inventory_Id:    preselect?.InventoryId ?? null,
@@ -133,6 +168,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     }).catch(() => {});
   }, [data]);
 
+  // Wishlist match on load
   useEffect(() => {
     if (!data?.product || !profileCode) return;
     let cancelled = false;
@@ -147,26 +183,81 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     return () => { cancelled = true; };
   }, [data, profileCode]);
 
-  const handleHeroImageLoad = useCallback(() => {
-    Animated.timing(heroImgOpacity, {
-      toValue: 1, duration: Motion.duration.carry,
-      easing: Motion.easing.inOut, useNativeDriver: true,
-    }).start();
-  }, [heroImgOpacity]);
+  // ── Derived values ───────────────────────────────────────────────────────────
+  const productDetails = data?.product ?? null;
+  const variantDetails = productDetails?.Variants ?? [];
+  const selectedVariant = variantDetails.find(v => String(v.InventoryId) === selectedVariantId) ?? variantDetails[0] ?? null;
+
+  const imageUrls: string[] = productDetails?.Images
+    ? Array.isArray(productDetails.Images)
+      ? (productDetails.Images as unknown as string[]).filter(Boolean)
+      : productDetails.Images.split(';').map(s => s.trim()).filter(Boolean)
+    : [];
+
+  const activePrice        = selectedVariant?.PriceDetails?.Price ?? 0;
+  const activeComparePrice = selectedVariant?.PriceDetails?.ComparePrice ?? 0;
+  const hasDiscount        = activeComparePrice > activePrice;
+  const discountPct        = hasDiscount
+    ? Math.round(((activeComparePrice - activePrice) / activeComparePrice) * 100) : 0;
+
+  const isOOS       = selectedVariant?.StockStatus?.Description === 'out_of_stock'
+                      && !selectedVariant?.BackOrder?.AllowBackOrder;
+  const isBackorder = selectedVariant?.StockStatus?.Description === 'out_of_stock'
+                      && selectedVariant?.BackOrder?.AllowBackOrder === true;
+  const maxQty      = selectedVariant?.MaxPerOrder ?? 10;
+
+  const chipOptions: VariantChipOption[] = useMemo(
+    () => variantDetails.map(v => ({
+      id:         String(v.InventoryId),
+      label:      v.Variant,
+      outOfStock: v.StockStatus?.Description === 'out_of_stock',
+      lowStock:   v.StockStatus?.Description !== 'out_of_stock' && v.Stock <= v.Threshold,
+    })),
+    [variantDetails],
+  );
+
+  const selectedChip = chipOptions.find(c => c.id === selectedVariantId);
+  const lowStockLabel = selectedChip?.lowStock && selectedVariant
+    ? `Only ${selectedVariant.Stock} left in ${selectedVariant.Variant}`
+    : null;
+
+  const conditionLabel = selectedVariant?.PhysicalAttributes?.Condition?.Value != null
+    ? CONDITION_LABELS[selectedVariant.PhysicalAttributes.Condition.Value] ?? null
+    : null;
+
+  const plateStyle = {
+    opacity: plateAnim,
+    transform: [{ translateY: plateAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+  };
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const handleVariantSelect = useCallback((id: string) => {
+    haptic.light();
+    const newVariant = variantDetails.find(v => String(v.InventoryId) === id);
+    setSelectedVariantId(id);
+    if (newVariant) {
+      const newMax = newVariant.MaxPerOrder ?? 10;
+      const newIsOOS = newVariant.StockStatus?.Description === 'out_of_stock'
+                       && !newVariant.BackOrder?.AllowBackOrder;
+      if (newIsOOS) setQuantity(1);
+      else setQuantity(q => Math.min(q, newMax));
+    }
+  }, [haptic, variantDetails]);
 
   const handleAddToCart = useCallback(async () => {
-    if (isOutOfStock && !allowBackOrder) {
+    if (isOOS && !isBackorder) {
       haptic.warning();
       toast.warning({ title: 'Out of stock', description: 'This variant is currently unavailable.' });
       return;
     }
     const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
-    const inventoryId = selectedVariant ? parseInt(selectedVariant) : parseInt(firstVariantId ?? '0');
+    const inventoryId = selectedVariantId
+      ? parseInt(selectedVariantId)
+      : parseInt(firstVariantId ?? '0');
 
     setAddingToCart(true);
     try {
       if (profileCode) {
-        // Logged-in: save to server cart
         const requestbody: PostCartSaveInterface = {
           CustomerProfileCode: profileCode,
           InventoryId: inventoryId,
@@ -181,9 +272,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         }
         setCartCount((prev: number) => prev + quantity);
       } else {
-        // Guest: save to local cart
         const product = data?.product;
-        const variantObj = product?.Variants?.find((v: VariantInterface) => String(v.InventoryId) === selectedVariant) ?? product?.Variants?.[0];
+        const variantObj = product?.Variants?.find((v: VariantInterface) =>
+          String(v.InventoryId) === selectedVariantId) ?? product?.Variants?.[0];
         await addToGuestCart({
           inventoryId,
           quantity,
@@ -192,7 +283,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           name:           product?.Name ?? '',
           brandName:      product?.BrandName ?? '',
           variant:        variantObj?.Variant ?? '',
-          image:          product?.Images?.split(';')[0] ?? '',
+          image:          Array.isArray(product?.Images)
+            ? (product.Images as unknown as string[])[0] ?? ''
+            : product?.Images?.split(';')[0] ?? '',
           organisationId: getOrgIdForInventory(inventoryId) ?? '',
         });
         setCartCount((prev: number) => prev + quantity);
@@ -210,14 +303,16 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     } finally {
       setAddingToCart(false);
     }
-  }, [profileCode, selectedVariant, data, quantity, haptic, badgeScale, setCartCount, navigation]);
+  }, [profileCode, selectedVariantId, data, quantity, haptic, badgeScale, setCartCount, navigation, isOOS, isBackorder, toast]);
 
   const handleWishlistToggle = useCallback(() => {
     guard(async () => {
       if (!profileCode) return;
       haptic.light();
       const firstVariantId = data?.product?.Variants?.[0]?.InventoryId;
-      const inventoryId = selectedVariant ? parseInt(selectedVariant) : parseInt(firstVariantId ?? '0');
+      const inventoryId = selectedVariantId
+        ? parseInt(selectedVariantId)
+        : parseInt(firstVariantId ?? '0');
       if (wishlisted && wishlistItemCode !== null) {
         await removeFromWishlist(profileCode, wishlistItemCode).catch(() => {});
         setWishlisted(false); setWishlistItemCode(null);
@@ -239,274 +334,508 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         }
       }
     });
-  }, [guard, profileCode, wishlisted, wishlistItemCode, haptic, data, selectedVariant]);
+  }, [guard, profileCode, wishlisted, wishlistItemCode, haptic, data, selectedVariantId, toast]);
 
-  const handleVariantSelect = useCallback((variantId: string) => {
-    haptic.light();
-    setSelectedVariant(variantId);
-  }, [haptic]);
+  // ── Error state ──────────────────────────────────────────────────────────────
+  if (isError) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top + Space[12] }]}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Icon name="chevron-back" size={20} color={Colors.ink1} />
+        </TouchableOpacity>
+        <ErrorBanner
+          title="Couldn't load product"
+          body={error ?? 'Check your connection and try again.'}
+          onRetry={() => fetchProduct()}
+        />
+      </View>
+    );
+  }
 
-  const productDetails = data?.product ?? null;
-  const variantDetails = productDetails?.Variants ?? [];
-  const selectedVariantObj = variantDetails.find(v => String(v.InventoryId) === selectedVariant) ?? variantDetails[0] ?? null;
-  const variantOptions: VariantOption[] = variantDetails.map(v => ({
-    id: String(v.InventoryId),
-    label: v.Variant,
-    outOfStock: v.StockStatus?.Description === 'out_of_stock',
-  }));
-  const imageUri       = productDetails?.Images ? productDetails.Images.split(';')[selectedImageIndex] : undefined;
-  const imageThumbs    = productDetails?.Images ? productDetails.Images.split(';').filter(Boolean) : [];
-  const activePrice        = selectedVariantObj?.PriceDetails?.Price ?? 0;
-  const activeComparePrice = selectedVariantObj?.PriceDetails?.ComparePrice ?? 0;
-  const isOutOfStock   = selectedVariantObj?.StockStatus?.Description === 'out_of_stock';
-  const allowBackOrder = selectedVariantObj?.BackOrder?.AllowBackOrder === true;
-  const hasDiscount    = activeComparePrice > activePrice;
-  const discountPct    = hasDiscount
-    ? Math.round(((activeComparePrice - activePrice) / activeComparePrice) * 100) : 0;
-
-  const plateStyle = {
-    opacity: plateAnim,
-    transform: [{ translateY: plateAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
-  };
-
-  const renderThumb = useCallback(({ item, index }: { item: string; index: number }) => (
-    <Pressable
-      onPress={() => { haptic.light(); setSelectedImageIndex(index); }}
-      style={{ width: 56, height: 56, borderRadius: 8, overflow: 'hidden', backgroundColor: Colors.surfaceDeep }}
-    >
-      <Image source={{ uri: item }} style={{ width: '100%', height: '100%' }} alt="" resizeMode="cover" />
-      {selectedImageIndex === index && (
-        <Box style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: Colors.ink1 }} />
-      )}
-    </Pressable>
-  ), [selectedImageIndex, haptic]);
-
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <Box className="flex-1 bg-surface">
+    <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {isError ? (
-        <Box
-          className="flex-1 bg-surface px-5"
-          style={{ paddingTop: insets.top + Space[12] }}
-        >
-          <HeroNavButton
-            icon="chevron-back"
+      {/* ── Floating nav bar (over hero) ──────────────────────────────────── */}
+      <Animated.View
+        style={[styles.navBar, { backgroundColor: navBgColor, top: insets.top, borderBottomColor: navBorderOpacity.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', Colors.rule] }) }]}
+        pointerEvents="box-none"
+      >
+        <Animated.View style={[styles.navPill, { backgroundColor: pillBg }]}>
+          <TouchableOpacity
             onPress={() => navigation.goBack()}
-            accessibilityLabel="Go back"
-            iconColor={Colors.ink1}
-          />
-          <ErrorBanner
-            title="Couldn't load product"
-            body={error ?? 'Check your connection and try again.'}
-            onRetry={() => fetchProduct()}
-          />
-        </Box>
-      ) : (
-        <>
-          <ScrollView className="flex-1" showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: Space[8] }}>
-
-            {/* ── Hero ─────────────────────────────────────────────────── */}
-            <Box
-              className="overflow-hidden bg-surfaceDeep"
-              style={{ height: HERO_H, width: SCREEN_W }}
-            >
-              {productDetails ? (
-                <Animated.Image
-                  source={{ uri: imageUri }}
-                  style={{ width: '100%', height: '100%', opacity: heroImgOpacity }}
-                  resizeMode="cover"
-                  onLoad={handleHeroImageLoad}
-                />
-              ) : (
-                <Box className="absolute inset-0 bg-surfaceDeep" />
-              )}
-
-              <LinearGradient
-                colors={['rgba(0,0,0,0.38)', 'rgba(0,0,0,0.0)']}
-                locations={[0, 0.28]}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-                pointerEvents="none"
-              />
-
-              {/* Floating nav */}
-              <HStack
-                className="absolute left-0 right-0 px-5 justify-between items-center"
-                style={{ top: 0, paddingTop: insets.top + Space[2] }}
-              >
-                <HeroNavButton
-                  icon="chevron-back"
-                  onPress={() => navigation.goBack()}
-                  accessibilityLabel="Go back"
-                />
-
-                <HStack style={{ gap: Space[2] }}>
-                  <HeroNavButton
-                    icon={wishlisted ? 'heart' : 'heart-outline'}
-                    onPress={handleWishlistToggle}
-                    accessibilityLabel={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
-                    iconColor={wishlisted ? Colors.accent : '#FFFFFF'}
-                  />
-                  <HeroNavButton
-                    icon="bag-outline"
-                    onPress={() => navigation.navigate('Cart')}
-                    accessibilityLabel="View cart"
-                  >
-                    <Animated.View style={{ transform: [{ scale: badgeScale }] }}>
-                      <Icon name="bag-outline" size={20} color="#FFFFFF" />
-                    </Animated.View>
-                  </HeroNavButton>
-                </HStack>
-              </HStack>
-
-              {/* Discount badge */}
-              {hasDiscount && (
-                <Box
-                  className="absolute left-5 rounded-xs border border-accent bg-accentTint px-2"
-                  style={{ top: insets.top + Space[2] + 44, paddingVertical: 3 }}
-                >
-                  <Text style={[Type.label, { color: Colors.accent }]}>
-                    -{discountPct}%
-                  </Text>
-                </Box>
-              )}
-            </Box>
-
-            {/* ── Thumbnail strip ───────────────────────────────────────── */}
-            {imageThumbs.length > 1 && (
-              <Box className="bg-surfaceSoft">
-                <FlatList
-                  data={imageThumbs}
-                  renderItem={renderThumb}
-                  keyExtractor={(_, i) => i.toString()}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: Space[5], paddingVertical: Space[3], gap: Space[2] }}
-                />
-              </Box>
-            )}
-
-            {/* ── Identity plate ────────────────────────────────────────── */}
-            <Animated.View style={plateStyle}>
-              <VStack className="bg-surface px-5 pt-5 pb-4" style={{ gap: Space[2] }}>
-                <ProductIdentity
-                  brand={productDetails?.BrandName}
-                  name={productDetails?.Name ?? ''}
-                  price={activePrice}
-                  comparePrice={activeComparePrice > activePrice ? activeComparePrice : undefined}
-                  loading={!productDetails}
-                />
-              </VStack>
-            </Animated.View>
-
-            <Divider className="mx-5 bg-rule" />
-
-            {/* ── Variants + description ────────────────────────────────── */}
-            <Animated.View style={plateStyle}>
-              <VStack className="bg-surface px-5 pt-5" style={{ gap: Space[4] }}>
-                {productDetails ? (
-                  <>
-                    {variantOptions.length > 0 && (
-                      <Pressable
-                        onPress={() => { haptic.light(); setVariantSheetOpen(true); }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          paddingVertical: Space[3],
-                          paddingHorizontal: Space[4],
-                          borderRadius: 10,
-                          borderWidth: 1,
-                          borderColor: selectedVariant ? Colors.ink1 : Colors.rule,
-                          backgroundColor: Colors.surfaceSoft,
-                        }}
-                      >
-                        <VStack style={{ gap: 2 }}>
-                          <Text style={Type.label}>Variant</Text>
-                          <Text style={{ fontFamily: 'JetBrainsMono-Regular', fontSize: 13, color: selectedVariant ? Colors.ink1 : Colors.ink3 }}>
-                            {selectedVariant
-                              ? variantOptions.find(o => o.id === selectedVariant)?.label
-                              : 'Select a variant'}
-                          </Text>
-                        </VStack>
-                        <Icon name="chevron-down" size={16} color={Colors.ink3} />
-                      </Pressable>
-                    )}
-
-                    {productDetails.Description ? (
-                      <>
-                        <Divider className="bg-rule" />
-                        <VStack style={{ gap: Space[2], marginBottom: Space[8] }}>
-                          <Text style={Type.label}>Details</Text>
-                          <Text
-                            className="text-ink2"
-                            style={{ fontSize: 16, lineHeight: 16 * 1.7 }}
-                          >
-                            {productDetails.Description}
-                          </Text>
-                        </VStack>
-                      </>
-                    ) : null}
-                  </>
-                ) : (
-                  <VStack style={{ gap: Space[4], paddingBottom: Space[6] }}>
-                    <Skeleton height={11} width="18%" />
-                    <SkeletonRow gap={Space[2]}>
-                      <Skeleton height={40} width={72} radius={8} />
-                      <Skeleton height={40} width={72} radius={8} />
-                      <Skeleton height={40} width={72} radius={8} />
-                    </SkeletonRow>
-                    <Skeleton height={14} />
-                    <Skeleton height={14} />
-                    <Skeleton height={14} width="70%" />
-                  </VStack>
-                )}
-              </VStack>
-            </Animated.View>
-          </ScrollView>
-
-          <VariantSheet
-            isOpen={variantSheetOpen}
-            onClose={() => setVariantSheetOpen(false)}
-            options={variantOptions}
-            selectedId={selectedVariant}
-            onSelect={handleVariantSelect}
-          />
-
-          {/* ── Purchase bar ──────────────────────────────────────────── */}
-          <VStack
-            className="bg-surfaceDeep border-t border-rule px-5 pt-3"
-            style={{ paddingBottom: Math.max(insets.bottom, Space[4]), gap: Space[2], ...Shadow.sm }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Box>
-              <QuantityStepper value={quantity} onChange={setQuantity} min={1} size="sm" />
-            </Box>
-            <PrimaryButton
-              label={isOutOfStock && !allowBackOrder ? 'Out of Stock' : 'Add to Bag'}
-              loading={addingToCart}
-              onPress={handleAddToCart}
-              isDisabled={isOutOfStock && !allowBackOrder}
-            />
-            {(!isOutOfStock || allowBackOrder) && (
-              <TextLinkButton
-                label="Buy Now"
-                onPress={handleAddToCart}
-              />
-            )}
-          </VStack>
-        </>
-      )}
+            <Icon name="chevron-back" size={19} color="rgba(255,255,255,0.95)" />
+          </TouchableOpacity>
+        </Animated.View>
 
-      {showLoginPrompt && (
+        <View style={styles.navRight}>
+          <Animated.View style={[styles.navPill, { backgroundColor: pillBg }]}>
+            <TouchableOpacity
+              onPress={handleWishlistToggle}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon
+                name={wishlisted ? 'heart' : 'heart-outline'}
+                size={18}
+                color={wishlisted ? Colors.accent : 'rgba(255,255,255,0.95)'}
+              />
+            </TouchableOpacity>
+          </Animated.View>
+
+          <Animated.View style={[styles.navPill, { backgroundColor: pillBg }]}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Cart')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Animated.View style={{ transform: [{ scale: badgeScale }] }}>
+                <Icon name="bag-outline" size={18} color="rgba(255,255,255,0.95)" />
+              </Animated.View>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Animated.View>
+
+      {/* ── Scrollable content ────────────────────────────────────────────── */}
+      <Animated.ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false },
+        )}
+      >
+        {/* Hero gallery */}
+        <View style={styles.heroContainer}>
+          {imageUrls.length > 1 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={{ width: SCREEN_W, height: HERO_H }}
+              onScroll={e => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                setActiveImageIndex(idx);
+              }}
+              scrollEventThrottle={16}
+            >
+              {imageUrls.map((url, i) => (
+                <Image
+                  key={i}
+                  source={{ uri: url }}
+                  style={{ width: SCREEN_W, height: HERO_H, resizeMode: 'cover' }}
+                />
+              ))}
+            </ScrollView>
+          ) : imageUrls.length === 1 ? (
+            <Image
+              source={{ uri: imageUrls[0] }}
+              style={{ width: SCREEN_W, height: HERO_H, resizeMode: 'cover' }}
+            />
+          ) : (
+            <View style={[styles.heroPlaceholder, { width: SCREEN_W, height: HERO_H }]} />
+          )}
+
+          {/* Gradient overlay */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.42)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.20)']}
+            locations={[0, 0.32, 0.68, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+
+          {/* Discount badge */}
+          {hasDiscount ? (
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountText}>–{discountPct}%</Text>
+            </View>
+          ) : null}
+
+          {/* Dot indicators */}
+          {imageUrls.length > 1 ? (
+            <View style={styles.dotsRow}>
+              {imageUrls.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    i === activeImageIndex ? styles.dotActive : styles.dotInactive,
+                  ]}
+                />
+              ))}
+            </View>
+          ) : null}
+        </View>
+
+        {/* Breadcrumb */}
+        <BreadcrumbRow
+          category={productDetails?.CategoryName}
+          subCategory={productDetails?.SubCategoryName}
+        />
+
+        {/* Identity plate */}
+        <Animated.View style={[styles.identityPlate, plateStyle]}>
+          {productDetails ? (
+            <>
+              {/* Brand + seller eyebrow */}
+              <View style={styles.eyebrowRow}>
+                {productDetails.BrandName ? (
+                  <Text style={styles.eyebrowBrand}>
+                    {productDetails.BrandName.toUpperCase()}
+                  </Text>
+                ) : null}
+                {productDetails.BrandName && productDetails.OrganisationName ? (
+                  <Text style={styles.eyebrowDot}>·</Text>
+                ) : null}
+                {productDetails.OrganisationName ? (
+                  <Text style={styles.eyebrowSeller}>
+                    Sold by {productDetails.OrganisationName}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Product name */}
+              <Text style={styles.productName}>{productDetails.Name}</Text>
+
+              {/* Condition badge */}
+              {conditionLabel ? (
+                <View style={styles.conditionBadge}>
+                  <Text style={styles.conditionText}>{conditionLabel}</Text>
+                </View>
+              ) : null}
+
+              {/* Price row */}
+              <View style={styles.priceRow}>
+                <Text style={styles.price}>Rs {activePrice.toFixed(0)}</Text>
+                {hasDiscount ? (
+                  <>
+                    <Text style={styles.comparePrice}>
+                      Rs {activeComparePrice.toFixed(0)}
+                    </Text>
+                    <Text style={styles.discountInline}>{discountPct}% off</Text>
+                  </>
+                ) : null}
+              </View>
+            </>
+          ) : (
+            <View style={{ gap: Space[2] }}>
+              <Skeleton height={11} width="22%" />
+              <Skeleton height={26} width="78%" />
+              <Skeleton height={26} width="55%" />
+              <Skeleton height={32} width="36%" />
+            </View>
+          )}
+        </Animated.View>
+
+        {/* Delivery band */}
+        {productDetails ? (
+          <DeliveryBand
+            freeShipping={productDetails.ShippingInfo?.FreeShipping ?? false}
+            estimatedDeliveryDays={productDetails.ShippingInfo?.EstimatedDeliveryDays}
+            isOOS={isOOS}
+            isBackorder={isBackorder}
+          />
+        ) : null}
+
+        {/* Variant chip grid */}
+        <Animated.View style={plateStyle}>
+          <VariantChipGrid
+            options={chipOptions}
+            selectedId={selectedVariantId}
+            onSelect={handleVariantSelect}
+            sizeChartUrl={productDetails?.AdditionalInfo?.SizeChart}
+            lowStockLabel={lowStockLabel}
+          />
+        </Animated.View>
+
+        {/* Trust cards */}
+        {productDetails ? (
+          <TrustCardRow
+            policy={productDetails.PolicyInfo}
+            shipping={productDetails.ShippingInfo}
+          />
+        ) : null}
+
+        {/* Description + specs as accordions */}
+        <ProductSpecs
+          description={productDetails?.Description}
+          color={productDetails?.AdditionalInfo?.Color}
+          material={productDetails?.AdditionalInfo?.MaterialComposition}
+          care={productDetails?.AdditionalInfo?.CareInstructions}
+          weight={selectedVariant?.PhysicalAttributes?.Weight ?? null}
+          weightUnit={selectedVariant?.PhysicalAttributes?.WeightUnit?.Description ?? null}
+        />
+
+        {/* Seller card */}
+        <SellerCard
+          sellerName={productDetails?.OrganisationName}
+          manufacturer={productDetails?.ProductClassification?.Manufacturer}
+          countryOfOrigin={productDetails?.ProductClassification?.CountryOfOrigin}
+        />
+
+        <View style={{ height: 8, backgroundColor: Colors.surface }} />
+      </Animated.ScrollView>
+
+      {/* ── Purchase bar ──────────────────────────────────────────────────── */}
+      <View
+        style={[
+          styles.purchaseBar,
+          { paddingBottom: Math.max(insets.bottom, Space[3]) },
+          Shadow.sm,
+        ]}
+      >
+        {!isOOS ? (
+          <View style={styles.stepperRow}>
+            <TouchableOpacity
+              onPress={() => setQuantity(q => Math.max(1, q - 1))}
+              style={styles.stepBtn}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Icon name="remove" size={12} color={INK} />
+            </TouchableOpacity>
+            <Text style={styles.stepCount}>{quantity}</Text>
+            <TouchableOpacity
+              onPress={() => setQuantity(q => Math.min(maxQty, q + 1))}
+              style={styles.stepBtn}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Icon name="add" size={12} color={INK} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        <View style={{ flex: 1 }}>
+          <PrimaryButton
+            label={isOOS ? 'Out of Stock' : 'Add to Bag'}
+            loading={addingToCart}
+            onPress={handleAddToCart}
+            isDisabled={isOOS}
+            height={44}
+          />
+        </View>
+      </View>
+
+      {showLoginPrompt ? (
         <LoginPromptSheet
           onClose={dismissLoginPrompt}
           onSignIn={() => { dismissLoginPrompt(); navigation.navigate('Login'); }}
           onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
         />
-      )}
-    </Box>
+      ) : null}
+    </View>
   );
 };
 
 export default ProductScreen;
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+  },
+  scroll: {
+    flex: 1,
+  },
+
+  // ── Nav bar ────────────────────────────────────────────────────────────────
+  navBar: {
+    position:          'absolute',
+    left:              0,
+    right:             0,
+    zIndex:            30,
+    height:            NAV_H,
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  navPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navRight: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+
+  // ── Hero ───────────────────────────────────────────────────────────────────
+  heroContainer: {
+    position: 'relative',
+    height: HERO_H,
+    backgroundColor: Colors.surfaceDeep,
+  },
+  heroPlaceholder: {
+    backgroundColor: Colors.surfaceDeep,
+  },
+  discountBadge: {
+    position: 'absolute',
+    bottom: 14,
+    left: 14,
+    backgroundColor: 'rgba(27,12,8,0.88)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  discountText: {
+    fontFamily: FontFamily.sans,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.04 * 12,
+    color: Colors.accent,
+  },
+  dotsRow: {
+    position: 'absolute',
+    bottom: 14,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  dot: {
+    height: 5,
+    borderRadius: 3,
+  },
+  dotActive: {
+    width: 16,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+  },
+  dotInactive: {
+    width: 5,
+    backgroundColor: 'rgba(255,255,255,0.38)',
+  },
+
+  // ── Identity plate ─────────────────────────────────────────────────────────
+  identityPlate: {
+    paddingHorizontal: Space[4],
+    paddingTop:        Space[4],
+    paddingBottom:     Space[4],
+    backgroundColor:   Colors.surface,
+    gap:               Space[2],
+  },
+  eyebrowRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           6,
+    marginBottom:  2,
+  },
+  eyebrowBrand: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    fontWeight:    '400',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    color:         Colors.ink3,
+  },
+  eyebrowDot: {
+    color:    Colors.ink4,
+    fontSize: 10,
+  },
+  eyebrowSeller: {
+    fontFamily: FontFamily.sans,
+    fontSize:   11,
+    color:      Colors.ink3,
+  },
+  productName: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      20,
+    fontWeight:    '600',
+    color:         Colors.ink1,
+    lineHeight:    20 * 1.25,
+    marginBottom:  4,
+  },
+  conditionBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: COND_BG,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginBottom: 11,
+  },
+  conditionText: {
+    fontFamily: FontFamily.sans,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.06 * 10,
+    color: COND_FG,
+    textTransform: 'uppercase',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  price: {
+    fontFamily: FontFamily.serif,
+    fontSize: 28,
+    fontWeight: '600',
+    color: INK,
+    lineHeight: 28,
+  },
+  comparePrice: {
+    fontFamily:         FontFamily.sans,
+    fontSize:           14,
+    color:              Colors.ink4,
+    textDecorationLine: 'line-through',
+  },
+  discountInline: {
+    fontFamily:  FontFamily.sans,
+    fontSize:    12,
+    fontWeight:  '600',
+    color:       Colors.accent,
+  },
+
+  // ── Purchase bar ───────────────────────────────────────────────────────────
+  purchaseBar: {
+    backgroundColor:   Colors.surface,
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
+    paddingHorizontal: Space[4],
+    paddingTop:        Space[3],
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               Space[3],
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Space[2],
+    flexShrink:    0,
+  },
+  stepBtn: {
+    width:           36,
+    height:          36,
+    borderRadius:    18,
+    backgroundColor: Colors.surfaceSoft,
+    borderWidth:     1,
+    borderColor:     Colors.rule,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  stepCount: {
+    fontFamily: FontFamily.sans,
+    fontSize: 15,
+    fontWeight: '600',
+    color: INK,
+    minWidth: 18,
+    textAlign: 'center',
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space[4],
+  },
+});

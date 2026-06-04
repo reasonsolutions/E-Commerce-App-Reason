@@ -11,7 +11,7 @@ const styles = StyleSheet.create({
 
   // ── TopBar ───────────────────────────────────────────────────────────────────
   topBar: {
-    backgroundColor: '#16130F',
+    backgroundColor: Colors.surface,
     zIndex:          10,
   },
   topBarRow: {
@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
     fontFamily:    FontFamily.serifItalic,
     fontSize:      30,
     fontWeight:    '700',
-    color:         '#FFFFFF',
+    color:         Colors.ink1,
     letterSpacing: -0.1,
   },
   wordmarkDot: {
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     justifyContent:    'center',
     paddingHorizontal: 3,
     borderWidth:       1.5,
-    borderColor:       '#16130F',
+    borderColor:       Colors.surface,
   },
   cartBadgeText: {
     ...Type.label,
@@ -74,9 +74,9 @@ const styles = StyleSheet.create({
     justifyContent:    'space-between',
     paddingHorizontal: Space.screenH,
     paddingVertical:   Space[2] + 2,
-    backgroundColor:   'rgba(192,98,59,0.16)',
+    backgroundColor:   'rgba(178,90,61,0.08)',
     borderTopWidth:    StyleSheet.hairlineWidth,
-    borderTopColor:    'rgba(255,255,255,0.06)',
+    borderTopColor:    Colors.rule,
   },
   resumeLeft: {
     flexDirection: 'row',
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     fontFamily:  FontFamily.sans,
     fontSize:    12.5,
     fontWeight:  '500',
-    color:       '#F3E9E2',
+    color:       Colors.ink2,
   },
   resumeRight: {
     flexDirection: 'row',

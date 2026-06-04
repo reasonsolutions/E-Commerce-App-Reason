@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { SavedCartItemInterface } from '../api/interfaces';
 import { ErrorState } from '../components/system';
-import { Colors, Space, Radius, Shadow } from '../theme';
+import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
@@ -506,9 +506,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           </View>
         </ScrollView>
 
-        {/* ── Summary panel — sticky at bottom ─────────────────────────── */}
+        {/* ── Summary panel — flush, same surface ──────────────────────── */}
         <Animated.View style={[styles.summaryPanel, summaryAnim, { paddingBottom: insets.bottom + Space[4] }]}>
-          <View style={styles.summaryRule} />
+          <View style={styles.summaryTopRule} />
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
@@ -523,7 +523,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           {totalSavings > 0 && (
             <View style={styles.summaryRow}>
               <Text style={styles.savingsLabel}>You save</Text>
-              <Text style={styles.savingsValue}>Rs {totalSavings.toFixed(0)}</Text>
+              <Text style={styles.savingsValue}>− Rs {totalSavings.toFixed(0)}</Text>
             </View>
           )}
 
@@ -546,10 +546,6 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
               <Text style={styles.checkoutBtnText}>Checkout</Text>
             </TouchableOpacity>
           </Animated.View>
-
-          <Text style={styles.summaryNote}>
-            Address & payment on the next step
-          </Text>
         </Animated.View>
       </View>
     );
@@ -557,45 +553,41 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
-      {/* ── Dark editorial header ─────────────────────────────────────── */}
+      {/* ── Light inline header ───────────────────────────────────────── */}
       <Animated.View
         style={[styles.header, { paddingTop: insets.top + Space[3] }, headerAnim]}
       >
         <View style={styles.headerRow}>
           <TouchableOpacity
-            style={styles.backBtn}
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Icon name="chevron-back" size={20} color="#FFFFFF" />
+            <Icon name="arrow-back" size={22} color={Colors.ink1} />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerEyebrow}>YOUR BAG</Text>
-            <Text style={styles.headerTitle}>
-              {!hasFetched
-                ? 'Your Bag'
-                : cartItems.length === 0
-                  ? 'Empty'
-                  : `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
-            </Text>
+            <Text style={styles.headerTitle}>My Bag</Text>
+            {hasFetched && itemCount > 0 ? (
+              <Text style={styles.headerCount}>{itemCount} {itemCount === 1 ? 'item' : 'items'}</Text>
+            ) : null}
           </View>
 
-          {cartItems.length > 0 ? (
+          {(isGuest ? guestItems.length : cartItems.length) > 0 ? (
             <TouchableOpacity
               onPress={clearCart}
               disabled={clearing}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.clearBtn}>{clearing ? '...' : 'Clear'}</Text>
+              <Text style={styles.clearBtn}>{clearing ? '…' : 'Clear'}</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.headerSpacer} />
           )}
         </View>
       </Animated.View>
+      <View style={styles.headerDivider} />
 
       {renderBody()}
 
@@ -618,7 +610,7 @@ const styles = StyleSheet.create({
 
   // ── Header ────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor:   Colors.ink1,
+    backgroundColor:   Colors.surface,
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[4],
   },
@@ -626,37 +618,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems:    'center',
   },
-  backBtn: {
-    width:           36,
-    height:          36,
-    borderRadius:    18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    justifyContent:  'center',
-    alignItems:      'center',
-  },
   headerCenter: {
     flex:              1,
     paddingHorizontal: Space[3],
     gap:               2,
   },
-  headerEyebrow: {
-    ...Type.label,
-    color:         'rgba(255,255,255,0.35)',
-    letterSpacing: 1.8,
-  },
   headerTitle: {
-    ...Type.title,
-    color:     '#FFFFFF',
-    fontSize:  26,
-    lineHeight: 26 * 1.1,
+    fontFamily:    FontFamily.serif,
+    fontSize:      22,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.3,
+  },
+  headerCount: {
+    ...Type.label,
+    color: Colors.ink4,
+  },
+  headerDivider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
   },
   headerSpacer: {
-    width: 36,
+    width: 32,
   },
   clearBtn: {
     ...Type.caption,
-    color:         'rgba(255,255,255,0.38)',
-    letterSpacing: 0.2,
+    color: Colors.ink3,
   },
 
   // ── Fill wrappers (error / empty / skeleton) ──────────────────────────────
@@ -858,16 +845,15 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
 
-  // ── Summary panel — surfaceDeep, flush ────────────────────────────────────
+  // ── Summary panel — same surface, no background shift ────────────────────
   summaryPanel: {
-    backgroundColor:   Colors.surfaceDeep,
+    backgroundColor:   Colors.surface,
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[4],
     paddingBottom:     Space[4],
     gap:               Space[3],
-    ...Shadow.sm,
   },
-  summaryRule: {
+  summaryTopRule: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
     marginBottom:    Space[1],
@@ -883,11 +869,11 @@ const styles = StyleSheet.create({
   },
   savingsLabel: {
     ...Type.caption,
-    color: Colors.accent,
+    color: Colors.ink2,
   },
   savingsValue: {
     ...Type.caption,
-    color: Colors.accent,
+    color: Colors.ink2,
   },
   summaryValue: {
     ...Type.caption,
@@ -909,13 +895,18 @@ const styles = StyleSheet.create({
     marginBottom:   Space[1],
   },
   summaryTotalLabel: {
-    ...Type.label,
-    color:         Colors.ink2,
-    letterSpacing: 1.4,
+    fontFamily:    FontFamily.serif,
+    fontSize:      17,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.2,
   },
   summaryTotalValue: {
-    ...Type.priceLarge,
-    color: Colors.ink1,
+    fontFamily:    FontFamily.serif,
+    fontSize:      24,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.5,
   },
 
   // Primary checkout CTA — ink1 pill, full-width
@@ -932,12 +923,6 @@ const styles = StyleSheet.create({
     ...Type.bodyStrong,
     color:         '#FFFFFF',
     letterSpacing: 0.3,
-  },
-  summaryNote: {
-    ...Type.caption,
-    color:     Colors.ink4,
-    textAlign: 'center',
-    fontSize:  12,
   },
 });
 

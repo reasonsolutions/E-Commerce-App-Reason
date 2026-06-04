@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -8,19 +8,19 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { clearSession } from '../utils/auth';
 import { useCart } from '../context/CartContext';
-import { BottomNavBar, Skeleton, FloatingLabelInput, PrimaryButton, ConfirmSheet } from '../components/ui';
-import { ErrorBanner } from '../components/ui';
+import {
+  BottomNavBar,
+  Skeleton,
+  ConfirmSheet,
+  EditProfileSheet,
+} from '../components/ui';
 import { getDeliveryAddresses } from '../api/address';
-import { postUpdateCustomer } from '../api/auth';
 import { DeliveryAddress } from './AddressScreen';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import type { LoggedInCustomerInterface } from '../api/interfaces';
@@ -29,7 +29,7 @@ import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
-import { useTactile } from '../hooks/useTactile';
+import { useAppToast } from '../hooks/useAppToast';
 
 type ProfileScreenProps = {
   navigation: {
@@ -39,276 +39,93 @@ type ProfileScreenProps = {
   };
 };
 
-// ── Section label ─────────────────────────────────────────────────────────────
-const SectionLabel: React.FC<{ children: string }> = ({ children }) => (
-  <Text style={sectionStyles.sectionLabel}>{children}</Text>
-);
-
-// ── Single profile row ────────────────────────────────────────────────────────
-const ProfileRow: React.FC<{
-  label: string;
-  value?: string;
-  icon?: string;
-  onPress?: () => void;
-  isLast?: boolean;
-  destructive?: boolean;
-}> = ({ label, value, icon, onPress, isLast, destructive }) => {
-  const haptic = useHaptic();
-  const { animatedStyle, handlers } = useTactile();
-
-  const handlePress = () => {
-    if (!onPress) return;
-    if (destructive) {
-      haptic.warning();
-    } else {
-      haptic.light();
-    }
-    onPress();
-  };
-
-  const rowContent = (
-    <View style={[sectionStyles.row, !isLast && sectionStyles.rowDivider]}>
-      <Text style={[sectionStyles.rowLabel, destructive && sectionStyles.rowLabelDestructive]}>
-        {label}
-      </Text>
-      <View style={sectionStyles.rowRight}>
-        {value ? (
-          <Text style={sectionStyles.rowValue} numberOfLines={1}>{value}</Text>
-        ) : null}
-        {icon ? (
-          <Icon
-            name={icon}
-            size={15}
-            color={destructive ? Colors.danger : Colors.ink4}
-          />
-        ) : null}
-      </View>
-    </View>
-  );
-
-  if (!onPress) return rowContent;
-
+// ── Avatar initials circle ────────────────────────────────────────────────────
+const Avatar: React.FC<{ name: string }> = ({ name }) => {
+  const parts    = name.trim().split(/\s+/);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
   return (
-    <Animated.View style={animatedStyle}>
-      <TouchableOpacity
-        {...handlers}
-        onPress={handlePress}
-        activeOpacity={1}
-      >
-        {rowContent}
-      </TouchableOpacity>
-    </Animated.View>
+    <View style={avatarStyles.circle}>
+      <Text style={avatarStyles.text}>{initials}</Text>
+    </View>
   );
 };
 
-const sectionStyles = StyleSheet.create({
-  sectionLabel: {
-    ...Type.label,
-    color:             Colors.ink4,
-    marginBottom:      Space[2],
-    paddingHorizontal: 1,
+const avatarStyles = StyleSheet.create({
+  circle: {
+    width:           52,
+    height:          52,
+    borderRadius:    26,
+    backgroundColor: Colors.surfaceDeep,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
-  row: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space[4],
-    minHeight: 50,
-  },
-  rowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.rule,
-  },
-  rowRight: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            Space[2],
-    flex:           1,
-    justifyContent: 'flex-end',
-  },
-  rowLabel: {
-    ...Type.body,
-    flexShrink: 0,
-  },
-  rowLabelDestructive: {
-    color: Colors.danger,
-  },
-  rowValue: {
-    ...Type.caption,
-    textAlign:   'right',
-    flexShrink:  1,
-    marginLeft:  Space[4],
+  text: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      18,
+    fontWeight:    '400',
+    color:         Colors.ink3,
+    letterSpacing: 0.5,
   },
 });
 
-// ── Edit modal ────────────────────────────────────────────────────────────────
-const EditProfileModal: React.FC<{
-  session: LoggedInCustomerInterface;
-  visible: boolean;
-  onClose: () => void;
-  onSaved: (updated: LoggedInCustomerInterface) => void;
-}> = ({ session, visible, onClose, onSaved }) => {
-  const insets = useSafeAreaInsets();
+// ── Menu row ──────────────────────────────────────────────────────────────────
+const MenuRow: React.FC<{
+  icon: string;
+  label: string;
+  sub: string;
+  onPress: () => void;
+  isLast?: boolean;
+}> = ({ icon, label, sub, onPress, isLast }) => {
   const haptic = useHaptic();
-
-  const [name,     setName]     = useState(session.CustomerName  ?? '');
-  const [email,    setEmail]    = useState(session.EmailID       ?? '');
-  const [mobile,   setMobile]   = useState(session.MobileNumber !== undefined ? String(session.MobileNumber) : '');
-  const [saving,   setSaving]   = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  // Reset fields whenever modal opens
-  useEffect(() => {
-    if (visible) {
-      setName(session.CustomerName ?? '');
-      setEmail(session.EmailID ?? '');
-      setMobile(session.MobileNumber !== undefined ? String(session.MobileNumber) : '');
-      setSaveError(null);
-    }
-  }, [visible, session]);
-
-  const handleSave = useCallback(async () => {
-    if (saving) return;
-    setSaveError(null);
-
-    if (!name.trim() || !email.trim() || !mobile.trim()) {
-      setSaveError('Name, email and mobile are required.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await postUpdateCustomer({
-        CustomerProfileCode: session.CustomerProfileCode,
-        CustomerName:        name.trim(),
-        EmailID:             email.trim(),
-        MobileNumber:        mobile.trim(),
-        CountryCode:         230,
-      });
-
-      if (res?.statusCode !== 1) {
-        setSaveError(res?.userMessage || 'Update failed. Please try again.');
-        setSaving(false);
-        return;
-      }
-
-      const updated: LoggedInCustomerInterface = {
-        ...session,
-        CustomerName:  name.trim(),
-        EmailID:       email.trim(),
-        MobileNumber:  Number(mobile.trim()),
-      };
-      await AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(updated));
-      haptic.success();
-      setSaving(false);
-      onSaved(updated);
-    } catch (err: any) {
-      setSaveError(err?.message ?? 'Something went wrong.');
-      setSaving(false);
-    }
-  }, [saving, name, email, mobile, session, haptic, onSaved]);
-
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
+    <TouchableOpacity
+      onPress={() => { haptic.light(); onPress(); }}
+      activeOpacity={0.7}
+      style={[menuRowStyles.row, !isLast && menuRowStyles.border]}
     >
-      <View style={[editStyles.root, { paddingTop: insets.top + Space[2] }]}>
-        {/* Sheet header */}
-        <View style={editStyles.sheetHeader}>
-          <TouchableOpacity
-            onPress={onClose}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Icon name="close" size={22} color={Colors.ink2} />
-          </TouchableOpacity>
-          <Text style={editStyles.sheetTitle}>Edit Profile</Text>
-          <View style={{ width: 22 }} />
-        </View>
-
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <ScrollView
-            contentContainerStyle={editStyles.fields}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {saveError ? (
-              <ErrorBanner title="Update failed" body={saveError} onRetry={handleSave} />
-            ) : null}
-
-            <FloatingLabelInput
-              label="Full Name"
-              value={name}
-              onChangeText={setName}
-              autoCapitalize="words"
-              returnKeyType="next"
-              activeColor={Colors.ink1}
-            />
-            <FloatingLabelInput
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              returnKeyType="next"
-              activeColor={Colors.ink1}
-            />
-            <FloatingLabelInput
-              label="Mobile Number"
-              value={mobile}
-              onChangeText={setMobile}
-              keyboardType="phone-pad"
-              returnKeyType="done"
-              onSubmitEditing={handleSave}
-              activeColor={Colors.ink1}
-            />
-            <View style={editStyles.ctaWrap}>
-              <PrimaryButton
-                label={saving ? '···' : 'Save changes'}
-                onPress={handleSave}
-                isDisabled={saving}
-              />
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+      <View style={menuRowStyles.iconWrap}>
+        <Icon name={icon} size={20} color={Colors.ink2} />
       </View>
-    </Modal>
+      <View style={menuRowStyles.textWrap}>
+        <Text style={menuRowStyles.label}>{label}</Text>
+        <Text style={menuRowStyles.sub}>{sub}</Text>
+      </View>
+      <Icon name="chevron-forward" size={16} color={Colors.ink4} />
+    </TouchableOpacity>
   );
 };
 
-const editStyles = StyleSheet.create({
-  root: {
-    flex:            1,
-    backgroundColor: Colors.surface,
-  },
-  sheetHeader: {
+const menuRowStyles = StyleSheet.create({
+  row: {
     flexDirection:     'row',
     alignItems:        'center',
-    justifyContent:    'space-between',
-    paddingHorizontal: Space.screenH,
     paddingVertical:   Space[4],
+    gap:               Space[4],
+  },
+  border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.rule,
   },
-  sheetTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      17,
-    fontWeight:    '400',
+  iconWrap: {
+    width:  28,
+    alignItems: 'center',
+  },
+  textWrap: {
+    flex: 1,
+    gap:  2,
+  },
+  label: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      15,
+    fontWeight:    '500',
     color:         Colors.ink1,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
-  fields: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[8],
-    paddingBottom:     Space[8],
-    gap:               Space[8],
-  },
-  ctaWrap: {
-    marginTop: Space[4],
+  sub: {
+    ...Type.caption,
+    color: Colors.ink4,
   },
 });
 
@@ -316,45 +133,48 @@ const editStyles = StyleSheet.create({
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const toast  = useAppToast();
   const { setCartCount } = useCart();
 
-  const headerAnim   = useEntrance(0);
-  const infoAnim     = useEntrance(80);
-  const addressAnim  = useEntrance(160);
-  const activityAnim = useEntrance(240);
-  const logoutAnim   = useEntrance(300);
+  const cardAnim    = useEntrance(60);
+  const menuAnim    = useEntrance(140);
+  const logoutAnim  = useEntrance(220);
 
-  const [session, setSession]           = useState<LoggedInCustomerInterface | null>(null);
-  const [primaryAddress, setPrimaryAddress] = useState<DeliveryAddress | null>(null);
-  const [editVisible, setEditVisible]   = useState(false);
+  const [session,       setSession]       = useState<LoggedInCustomerInterface | null>(null);
+  const [addressCount,  setAddressCount]  = useState<number>(0);
+  const [editVisible,   setEditVisible]   = useState(false);
   const [logoutVisible, setLogoutVisible] = useState(false);
 
-  // Re-read session on every focus so in-app edits and external changes are reflected
   useFocusEffect(useCallback(() => {
-    AsyncStorage.getItem(STORAGE_KEYS.userData).then(raw => {
-      if (!raw) return;
-      try { setSession(JSON.parse(raw)); } catch {}
-    });
-  }, []));
+    let cancelled = false;
 
-  useEffect(() => {
-    if (!session?.CustomerProfileCode) return;
-    getDeliveryAddresses(session.CustomerProfileCode).then(res => {
-      if (res.statusCode !== 1) return;
-      const list: DeliveryAddress[] = res.result || [];
-      setPrimaryAddress(list.find(a => a.IsPrimary) ?? list[0] ?? null);
-    }).catch(() => {});
-  }, [session?.CustomerProfileCode]);
+    const load = async () => {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+      if (cancelled || !raw) return;
+      let parsed: LoggedInCustomerInterface;
+      try { parsed = JSON.parse(raw); } catch { return; }
+      if (!cancelled) setSession(parsed);
+
+      if (!parsed.CustomerProfileCode) return;
+      try {
+        const res = await getDeliveryAddresses(parsed.CustomerProfileCode);
+        if (cancelled) return;
+        if (res.statusCode === 1) {
+          const list: DeliveryAddress[] = res.result || [];
+          setAddressCount(list.length);
+        }
+      } catch {}
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, []));
 
   const handleSaved = useCallback((updated: LoggedInCustomerInterface) => {
     setSession(updated);
     setEditVisible(false);
-  }, []);
-
-  const handleLogout = () => {
-    haptic.warning();
-    setLogoutVisible(true);
-  };
+    toast.success({ title: 'Profile updated' });
+  }, [toast]);
 
   const confirmLogout = async () => {
     setLogoutVisible(false);
@@ -363,135 +183,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
   };
 
-  const displayName  = session?.CustomerName || '—';
-  const displayEmail = session?.EmailID      || '—';
+  const displayName   = session?.CustomerName  || '—';
+  const displayEmail  = session?.EmailID       || '—';
+  const displayMobile = session?.MobileNumber !== undefined ? String(session.MobileNumber) : null;
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
       {session && (
-        <EditProfileModal
+        <EditProfileSheet
           session={session}
-          visible={editVisible}
+          isOpen={editVisible}
           onClose={() => setEditVisible(false)}
           onSaved={handleSaved}
         />
       )}
-
-      {/* Dark editorial header */}
-      <Animated.View
-        style={[styles.header, { paddingTop: insets.top + Space[2] }, headerAnim]}
-      >
-        <Text style={styles.eyebrow}>MY ACCOUNT</Text>
-        <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
-        <Text style={styles.displayEmail} numberOfLines={1}>{displayEmail}</Text>
-        <View style={styles.headerSeam} />
-      </Animated.View>
-
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + Space[8] + 60 },
-        ]}
-      >
-        {/* Account */}
-        <Animated.View style={infoAnim}>
-          <View style={styles.sectionHeader}>
-            <Text style={[sectionStyles.sectionLabel, { marginBottom: 0 }]}>ACCOUNT</Text>
-            {session ? (
-              <TouchableOpacity
-                onPress={() => { haptic.light(); setEditVisible(true); }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.editLink}>Edit</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-          {!session ? (
-            <View style={styles.skeletonBlock}>
-              <Skeleton height={12} width="40%" radius={Radius.xs} />
-              <Skeleton height={12} width="60%" radius={Radius.xs} />
-              <Skeleton height={12} width="50%" radius={Radius.xs} />
-            </View>
-          ) : (
-            <>
-              <ProfileRow label="Name"   value={displayName} />
-              <ProfileRow
-                label="Mobile"
-                value={session.MobileNumber !== undefined ? String(session.MobileNumber) : '—'}
-              />
-              <ProfileRow label="Email"  value={displayEmail} isLast />
-            </>
-          )}
-        </Animated.View>
-
-        {/* Address */}
-        <Animated.View style={[styles.sectionBlock, addressAnim]}>
-          <SectionLabel>ADDRESS</SectionLabel>
-          {primaryAddress ? (
-            <View style={styles.addressBlock}>
-              <Text style={styles.addressName}>{primaryAddress.CustomerName}</Text>
-              <Text style={styles.addressLine}>
-                {[primaryAddress.Address, primaryAddress.StreetName].filter(Boolean).join(', ')}
-              </Text>
-              {primaryAddress.Landmark ? (
-                <Text style={styles.addressLine}>{primaryAddress.Landmark}</Text>
-              ) : null}
-              <Text style={styles.addressLine}>
-                {[primaryAddress.City, primaryAddress.Zipcode].filter(Boolean).join(' · ')}
-              </Text>
-              <Text style={styles.addressMobile}>{String(primaryAddress.MobileNumber)}</Text>
-            </View>
-          ) : (
-            <View style={styles.addressEmpty}>
-              <Text style={styles.addressEmptyText}>No address saved.</Text>
-            </View>
-          )}
-          <View style={styles.divider} />
-          <ProfileRow
-            label="Manage addresses"
-            icon="chevron-forward"
-            onPress={() => navigation.navigate('Address')}
-            isLast
-          />
-        </Animated.View>
-
-        {/* Activity */}
-        <Animated.View style={[styles.sectionBlock, activityAnim]}>
-          <SectionLabel>ACTIVITY</SectionLabel>
-          <ProfileRow
-            label="Order History"
-            icon="chevron-forward"
-            onPress={() => navigation.navigate('Orders')}
-          />
-          <ProfileRow
-            label="Saved Items"
-            icon="chevron-forward"
-            onPress={() => navigation.navigate('Wishlist')}
-            isLast
-          />
-        </Animated.View>
-
-        {/* Log out */}
-        <Animated.View style={[styles.logoutBlock, logoutAnim]}>
-          <ProfileRow
-            label="Log out"
-            icon="log-out-outline"
-            onPress={handleLogout}
-            destructive
-            isLast
-          />
-        </Animated.View>
-      </ScrollView>
-
-      <BottomNavBar
-        activeTab="Profile"
-        onNavigate={(route) => navigation.navigate(route)}
-        onNavigateToAuth={(screen) => navigation.navigate(screen)}
-      />
 
       {logoutVisible && (
         <ConfirmSheet
@@ -503,48 +210,124 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           destructive
         />
       )}
+
+      {/* ── Inline light header ───────────────────────────────────────────────── */}
+      <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="arrow-back" size={22} color={Colors.ink1} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          onPress={() => { haptic.light(); setEditVisible(true); }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          disabled={!session}
+        >
+          <Icon name="create-outline" size={22} color={session ? Colors.ink1 : Colors.ink5} />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.headerDivider} />
+
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Space[8] + 60 },
+        ]}
+      >
+        {/* ── Profile identity ─────────────────────────────────────────────── */}
+        <Animated.View style={[styles.profileCard, cardAnim]}>
+          {session ? (
+            <Avatar name={displayName} />
+          ) : (
+            <View style={[avatarStyles.circle, { backgroundColor: Colors.surfaceSoft }]} />
+          )}
+          <View style={styles.profileInfo}>
+            {session ? (
+              <>
+                <Text style={styles.profileName}>{displayName}</Text>
+                <Text style={styles.profileMeta}>
+                  {displayMobile ?? displayEmail}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Skeleton height={16} width={160} radius={Radius.xs} />
+                <Skeleton height={11} width={120} radius={Radius.xs} style={{ marginTop: Space[2] }} />
+              </>
+            )}
+          </View>
+        </Animated.View>
+
+        {/* ── Menu list ────────────────────────────────────────────────────── */}
+        <Animated.View style={[styles.menuCard, menuAnim]}>
+          <MenuRow
+            icon="heart-outline"
+            label="My Wishlist"
+            sub="View saved products"
+            onPress={() => navigation.navigate('Wishlist')}
+          />
+          <MenuRow
+            icon="cube-outline"
+            label="Orders"
+            sub="Track and reorder"
+            onPress={() => navigation.navigate('Orders')}
+          />
+          <MenuRow
+            icon="location-outline"
+            label="Addresses"
+            sub={addressCount > 0 ? `${addressCount} saved address${addressCount !== 1 ? 'es' : ''}` : 'Manage delivery addresses'}
+            onPress={() => navigation.navigate('AddressManagement')}
+          />
+          <MenuRow
+            icon="mail-outline"
+            label="Email"
+            sub={displayEmail}
+            onPress={() => { haptic.light(); setEditVisible(true); }}
+            isLast
+          />
+        </Animated.View>
+
+        {/* ── Log out ──────────────────────────────────────────────────────── */}
+        <Animated.View style={[styles.logoutBlock, logoutAnim]}>
+          <TouchableOpacity
+            onPress={() => { haptic.warning(); setLogoutVisible(true); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </ScrollView>
+
+      <BottomNavBar
+        activeTab="Profile"
+        onNavigate={(route) => navigation.navigate(route)}
+        onNavigateToAuth={(screen) => navigation.navigate(screen)}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    flex:            1,
     backgroundColor: Colors.surface,
   },
 
   // ── Header ───────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor:   Colors.ink1,
+    flexDirection:     'row',
+    alignItems:        'center',
     paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[5],
-    gap:               4,
+    paddingBottom:     Space[3],
+    backgroundColor:   Colors.surface,
   },
-  eyebrow: {
-    ...Type.label,
-    color:        'rgba(255,255,255,0.30)',
-    marginBottom: Space[1],
-  },
-  displayName: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      26,
-    fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.5,
-    lineHeight:    26 * 1.1,
-  },
-  displayEmail: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      11,
-    color:         'rgba(255,255,255,0.38)',
-    letterSpacing: 0.2,
-    marginTop:     2,
-  },
-  headerSeam: {
-    height:           StyleSheet.hairlineWidth,
-    backgroundColor:  'rgba(255,255,255,0.06)',
-    marginTop:        Space[4],
-    marginHorizontal: -Space.screenH,
+  headerDivider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
   },
 
   // ── Scroll ───────────────────────────────────────────────────────────────────
@@ -553,71 +336,53 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Space.screenH,
-    paddingTop:        Space[5],
+    paddingTop:        Space[6],
   },
 
-  // ── Section spacing ───────────────────────────────────────────────────────────
-  sectionBlock: {
-    marginTop: Space[6],
+  // ── Profile identity (flat — sits directly on surface) ───────────────────────
+  profileCard: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Space[4],
+    paddingBottom: Space[6],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+    marginBottom:  Space[2],
   },
-  logoutBlock: {
-    marginTop:       Space[8],
-    borderTopWidth:  StyleSheet.hairlineWidth,
-    borderTopColor:  Colors.rule,
-    paddingTop:      Space[2],
+  profileInfo: {
+    flex: 1,
+    gap:  3,
   },
-
-  // ── Address block ─────────────────────────────────────────────────────────────
-  addressBlock: {
-    paddingVertical: Space[4],
-    gap:             4,
-  },
-  addressName: {
+  profileName: {
     fontFamily:    FontFamily.serif,
-    fontSize:      15,
+    fontSize:      24,
     fontWeight:    '400',
     color:         Colors.ink1,
-    letterSpacing: -0.1,
-    marginBottom:  2,
+    letterSpacing: -0.5,
+    lineHeight:    26,
   },
-  addressLine: {
-    ...Type.caption,
-    color:      Colors.ink2,
-    lineHeight: 18,
-  },
-  addressMobile: {
+  profileMeta: {
     fontFamily:    FontFamily.mono,
     fontSize:      11,
     color:         Colors.ink4,
     letterSpacing: 0.2,
-    marginTop:     4,
-  },
-  addressEmpty: {
-    paddingVertical: Space[4],
-  },
-  addressEmptyText: {
-    ...Type.caption,
-    color: Colors.ink4,
-  },
-  divider: {
-    height:          StyleSheet.hairlineWidth,
-    backgroundColor: Colors.rule,
-  },
-  skeletonBlock: {
-    paddingVertical: Space[4],
-    gap:             Space[3],
   },
 
-  // ── Account section header row ────────────────────────────────────────────────
-  sectionHeader: {
-    flexDirection:  'row',
-    alignItems:     'baseline',
-    justifyContent: 'space-between',
-    marginBottom:   Space[2],
+  // ── Menu list (flat — no card border) ────────────────────────────────────────
+  menuCard: {
+    paddingTop: Space[2],
   },
-  editLink: {
-    ...Type.caption,
-    color: Colors.ink3,
+
+  // ── Logout ────────────────────────────────────────────────────────────────────
+  logoutBlock: {
+    marginTop:    Space[10],
+    alignItems:   'flex-start',
+  },
+  logoutText: {
+    fontFamily:  FontFamily.sans,
+    fontSize:    15,
+    fontWeight:  '600',
+    color:       Colors.danger,
   },
 });
 

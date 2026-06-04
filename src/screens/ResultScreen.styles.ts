@@ -15,15 +15,37 @@ export const HERO_IMG_H = SCREEN_W * 0.56;
 export const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.surface,
   },
 
   // ── Header ──────────────────────────────────────────────────────────────────
   headerWrap: {
-    zIndex: 2,
+    backgroundColor: Colors.surface,
+    zIndex:          2,
+  },
+  headerRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: Space.screenH,
+    paddingVertical:   Space[3],
+    gap:               Space[3],
+  },
+  headerCenter: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      22,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.3,
+  },
+  headerDivider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
   },
 
-  // ── Filter pill (rightSlot) ──────────────────────────────────────────────────
+  // ── Filter pill ──────────────────────────────────────────────────────────────
   filterPill: {
     flexDirection:     'row',
     alignItems:        'center',
@@ -32,12 +54,12 @@ export const styles = StyleSheet.create({
     paddingHorizontal: Space[2] + 2,
     borderRadius:      Radius.pill,
     borderWidth:       1,
-    borderColor:       'rgba(255,255,255,0.18)',
+    borderColor:       Colors.rule,
   },
   filterPillText: {
     fontFamily:    FontFamily.mono,
     fontSize:      11,
-    color:         'rgba(255,255,255,0.70)',
+    color:         Colors.ink3,
     letterSpacing: 0.5,
   },
   filterPillTextActive: {
@@ -48,14 +70,6 @@ export const styles = StyleSheet.create({
     height:          6,
     borderRadius:    3,
     backgroundColor: Colors.accent,
-  },
-
-  // ── Search band ──────────────────────────────────────────────────────────────
-  searchBand: {
-    backgroundColor:   Colors.ink1,
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[2],
-    paddingBottom:     Space[3],
   },
 
   // ── Scroll canvas ────────────────────────────────────────────────────────────

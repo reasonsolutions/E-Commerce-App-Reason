@@ -7,11 +7,16 @@ import type {
 } from '../interfaces';
 
 interface RawOrderHistoryItem {
-  InventoryID: number;
-  ItemID:      number;
-  BrandID:     number;
-  BrandName:   string;
-  Price:       number;
+  InventoryID:  number;
+  ItemID:       number;
+  BrandID:      number;
+  BrandName:    string;
+  Price:        number;
+  Quantity:     number;
+  Name:         string;
+  Variant:      string;
+  Images:       string;
+  OrderStatus:  number;
   [key: string]: unknown;
 }
 
@@ -25,6 +30,7 @@ export interface OrderHistoryFilters {
   sortBy?:   'asc' | 'desc';
   dateFrom?: string | null;
   dateTo?:   string | null;
+  status?:   'all' | 'delivered' | 'cancelled' | 'returned';
 }
 
 export const placeOrder = async (data: PlaceOrderInterface) => {
@@ -55,6 +61,8 @@ export const postOrderHistory = async (
     return { items: [], hasMore: false };
   }
 
+  const PAGE_SIZE = payload.PageSize ?? 10;
+
   const items = raw.result.flatMap((order: RawOrderHistoryGroup) =>
     (order.Items ?? []).map((item: RawOrderHistoryItem) => ({
       ...item,
@@ -68,7 +76,9 @@ export const postOrderHistory = async (
     })),
   );
 
-  return { items, hasMore: items.length > 0 };
+  // hasMore is true only if the server returned a full page of groups —
+  // a partial page means we've reached the end.
+  return { items, hasMore: raw.result.length >= PAGE_SIZE };
 };
 
 export const postCnfOrderDetail = async (OrderMasterCode: string, CustomerProfileCode: number) => {

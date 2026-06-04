@@ -332,7 +332,29 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         return;
       }
       setCartCount(0);
-      navigation.navigate('OrderSuccess', { orderNumber: response.result?.OrderNumber ?? '' });
+      const selectedAddr = (addresses ?? []).find(
+        a => a.OrderDeliveryAddressCode === selectedAddressCode,
+      );
+      navigation.navigate('OrderSuccess', {
+        orderNumber:    response.result?.OrderNumber ?? '',
+        itemCount:      cartItems.length,
+        orderTotal:     total,
+        orderCurrency:  'MUR',
+        orderTimestamp: response.result?.CreatedDate ?? null,
+        orderStatus:    response.result?.OrderStatus ?? null,
+        deliveryAddress: selectedAddr
+          ? {
+              street: [selectedAddr.Address, selectedAddr.StreetName].filter(Boolean).join(', '),
+              city:   selectedAddr.City ?? '',
+            }
+          : null,
+        cartItems: cartItems.map((item: SavedCartItemInterface) => ({
+          name:     item.Name,
+          quantity: item.Quantity,
+          price:    item.Price,
+          image:    item.Images?.split(';').filter(Boolean)[0] ?? '',
+        })),
+      });
     } catch (err: any) {
       setOrderError('Could not place your order. Please try again.');
     } finally {

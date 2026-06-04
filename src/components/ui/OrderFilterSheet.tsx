@@ -1,11 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Modal,
-  TextInput,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -16,7 +15,116 @@ import { FontFamily } from '../../theme/fonts';
 import { useHaptic } from '../../hooks/useHaptic';
 import type { OrderHistoryFilters } from '../../api/order';
 
-export type OrderSortKey = 'desc' | 'asc';
+export type OrderSortKey = 'desc' | 'asc' | '30d' | '6m' | '12m';
+export type OrderStatusKey = 'all' | 'delivered' | 'cancelled' | 'returned';
+
+function toISODate(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+function sortKeyToDates(key: OrderSortKey): { sortBy: 'asc' | 'desc'; dateFrom: string | null; dateTo: string | null } {
+  const now   = new Date();
+  const today = toISODate(now);
+
+  if (key === 'asc') return { sortBy: 'asc', dateFrom: null, dateTo: null };
+  if (key === '30d') {
+    const d = new Date(now); d.setDate(now.getDate() - 30);
+    return { sortBy: 'desc', dateFrom: toISODate(d), dateTo: today };
+  }
+  if (key === '6m') {
+    const d = new Date(now); d.setMonth(now.getMonth() - 6);
+    return { sortBy: 'desc', dateFrom: toISODate(d), dateTo: today };
+  }
+  if (key === '12m') {
+    const d = new Date(now); d.setFullYear(now.getFullYear() - 1);
+    return { sortBy: 'desc', dateFrom: toISODate(d), dateTo: today };
+  }
+  // 'desc' = Recent (default)
+  return { sortBy: 'desc', dateFrom: null, dateTo: null };
+}
+
+function filtersToSortKey(filters: OrderHistoryFilters): OrderSortKey {
+  if (filters.sortBy === 'asc') return 'asc';
+  if (!filters.dateFrom) return 'desc';
+  const now   = new Date();
+  const today = toISODate(now);
+  const d30   = new Date(now); d30.setDate(now.getDate() - 30);
+  const d6m   = new Date(now); d6m.setMonth(now.getMonth() - 6);
+  const d12m  = new Date(now); d12m.setFullYear(now.getFullYear() - 1);
+  if (filters.dateFrom === toISODate(d30)  && filters.dateTo === today) return '30d';
+  if (filters.dateFrom === toISODate(d6m)  && filters.dateTo === today) return '6m';
+  if (filters.dateFrom === toISODate(d12m) && filters.dateTo === today) return '12m';
+  return 'desc';
+}
+
+const SORT_OPTIONS: { key: OrderSortKey; label: string }[] = [
+  { key: 'desc', label: 'Recent' },
+  { key: '30d',  label: 'Last 30 Days' },
+  { key: '6m',   label: 'Last 6 Months' },
+  { key: '12m',  label: 'Last 12 Months' },
+];
+
+const STATUS_OPTIONS: { key: OrderStatusKey; label: string }[] = [
+  { key: 'all',       label: 'All Status' },
+  { key: 'delivered', label: 'Delivered' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'returned',  label: 'Returned' },
+];
+
+const RadioRow: React.FC<{
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  isLast?: boolean;
+}> = ({ label, selected, onPress, isLast }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.7}
+    style={[radioStyles.row, !isLast && radioStyles.border]}
+  >
+    <Text style={radioStyles.label}>{label}</Text>
+    <View style={[radioStyles.outer, selected && radioStyles.outerSelected]}>
+      {selected && <View style={radioStyles.inner} />}
+    </View>
+  </TouchableOpacity>
+);
+
+const radioStyles = StyleSheet.create({
+  row: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'space-between',
+    paddingVertical: Space[4],
+  },
+  border: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  label: {
+    fontFamily: FontFamily.sans,
+    fontSize:   15,
+    fontWeight: '400',
+    color:      Colors.ink1,
+  },
+  outer: {
+    width:        20,
+    height:       20,
+    borderRadius: 10,
+    borderWidth:  1.5,
+    borderColor:  Colors.ink4,
+    alignItems:   'center',
+    justifyContent: 'center',
+  },
+  outerSelected: {
+    borderColor: Colors.ink1,
+  },
+  inner: {
+    width:           10,
+    height:          10,
+    borderRadius:    5,
+    backgroundColor: Colors.ink1,
+  },
+});
 
 interface OrderFilterSheetProps {
   visible:    boolean;
@@ -25,26 +133,6 @@ interface OrderFilterSheetProps {
   onClearAll: () => void;
   current:    OrderHistoryFilters;
 }
-
-const SORT_OPTIONS: { key: OrderSortKey; label: string }[] = [
-  { key: 'desc', label: 'Newest first' },
-  { key: 'asc',  label: 'Oldest first' },
-];
-
-const Chip: React.FC<{ label: string; selected: boolean; onPress: () => void }> = ({
-  label, selected, onPress,
-}) => (
-  <TouchableOpacity
-    onPress={onPress}
-    activeOpacity={0.75}
-    style={[styles.chip, selected && styles.chipSelected]}
-  >
-    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-  </TouchableOpacity>
-);
-
-// yyyy-MM-dd validation
-const isValidDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 export const OrderFilterSheet: React.FC<OrderFilterSheetProps> = ({
   visible,
@@ -56,54 +144,26 @@ export const OrderFilterSheet: React.FC<OrderFilterSheetProps> = ({
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
 
-  const [sortBy,   setSortBy]   = useState<OrderSortKey>(current.sortBy ?? 'desc');
-  const [dateFrom, setDateFrom] = useState(current.dateFrom ?? '');
-  const [dateTo,   setDateTo]   = useState(current.dateTo ?? '');
-  const [dateError, setDateError] = useState('');
+  const [sortKey, setSortKey]   = useState<OrderSortKey>(filtersToSortKey(current));
+  const [status,  setStatus]    = useState<OrderStatusKey>(current.status ?? 'all');
 
-  // Sync draft when sheet opens with current filters
   useEffect(() => {
     if (visible) {
-      setSortBy(current.sortBy ?? 'desc');
-      setDateFrom(current.dateFrom ?? '');
-      setDateTo(current.dateTo ?? '');
-      setDateError('');
+      setSortKey(filtersToSortKey(current));
+      setStatus(current.status ?? 'all');
     }
   }, [visible, current]);
 
-  const validate = (): boolean => {
-    if (dateFrom && !isValidDate(dateFrom)) {
-      setDateError('Date From must be yyyy-MM-dd');
-      return false;
-    }
-    if (dateTo && !isValidDate(dateTo)) {
-      setDateError('Date To must be yyyy-MM-dd');
-      return false;
-    }
-    if (dateFrom && dateTo && dateFrom > dateTo) {
-      setDateError('Date From cannot be after Date To');
-      return false;
-    }
-    setDateError('');
-    return true;
-  };
-
   const handleApply = () => {
-    if (!validate()) return;
     haptic.success();
-    onApply({
-      sortBy,
-      dateFrom: dateFrom || null,
-      dateTo:   dateTo   || null,
-    });
+    const dates = sortKeyToDates(sortKey);
+    onApply({ ...dates, status });
   };
 
   const handleClear = () => {
     haptic.light();
-    setSortBy('desc');
-    setDateFrom('');
-    setDateTo('');
-    setDateError('');
+    setSortKey('desc');
+    setStatus('all');
     onClearAll();
   };
 
@@ -120,65 +180,42 @@ export const OrderFilterSheet: React.FC<OrderFilterSheetProps> = ({
       >
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + Space[4] }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + Space[6] }]}>
           <View style={styles.handle} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>Filter & Sort</Text>
+            <Text style={styles.title}>Sort By:</Text>
             <TouchableOpacity onPress={handleClear} activeOpacity={0.7}>
-              <Text style={styles.clearBtn}>Clear all</Text>
+              <Text style={styles.clearBtn}>Reset</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Sort */}
-          <Text style={styles.sectionLabel}>SORT</Text>
-          <View style={styles.chipRow}>
-            {SORT_OPTIONS.map(opt => (
-              <Chip
-                key={opt.key}
-                label={opt.label}
-                selected={sortBy === opt.key}
-                onPress={() => { haptic.light(); setSortBy(opt.key); }}
-              />
-            ))}
-          </View>
+          {/* Sort options */}
+          {SORT_OPTIONS.map((opt, i) => (
+            <RadioRow
+              key={opt.key}
+              label={opt.label}
+              selected={sortKey === opt.key}
+              onPress={() => { haptic.light(); setSortKey(opt.key); }}
+              isLast={i === SORT_OPTIONS.length - 1}
+            />
+          ))}
 
           <View style={styles.divider} />
 
-          {/* Date range */}
-          <Text style={styles.sectionLabel}>DATE RANGE</Text>
-          <View style={styles.dateRow}>
-            <View style={styles.dateField}>
-              <Text style={styles.dateLabel}>FROM</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={dateFrom}
-                onChangeText={v => { setDateFrom(v); setDateError(''); }}
-                placeholder="yyyy-MM-dd"
-                placeholderTextColor={Colors.ink5}
-                keyboardType="numeric"
-                maxLength={10}
-                returnKeyType="next"
-              />
-            </View>
-            <View style={styles.dateSep} />
-            <View style={styles.dateField}>
-              <Text style={styles.dateLabel}>TO</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={dateTo}
-                onChangeText={v => { setDateTo(v); setDateError(''); }}
-                placeholder="yyyy-MM-dd"
-                placeholderTextColor={Colors.ink5}
-                keyboardType="numeric"
-                maxLength={10}
-                returnKeyType="done"
-              />
-            </View>
-          </View>
-          {dateError ? <Text style={styles.errorText}>{dateError}</Text> : null}
+          <Text style={styles.sectionLabel}>Status:</Text>
 
-          {/* Apply */}
+          {/* Status options */}
+          {STATUS_OPTIONS.map((opt, i) => (
+            <RadioRow
+              key={opt.key}
+              label={opt.label}
+              selected={status === opt.key}
+              onPress={() => { haptic.light(); setStatus(opt.key); }}
+              isLast={i === STATUS_OPTIONS.length - 1}
+            />
+          ))}
+
           <View style={styles.applyWrap}>
             <TouchableOpacity
               onPress={handleApply}
@@ -201,12 +238,12 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   sheet: {
     backgroundColor:      Colors.surface,
-    borderTopLeftRadius:  18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius:  20,
+    borderTopRightRadius: 20,
     paddingHorizontal:    Space.screenH,
     paddingTop:           Space[2],
   },
@@ -216,98 +253,43 @@ const styles = StyleSheet.create({
     height:          4,
     borderRadius:    2,
     alignSelf:       'center',
-    marginBottom:    Space[4],
+    marginBottom:    Space[5],
   },
   header: {
     flexDirection:  'row',
     alignItems:     'center',
     justifyContent: 'space-between',
-    marginBottom:   Space[5],
+    marginBottom:   Space[2],
   },
   title: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
-    fontWeight:    '400',
+    fontFamily:    FontFamily.sans,
+    fontSize:      17,
+    fontWeight:    '600',
     color:         Colors.ink1,
-    letterSpacing: -0.3,
+    letterSpacing: -0.1,
   },
   clearBtn: {
     ...Type.caption,
-    color:              Colors.ink3,
-    textDecorationLine: 'underline',
+    color: Colors.ink3,
   },
   sectionLabel: {
-    ...Type.label,
-    color:        Colors.ink4,
-    marginBottom: Space[3],
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap:      'wrap',
+    fontFamily:    FontFamily.sans,
+    fontSize:      17,
+    fontWeight:    '600',
+    color:         Colors.ink1,
+    letterSpacing: -0.1,
     marginBottom:  Space[2],
-  },
-  chip: {
-    paddingVertical:   Space[1] + 2,
-    paddingHorizontal: Space[3],
-    borderRadius:      Radius.pill,
-    borderWidth:       1,
-    borderColor:       Colors.rule,
-    backgroundColor:   Colors.surface,
-    marginBottom:      Space[2],
-    marginRight:       Space[2],
-  },
-  chipSelected: {
-    backgroundColor: Colors.ink1,
-    borderColor:     Colors.ink1,
-  },
-  chipText: {
-    ...Type.caption,
-    color: Colors.ink2,
-  },
-  chipTextSelected: {
-    color: '#FFFFFF',
   },
   divider: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
-    marginVertical:  Space[5],
-  },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems:    'flex-start',
-    marginBottom:  Space[2],
-  },
-  dateField: {
-    flex: 1,
-  },
-  dateSep: {
-    width: Space[3],
-  },
-  dateLabel: {
-    ...Type.label,
-    color:        Colors.ink4,
-    marginBottom: Space[1],
-  },
-  dateInput: {
-    fontFamily:      FontFamily.mono,
-    fontSize:        13,
-    color:           Colors.ink1,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.rule,
-    paddingVertical: Space[2],
-    letterSpacing:   0.3,
-  },
-  errorText: {
-    ...Type.caption,
-    color:       Colors.danger,
-    marginTop:   Space[1],
-    marginBottom: Space[2],
+    marginVertical:  Space[4],
   },
   applyWrap: {
-    marginTop:      Space[5],
+    marginTop:      Space[6],
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.rule,
-    paddingTop:     Space[3],
+    paddingTop:     Space[4],
   },
   applyBtn: {
     backgroundColor: Colors.ink1,

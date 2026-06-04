@@ -6,12 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Modal,
-  KeyboardAvoidingView,
-  Platform,
+  StatusBar,
   Animated,
   PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, Radius } from '../../theme';
 import { Type } from '../../theme/typography';
 import { FontFamily } from '../../theme/fonts';
@@ -24,7 +24,7 @@ const THUMB_R = 13;
 const TRACK_H = 3;
 const MIN_GAP = 0.05;
 
-// ── Dual-thumb price range slider — pure PanResponder, no Reanimated ──────────
+// ── Dual-thumb price range slider ─────────────────────────────────────────────
 const PriceRangeSlider: React.FC<{
   floor: number;
   ceiling: number;
@@ -35,8 +35,6 @@ const PriceRangeSlider: React.FC<{
   onDragStart: () => void;
   onDragEnd: () => void;
 }> = ({ floor, ceiling, valueMin, valueMax, onChangeMin, onChangeMax, onDragStart, onDragEnd }) => {
-  // Keep mutable refs for everything the PanResponder closures need —
-  // closures are created once, so they must read through refs to get current values.
   const trackWNum = useRef(0);
   const floorRef  = useRef(floor);
   const rangeRef  = useRef(ceiling - floor || 1);
@@ -45,33 +43,27 @@ const PriceRangeSlider: React.FC<{
   const startLoPx = useRef(0);
   const startHiPx = useRef(0);
 
-  // Pixel Animated.Values — driven directly, no interpolation
   const loPx = useRef(new Animated.Value(0)).current;
   const hiPx = useRef(new Animated.Value(0)).current;
 
-  // Labels update live during drag
   const [displayMin, setDisplayMin] = React.useState(valueMin);
   const [displayMax, setDisplayMax] = React.useState(valueMax);
 
-  // Helpers always read from refs — safe to call from PanResponder closures
   const fracToPx  = (f: number) => f * trackWNum.current;
   const pxToPrice = (px: number) =>
     Math.round(floorRef.current + (px / (trackWNum.current || 1)) * rangeRef.current);
 
-  // Recompute positions whenever bounds or track width change
   const reposition = () => {
     if (trackWNum.current === 0) return;
     loPx.setValue(fracToPx(loFrac.current));
     hiPx.setValue(fracToPx(hiFrac.current));
   };
 
-  // Track width known — set positions
   const onLayout = (w: number) => {
     trackWNum.current = w;
     reposition();
   };
 
-  // Bounds changed (products loaded) — update refs and reposition
   useEffect(() => {
     floorRef.current = floor;
     rangeRef.current = ceiling - floor || 1;
@@ -83,7 +75,6 @@ const PriceRangeSlider: React.FC<{
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floor, ceiling]);
 
-  // External value reset (clear-all) — re-sync fracs and positions
   useEffect(() => {
     loFrac.current = (valueMin - floorRef.current) / rangeRef.current;
     setDisplayMin(valueMin);
@@ -159,9 +150,7 @@ const PriceRangeSlider: React.FC<{
         onLayout={e => onLayout(e.nativeEvent.layout.width)}
       >
         <View style={sliderStyles.trackBg} />
-
         <Animated.View style={[sliderStyles.trackFill, { left: fillLeft, width: fillWidth }]} />
-
         <Animated.View
           {...loPanResponder.panHandlers}
           style={[sliderStyles.thumb, { transform: [{ translateX: loTransX }] }]}
@@ -180,9 +169,41 @@ const PriceRangeSlider: React.FC<{
   );
 };
 
+// ── Checkbox row ──────────────────────────────────────────────────────────────
+const CheckRow: React.FC<{
+  label: string;
+  checked: boolean;
+  onPress: () => void;
+  count?: number;
+}> = ({ label, checked, onPress, count }) => (
+  <TouchableOpacity style={styles.checkRow} onPress={onPress} activeOpacity={0.7}>
+    <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+      {checked && <Icon name="checkmark" size={12} color="#FFFFFF" />}
+    </View>
+    <Text style={styles.checkLabel} numberOfLines={1}>{label}</Text>
+    {count !== undefined && (
+      <Text style={styles.checkCount}>{count}</Text>
+    )}
+  </TouchableOpacity>
+);
+
+// ── Radio row ─────────────────────────────────────────────────────────────────
+const RadioRow: React.FC<{
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}> = ({ label, selected, onPress }) => (
+  <TouchableOpacity style={styles.radioRow} onPress={onPress} activeOpacity={0.7}>
+    <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
+      {selected && <View style={styles.radioInner} />}
+    </View>
+    <Text style={styles.radioLabel}>{label}</Text>
+  </TouchableOpacity>
+);
+
 // ── FilterSheet ───────────────────────────────────────────────────────────────
 
-interface FilterSheetProps {
+export interface FilterSheetProps {
   visible: boolean;
   onClose: () => void;
   onApply: () => void;
@@ -209,24 +230,14 @@ interface FilterSheetProps {
   priceCeiling?: number;
 }
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'default',    label: 'Default' },
-  { key: 'price_asc',  label: 'Price: Low to High' },
-  { key: 'price_desc', label: 'Price: High to Low' },
-  { key: 'newest',     label: 'Newest' },
-];
+type NavSection = 'sort' | 'category' | 'brand' | 'price' | 'offers';
 
-const Chip: React.FC<{ label: string; selected: boolean; onPress: () => void }> = ({
-  label, selected, onPress,
-}) => (
-  <TouchableOpacity
-    onPress={onPress}
-    activeOpacity={0.75}
-    style={[styles.chip, selected && styles.chipSelected]}
-  >
-    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-  </TouchableOpacity>
-);
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'default',    label: 'Relevance' },
+  { key: 'price_asc',  label: 'Price Low to High' },
+  { key: 'price_desc', label: 'Price High to Low' },
+  { key: 'newest',     label: 'Newest First' },
+];
 
 export const FilterSheet: React.FC<FilterSheetProps> = ({
   visible,
@@ -251,95 +262,85 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
   priceFloor = 0,
   priceCeiling = 10000,
 }) => {
-  const insets          = useSafeAreaInsets();
-  const haptic          = useHaptic();
-  const scrollRef       = useRef<ScrollView>(null);
-  const [scrollEnabled, setScrollEnabled] = useState(true);
+  const insets = useSafeAreaInsets();
+  const haptic = useHaptic();
+  const [activeSection, setActiveSection] = useState<NavSection>('sort');
+  const [sliderScrollEnabled, setSliderScrollEnabled] = useState(true);
 
   useEffect(() => {
-    if (visible) scrollRef.current?.scrollTo({ y: 0, animated: false });
+    if (visible) setActiveSection('sort');
   }, [visible]);
 
   const sliderMin = draftPriceMin !== '' ? Number(draftPriceMin) : priceFloor;
   const sliderMax = draftPriceMax !== '' ? Number(draftPriceMax) : priceCeiling;
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <KeyboardAvoidingView
-        style={styles.modalOuter}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.sheetBackground, { paddingBottom: insets.bottom + Space[4] }]}>
-          <View style={styles.sheetHandle} />
+  const hasActiveFilters =
+    draftCategories.length > 0 ||
+    draftBrands.length > 0 ||
+    draftPriceMin !== '' ||
+    draftPriceMax !== '' ||
+    draftDiscount ||
+    draftSortKey !== 'default';
 
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Filter & Sort</Text>
-            <TouchableOpacity onPress={() => { haptic.light(); onClearAll(); }} activeOpacity={0.7}>
-              <Text style={styles.sheetClearBtn}>Clear all</Text>
-            </TouchableOpacity>
-          </View>
+  const navItems: { key: NavSection; label: string; count?: number }[] = [
+    { key: 'sort',     label: 'Sort By',   count: draftSortKey !== 'default' ? 1 : undefined },
+    { key: 'category', label: 'Category',  count: draftCategories.length || undefined },
+    ...(!hideBrands ? [{ key: 'brand' as NavSection, label: 'Brand', count: draftBrands.length || undefined }] : []),
+    { key: 'price',   label: 'Price',     count: (draftPriceMin !== '' || draftPriceMax !== '') ? 1 : undefined },
+    { key: 'offers',  label: 'Offers',    count: draftDiscount ? 1 : undefined },
+  ];
 
-          <ScrollView
-            ref={scrollRef}
-            scrollEnabled={scrollEnabled}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.sheetContent}
-          >
-            <Text style={styles.sectionLabel}>SORT</Text>
-            <View style={styles.chipRow}>
-              {SORT_OPTIONS.map(opt => (
-                <Chip
-                  key={opt.key}
-                  label={opt.label}
-                  selected={draftSortKey === opt.key}
-                  onPress={() => { haptic.light(); setDraftSortKey(opt.key); }}
-                />
-              ))}
-            </View>
+  const renderPanel = () => {
+    switch (activeSection) {
+      case 'sort':
+        return (
+          <>
+            {SORT_OPTIONS.map(opt => (
+              <RadioRow
+                key={opt.key}
+                label={opt.label}
+                selected={draftSortKey === opt.key}
+                onPress={() => { haptic.light(); setDraftSortKey(opt.key); }}
+              />
+            ))}
+          </>
+        );
 
-            {sheetCategories.length > 0 && (
-              <>
-                <View style={styles.sectionDivider} />
-                <Text style={styles.sectionLabel}>CATEGORIES</Text>
-                <View style={styles.chipRow}>
-                  {sheetCategories.map(cat => (
-                    <Chip
-                      key={cat.CategoryId}
-                      label={cat.CategoryName}
-                      selected={draftCategories.includes(cat.CategoryId)}
-                      onPress={() => toggleDraftCategory(cat.CategoryId)}
-                    />
-                  ))}
-                </View>
-              </>
-            )}
+      case 'category':
+        return sheetCategories.length === 0 ? (
+          <Text style={styles.emptyPanelText}>No categories available</Text>
+        ) : (
+          <>
+            {sheetCategories.map(cat => (
+              <CheckRow
+                key={cat.CategoryId}
+                label={cat.CategoryName}
+                checked={draftCategories.includes(cat.CategoryId)}
+                onPress={() => { haptic.light(); toggleDraftCategory(cat.CategoryId); }}
+              />
+            ))}
+          </>
+        );
 
-            {!hideBrands && allBrandsFromSheet.length > 0 && (
-              <>
-                <View style={styles.sectionDivider} />
-                <Text style={styles.sectionLabel}>BRANDS</Text>
-                <View style={styles.chipRow}>
-                  {allBrandsFromSheet.map(brand => (
-                    <Chip
-                      key={brand.id}
-                      label={brand.name}
-                      selected={draftBrands.includes(brand.id)}
-                      onPress={() => toggleDraftBrand(brand.id)}
-                    />
-                  ))}
-                </View>
-              </>
-            )}
+      case 'brand':
+        return allBrandsFromSheet.length === 0 ? (
+          <Text style={styles.emptyPanelText}>No brands available</Text>
+        ) : (
+          <>
+            {allBrandsFromSheet.map(b => (
+              <CheckRow
+                key={b.id}
+                label={b.name}
+                checked={draftBrands.includes(b.id)}
+                onPress={() => { haptic.light(); toggleDraftBrand(b.id); }}
+              />
+            ))}
+          </>
+        );
 
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>PRICE RANGE</Text>
+      case 'price':
+        return (
+          <View style={styles.pricePanel}>
             <PriceRangeSlider
               key={`${priceFloor}-${priceCeiling}`}
               floor={priceFloor}
@@ -348,32 +349,105 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
               valueMax={sliderMax}
               onChangeMin={setDraftPriceMin}
               onChangeMax={setDraftPriceMax}
-              onDragStart={() => setScrollEnabled(false)}
-              onDragEnd={() => setScrollEnabled(true)}
+              onDragStart={() => setSliderScrollEnabled(false)}
+              onDragEnd={() => setSliderScrollEnabled(true)}
             />
-
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>OFFERS</Text>
-            <View style={styles.chipRow}>
-              <Chip
-                label="Discount only"
-                selected={draftDiscount}
-                onPress={() => { haptic.light(); setDraftDiscount(!draftDiscount); }}
-              />
-            </View>
-          </ScrollView>
-
-          <View style={styles.applyWrap}>
-            <TouchableOpacity
-              onPress={() => { haptic.success(); onApply(); }}
-              activeOpacity={0.85}
-              style={styles.applyBtn}
-            >
-              <Text style={styles.applyBtnText}>Apply</Text>
-            </TouchableOpacity>
           </View>
+        );
+
+      case 'offers':
+        return (
+          <RadioRow
+            label="Discount only"
+            selected={draftDiscount}
+            onPress={() => { haptic.light(); setDraftDiscount(!draftDiscount); }}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+
+        {/* ── Header ───────────────────────────────────────────────────── */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Icon name="arrow-back" size={22} color={Colors.ink1} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Filter By</Text>
+          <TouchableOpacity
+            onPress={() => { haptic.light(); onClearAll(); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            disabled={!hasActiveFilters}
+          >
+            <Text style={[styles.resetBtn, !hasActiveFilters && styles.resetBtnDisabled]}>Reset</Text>
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+        <View style={styles.headerDivider} />
+
+        {/* ── Two-panel body ───────────────────────────────────────────── */}
+        <View style={styles.body}>
+
+          {/* Left nav */}
+          <View style={styles.navCol}>
+            {navItems.map(item => {
+              const isActive = activeSection === item.key;
+              return (
+                <TouchableOpacity
+                  key={item.key}
+                  style={[styles.navItem, isActive && styles.navItemActive]}
+                  onPress={() => { haptic.light(); setActiveSection(item.key); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                    {item.label}
+                  </Text>
+                  {item.count !== undefined && (
+                    <View style={styles.navBadge}>
+                      <Text style={styles.navBadgeText}>{item.count}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Right panel */}
+          <ScrollView
+            style={styles.panelCol}
+            contentContainerStyle={styles.panelContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            scrollEnabled={sliderScrollEnabled}
+          >
+            {renderPanel()}
+          </ScrollView>
+        </View>
+
+        {/* ── Apply button ─────────────────────────────────────────────── */}
+        <View style={[styles.applyWrap, { paddingBottom: insets.bottom + Space[2] }]}>
+          <TouchableOpacity
+            onPress={() => { haptic.success(); onApply(); }}
+            activeOpacity={0.85}
+            style={styles.applyBtn}
+          >
+            <Text style={styles.applyBtnText}>Apply</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </Modal>
   );
 };
@@ -382,11 +456,12 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
 const sliderStyles = StyleSheet.create({
   wrap: {
     paddingBottom: Space[2],
+    paddingTop:    Space[2],
   },
   labels: {
     flexDirection:  'row',
     justifyContent: 'space-between',
-    marginBottom:   Space[4],
+    marginBottom:   Space[5],
   },
   valueText: {
     fontFamily:    FontFamily.serif,
@@ -405,8 +480,8 @@ const sliderStyles = StyleSheet.create({
     color: Colors.ink4,
   },
   trackOuter: {
-    height:   THUMB_R * 2,
-    position: 'relative',
+    height:         THUMB_R * 2,
+    position:       'relative',
     justifyContent: 'center',
   },
   trackBg: {
@@ -440,92 +515,188 @@ const sliderStyles = StyleSheet.create({
 
 // ── Sheet styles ──────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  modalOuter: {
-    flex:           1,
-    justifyContent: 'flex-end',
+  root: {
+    flex:            1,
+    backgroundColor: Colors.surface,
   },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  sheetBackground: {
-    backgroundColor:      Colors.surface,
-    borderTopLeftRadius:  18,
-    borderTopRightRadius: 18,
-    maxHeight:            '78%',
-  },
-  sheetHandle: {
-    backgroundColor: Colors.rule,
-    width:           40,
-    height:          4,
-    borderRadius:    2,
-    alignSelf:       'center',
-    marginTop:       Space[2],
-    marginBottom:    Space[1],
-  },
-  sheetHeader: {
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  header: {
     flexDirection:     'row',
     alignItems:        'center',
     justifyContent:    'space-between',
     paddingHorizontal: Space.screenH,
-    marginBottom:      Space[5],
+    paddingVertical:   Space[4],
   },
-  sheetTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
-    fontWeight:    '400',
+  headerTitle: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      17,
+    fontWeight:    '600',
     color:         Colors.ink1,
-    letterSpacing: -0.3,
+    letterSpacing: 0,
   },
-  sheetClearBtn: {
-    ...Type.caption,
-    color:              Colors.ink3,
-    textDecorationLine: 'underline',
-  },
-  sheetContent: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[3],
-    paddingBottom:     Space[4],
-  },
-  sectionLabel: {
-    ...Type.label,
-    color:        Colors.ink4,
-    marginBottom: Space[3],
-  },
-  sectionDivider: {
+  headerDivider: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
-    marginVertical:  Space[5],
   },
-  chipRow: {
+  resetBtn: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      14,
+    fontWeight:    '500',
+    color:         Colors.accent,
+    letterSpacing: 0,
+  },
+  resetBtnDisabled: {
+    color: Colors.ink4,
+  },
+
+  // ── Two-panel layout ─────────────────────────────────────────────────────────
+  body: {
+    flex:          1,
     flexDirection: 'row',
-    flexWrap:      'wrap',
   },
-  chip: {
-    paddingVertical:   Space[1] + 2,
-    paddingHorizontal: Space[3],
-    borderRadius:      Radius.pill,
-    borderWidth:       1,
-    borderColor:       Colors.rule,
-    backgroundColor:   Colors.surface,
-    marginBottom:      Space[2],
-    marginRight:       Space[2],
+
+  // Left nav column
+  navCol: {
+    width:           130,
+    backgroundColor: Colors.surfaceSoft,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: Colors.rule,
   },
-  chipSelected: {
+  navItem: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'space-between',
+    paddingVertical:  Space[4] + 2,
+    paddingLeft:     Space[4],
+    paddingRight:    Space[3],
+    borderLeftWidth:  3,
+    borderLeftColor: 'transparent',
+  },
+  navItemActive: {
+    backgroundColor:  Colors.surface,
+    borderLeftColor:  Colors.ink1,
+  },
+  navLabel: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      13,
+    fontWeight:    '400',
+    color:         Colors.ink3,
+    flex:          1,
+  },
+  navLabelActive: {
+    color:      Colors.ink1,
+    fontWeight: '500',
+  },
+  navBadge: {
+    backgroundColor: Colors.ink1,
+    borderRadius:    8,
+    minWidth:        16,
+    height:          16,
+    alignItems:      'center',
+    justifyContent:  'center',
+    paddingHorizontal: 4,
+  },
+  navBadgeText: {
+    fontFamily:  FontFamily.mono,
+    fontSize:    9,
+    color:       '#FFFFFF',
+    fontWeight:  '400',
+  },
+
+  // Right panel column
+  panelCol: {
+    flex: 1,
+  },
+  panelContent: {
+    paddingHorizontal: Space[4],
+    paddingTop:        Space[3],
+    paddingBottom:     Space[6],
+  },
+  pricePanel: {
+    paddingTop: Space[2],
+  },
+  emptyPanelText: {
+    ...Type.caption,
+    color:     Colors.ink4,
+    marginTop: Space[4],
+  },
+
+  // ── Check row ────────────────────────────────────────────────────────────────
+  checkRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingVertical:   Space[3] + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+    gap:               Space[3],
+  },
+  checkbox: {
+    width:           20,
+    height:          20,
+    borderRadius:    Radius.xs,
+    borderWidth:     1.5,
+    borderColor:     Colors.rule,
+    backgroundColor: Colors.surface,
+    alignItems:      'center',
+    justifyContent:  'center',
+    flexShrink:      0,
+  },
+  checkboxChecked: {
     backgroundColor: Colors.ink1,
     borderColor:     Colors.ink1,
   },
-  chipText: {
-    ...Type.caption,
-    color: Colors.ink2,
+  checkLabel: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      14,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    flex:          1,
   },
-  chipTextSelected: {
-    color: '#FFFFFF',
+  checkCount: {
+    ...Type.label,
+    color: Colors.ink4,
   },
+
+  // ── Radio row ─────────────────────────────────────────────────────────────────
+  radioRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingVertical:   Space[4],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+    gap:               Space[3],
+  },
+  radioOuter: {
+    width:           20,
+    height:          20,
+    borderRadius:    10,
+    borderWidth:     1.5,
+    borderColor:     Colors.rule,
+    alignItems:      'center',
+    justifyContent:  'center',
+    flexShrink:      0,
+  },
+  radioOuterSelected: {
+    borderColor: Colors.ink1,
+  },
+  radioInner: {
+    width:           10,
+    height:          10,
+    borderRadius:    5,
+    backgroundColor: Colors.ink1,
+  },
+  radioLabel: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      14,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+  },
+
+  // ── Apply ──────────────────────────────────────────────────────────────────
   applyWrap: {
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[3],
-    paddingBottom:     Space[2],
     borderTopWidth:    StyleSheet.hairlineWidth,
     borderTopColor:    Colors.rule,
   },
