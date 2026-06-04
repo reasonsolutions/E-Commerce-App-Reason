@@ -222,8 +222,8 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
-      hasFetched.current = false;
-      setItems([]);
+      // Skip reload if already loaded — preserves scroll position when tabbing back
+      if (hasFetched.current) return () => { cancelled.current = true; };
       fetchWishlist(cancelled);
       return () => { cancelled.current = true; };
     }, [fetchWishlist]),

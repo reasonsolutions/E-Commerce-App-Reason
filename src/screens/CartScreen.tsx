@@ -802,13 +802,13 @@ const styles = StyleSheet.create({
     fontWeight:    '400',
     color:         Colors.ink1,
     letterSpacing: -0.2,
-    lineHeight:    14 * 1.35,
+    lineHeight:    14 * 1.45,
   },
   cartVariant: {
     ...Type.caption,
-    color:     Colors.ink4,
-    fontSize:  12,
-    lineHeight: 12 * 1.3,
+    color:      Colors.ink4,
+    fontSize:   12,
+    lineHeight: 12 * 1.4,
   },
   // Quiet ×  dismiss — no background circle
   removeGlyph: {
@@ -857,12 +857,14 @@ const styles = StyleSheet.create({
     fontWeight:    '400',
     color:         Colors.ink1,
     letterSpacing: -0.3,
+    lineHeight:    16 * 1.2,
   },
   cartUnitWas: {
     ...Type.caption,
     fontSize:           11,
     color:              Colors.ink4,
     textDecorationLine: 'line-through',
+    lineHeight:         11 * 1.4,
   },
 
   // ── Summary panel — same surface, no background shift ────────────────────

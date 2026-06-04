@@ -18,12 +18,9 @@ import {
   NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/storageKeys';
 import { getCategories, getBrands } from '../api/product';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { SortBy } from '../config/enum_files/SortBy';
@@ -36,7 +33,6 @@ import {
 } from '../api/interfaces';
 import {
   Skeleton,
-  Price,
   EmptyState,
   FilterSheet,
 } from '../components/ui';
@@ -52,7 +48,6 @@ import {
   styles,
   COL_W,
   GRID_IMG_H,
-  SPAN_IMG_H,
   HERO_IMG_H,
 } from './ResultScreen.styles';
 import { addToWishlist } from '../api/wishlist';
@@ -95,7 +90,7 @@ function applySort(
   return products;
 }
 
-// ── Wishlist heart — fire-and-forget, outline only on listing ─────────────────
+// ── Wishlist heart — bare icon, no background circle ─────────────────────────
 const WishlistHeart: React.FC<{ inventoryId: number }> = ({ inventoryId }) => {
   const haptic      = useHaptic();
   const profileCode = useProfileCode();
@@ -122,20 +117,13 @@ const WishlistHeart: React.FC<{ inventoryId: number }> = ({ inventoryId }) => {
       <Icon
         name={added ? 'heart' : 'heart-outline'}
         size={18}
-        color={added ? Colors.accent : '#FFFFFF'}
+        color={added ? Colors.accent : Colors.ink4}
       />
     </TouchableOpacity>
   );
 };
 
-// ── Ember discount badge — shared across all three card types ─────────────────
-const DiscountBadge: React.FC<{ pct: number }> = ({ pct }) => (
-  <View style={styles.discountBadge}>
-    <Text style={styles.discountBadgeText}>−{pct}%</Text>
-  </View>
-);
-
-// ── Hero card — first product, cinematic full-bleed ───────────────────────────
+// ── Hero card — full-width image, identity below on clean surface ─────────────
 const HeroCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onNavigate: (itemId: number) => void;
@@ -157,19 +145,14 @@ const HeroCard: React.FC<{
 
   const hasDiscount = product.ComparePrice > product.Price;
   const discountPct = hasDiscount
-    ? Math.round(
-        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
-      )
+    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
     : 0;
 
   return (
     <Animated.View style={[styles.heroCard, animatedStyle]}>
       <TouchableOpacity
         {...handlers}
-        onPress={() => {
-          haptic.light();
-          onPress();
-        }}
+        onPress={() => { haptic.light(); onPress(); }}
         activeOpacity={1}
       >
         <View style={styles.heroImgWrap}>
@@ -181,48 +164,21 @@ const HeroCard: React.FC<{
               onLoad={onLoad}
             />
           ) : null}
+          <WishlistHeart inventoryId={product.Inventory_Id} />
         </View>
-        <LinearGradient
-          colors={[
-            'transparent',
-            'transparent',
-            'rgba(8,8,8,0.38)',
-            'rgba(8,8,8,0.78)',
-          ]}
-          locations={[0, 0.35, 0.65, 1]}
-          style={[StyleSheet.absoluteFillObject, { height: HERO_IMG_H }]}
-          pointerEvents="none"
-        />
-        {hasDiscount && (
-          <View style={styles.heroBadgeWrap}>
-            <DiscountBadge pct={discountPct} />
-          </View>
-        )}
-        <WishlistHeart inventoryId={product.Inventory_Id} />
-        <View style={styles.heroFooter}>
-          <View style={styles.heroFooterLeft}>
-            {product.Brand_Name ? (
-              <Text style={styles.heroCardBrand}>
-                {product.Brand_Name.toUpperCase()}
-              </Text>
-            ) : null}
-            <Text style={styles.heroCardName} numberOfLines={1}>
-              {product.Name}
-            </Text>
-            <View style={styles.heroPriceRow}>
-              <Text style={styles.heroCardPrice}>
-                Rs {product.Price.toFixed(0)}
-              </Text>
-              {hasDiscount && (
-                <Text style={styles.heroCardWas}>
-                  Rs {product.ComparePrice.toFixed(0)}
-                </Text>
-              )}
-            </View>
-          </View>
-          <View style={styles.heroViewLink}>
-            <Text style={styles.heroViewLinkText}>View</Text>
-            <View style={styles.heroViewLinkUnderline} />
+        <View style={styles.heroInfo}>
+          {product.Brand_Name ? (
+            <Text style={styles.heroCardBrand}>{product.Brand_Name.toUpperCase()}</Text>
+          ) : null}
+          <Text style={styles.heroCardName} numberOfLines={2}>{product.Name}</Text>
+          <View style={styles.heroPriceRow}>
+            <Text style={styles.heroCardPrice}>Rs {product.Price.toFixed(0)}</Text>
+            {hasDiscount && (
+              <>
+                <Text style={styles.heroCardWas}>Rs {product.ComparePrice.toFixed(0)}</Text>
+                <Text style={styles.heroDiscount}>−{discountPct}%</Text>
+              </>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -281,11 +237,6 @@ const GridTile: React.FC<{
                 onLoad={onLoad}
               />
             ) : null}
-            {hasDiscount && (
-              <View style={styles.gridBadgeWrap}>
-                <DiscountBadge pct={discountPct} />
-              </View>
-            )}
             <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.gridInfo}>
@@ -297,11 +248,12 @@ const GridTile: React.FC<{
             <Text style={styles.gridName} numberOfLines={2}>
               {product.Name}
             </Text>
-            <Price
-              value={product.Price}
-              was={hasDiscount ? product.ComparePrice : undefined}
-              size="sm"
-            />
+            <View style={styles.heroPriceRow}>
+              <Text style={styles.gridPrice}>Rs {product.Price.toFixed(0)}</Text>
+              {hasDiscount && (
+                <Text style={styles.heroDiscount}>−{discountPct}%</Text>
+              )}
+            </View>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -359,29 +311,23 @@ const SpanCard: React.FC<{
                 onLoad={onLoad}
               />
             ) : null}
+            <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
-          <LinearGradient
-            colors={['transparent', 'rgba(8,8,8,0.48)', 'rgba(8,8,8,0.80)']}
-            locations={[0.28, 0.65, 1]}
-            style={[StyleSheet.absoluteFillObject, { height: SPAN_IMG_H }]}
-            pointerEvents="none"
-          />
-          {hasDiscount && (
-            <View style={styles.spanBadgeWrap}>
-              <DiscountBadge pct={discountPct} />
-            </View>
-          )}
-          <WishlistHeart inventoryId={product.Inventory_Id} />
           <View style={styles.spanFooter}>
             {product.Brand_Name ? (
-              <Text style={styles.spanBrand}>
+              <Text style={styles.gridBrand}>
                 {product.Brand_Name.toUpperCase()}
               </Text>
             ) : null}
-            <Text style={styles.spanName} numberOfLines={1}>
+            <Text style={styles.spanName} numberOfLines={2}>
               {product.Name}
             </Text>
-            <Text style={styles.spanPrice}>Rs {product.Price.toFixed(0)}</Text>
+            <View style={styles.heroPriceRow}>
+              <Text style={styles.gridPrice}>Rs {product.Price.toFixed(0)}</Text>
+              {hasDiscount && (
+                <Text style={styles.heroDiscount}>−{discountPct}%</Text>
+              )}
+            </View>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -1023,7 +969,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         )}
 
         {!hasMore && allProducts.length > 0 && !loading && (
-          <Text style={styles.endOfResults}>You've seen it all</Text>
+          <View style={styles.endOfResultsRow}>
+            <View style={styles.endOfResultsLine} />
+            <Text style={styles.endOfResults}>End of results</Text>
+            <View style={styles.endOfResultsLine} />
+          </View>
         )}
       </ScrollView>
 

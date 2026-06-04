@@ -27,7 +27,7 @@ export const styles = StyleSheet.create({
     flexDirection:     'row',
     alignItems:        'center',
     paddingHorizontal: Space.screenH,
-    paddingVertical:   Space[3],
+    paddingVertical:   Space[4],
     gap:               Space[3],
   },
   headerCenter: {
@@ -35,10 +35,11 @@ export const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily:    FontFamily.serif,
-    fontSize:      22,
+    fontSize:      24,
     fontWeight:    '400',
     color:         Colors.ink1,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
+    lineHeight:    24 * 1.2,
   },
   headerDivider: {
     height:          StyleSheet.hairlineWidth,
@@ -61,6 +62,7 @@ export const styles = StyleSheet.create({
     fontSize:      11,
     color:         Colors.ink3,
     letterSpacing: 0.5,
+    lineHeight:    11 * 1.2,
   },
   filterPillTextActive: {
     color: Colors.accent,
@@ -84,49 +86,31 @@ export const styles = StyleSheet.create({
 
   // ── Hero card ────────────────────────────────────────────────────────────────
   heroCard: {
-    borderRadius:     Radius.md,
-    overflow:         'hidden',
-    backgroundColor:  Colors.surfaceDeep,
-    marginBottom:     Space[1],
+    overflow:        'hidden',
+    backgroundColor: Colors.surfaceDeep,
+    marginBottom:    Space[1],
   },
   heroImgWrap: {
     width:           '100%',
     height:          HERO_IMG_H,
     backgroundColor: Colors.surfaceDeep,
+    overflow:        'hidden',
   },
-  heroBadgeWrap: {
-    position: 'absolute',
-    top:      Space[3],
-    left:     Space[3],
-  },
-  heroFooter: {
-    position:          'absolute',
-    bottom:            0,
-    left:              0,
-    right:             0,
-    paddingHorizontal: Space[5],
-    paddingBottom:     Space[5],
-    paddingTop:        Space[4],
-    flexDirection:     'row',
-    alignItems:        'flex-end',
-    justifyContent:    'space-between',
-  },
-  heroFooterLeft: {
-    flex:         1,
-    gap:          4,
-    paddingRight: Space[4],
+  heroInfo: {
+    paddingTop:  Space[3],
+    gap:         3,
   },
   heroCardBrand: {
     ...Type.label,
-    color: 'rgba(255,255,255,0.46)',
+    color: Colors.ink4,
   },
   heroCardName: {
     fontFamily:    FontFamily.serif,
-    fontSize:      20,
+    fontSize:      18,
     fontWeight:    '400',
-    color:         '#FFFFFF',
+    color:         Colors.ink1,
     letterSpacing: -0.3,
-    lineHeight:    20 * 1.2,
+    lineHeight:    18 * 1.4,
   },
   heroPriceRow: {
     flexDirection: 'row',
@@ -136,46 +120,25 @@ export const styles = StyleSheet.create({
   },
   heroCardPrice: {
     fontFamily:    FontFamily.serif,
-    fontSize:      18,
+    fontSize:      16,
     fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.3,
+    color:         Colors.ink1,
+    letterSpacing: -0.2,
+    lineHeight:    16 * 1.2,
   },
   heroCardWas: {
     fontFamily:         FontFamily.mono,
-    fontSize:           12,
-    color:              'rgba(255,255,255,0.36)',
+    fontSize:           11,
+    color:              Colors.ink4,
     textDecorationLine: 'line-through',
+    lineHeight:         11 * 1.2,
   },
-  heroViewLink: {
-    alignItems:    'center',
-    paddingBottom: 2,
-  },
-  heroViewLinkText: {
-    ...Type.caption,
-    color:         'rgba(255,255,255,0.72)',
+  heroDiscount: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    color:         Colors.ink3,
     letterSpacing: 0.2,
-  },
-  heroViewLinkUnderline: {
-    height:          1,
-    width:           '100%',
-    backgroundColor: 'rgba(255,255,255,0.32)',
-    marginTop:       2,
-  },
-
-  // ── Ember discount badge ──────────────────────────────────────────────────────
-  discountBadge: {
-    backgroundColor:   Colors.accentTint,
-    borderWidth:       1,
-    borderColor:       Colors.accent,
-    borderRadius:      Radius.xs,
-    paddingVertical:   2,
-    paddingHorizontal: Space[2],
-  },
-  discountBadgeText: {
-    ...Type.label,
-    color:         Colors.accent,
-    letterSpacing: 0.8,
+    lineHeight:    10 * 1.2,
   },
 
   // ── Grid divider ─────────────────────────────────────────────────────────────
@@ -213,9 +176,8 @@ export const styles = StyleSheet.create({
     left:     Space[2],
   },
   gridInfo: {
-    paddingTop:        Space[2],
-    paddingHorizontal: 1,
-    gap:               3,
+    paddingTop: Space[2],
+    gap:        3,
   },
   gridBrand: {
     ...Type.label,
@@ -227,55 +189,41 @@ export const styles = StyleSheet.create({
     fontWeight:    '400',
     color:         Colors.ink1,
     letterSpacing: -0.1,
-    lineHeight:    14 * 1.35,
+    lineHeight:    14 * 1.45,
+  },
+  gridPrice: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      14,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.1,
+    lineHeight:    14 * 1.2,
   },
 
   // ── Span card ─────────────────────────────────────────────────────────────────
   spanCard: {
     width:           SPAN_W,
-    borderRadius:    Radius.md,
     overflow:        'hidden',
     backgroundColor: Colors.surfaceDeep,
     marginBottom:    Space[6],
   },
   spanImgWrap: {
     width:           '100%',
-    height:          SPAN_IMG_H,
+    height:          SPAN_W * 0.65,
     backgroundColor: Colors.surfaceDeep,
-  },
-  spanBadgeWrap: {
-    position: 'absolute',
-    top:      Space[3],
-    left:     Space[4],
+    overflow:        'hidden',
   },
   spanFooter: {
-    position:          'absolute',
-    bottom:            0,
-    left:              0,
-    right:             0,
-    paddingHorizontal: Space[5],
-    paddingBottom:     Space[5],
-    gap:               3,
-  },
-  spanBrand: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.44)',
+    paddingTop: Space[3],
+    gap:        3,
   },
   spanName: {
     fontFamily:    FontFamily.serif,
-    fontSize:      18,
+    fontSize:      16,
     fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.3,
-    lineHeight:    18 * 1.2,
-  },
-  spanPrice: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      15,
-    fontWeight:    '400',
-    color:         'rgba(255,255,255,0.75)',
+    color:         Colors.ink1,
     letterSpacing: -0.2,
-    marginTop:     2,
+    lineHeight:    16 * 1.45,
   },
 
   // ── Skeleton ──────────────────────────────────────────────────────────────────
@@ -311,22 +259,28 @@ export const styles = StyleSheet.create({
   chipTextSelected: {
     color: '#FFFFFF',
   },
+  endOfResultsRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    marginVertical: Space[8],
+    gap:            Space[3],
+  },
+  endOfResultsLine: {
+    flex:            1,
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+  },
   endOfResults: {
     ...Type.caption,
-    color:     Colors.ink4,
-    textAlign: 'center',
-    marginVertical: Space[6],
+    color:         Colors.ink5,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    fontSize:      10,
   },
   heartBtn: {
-    position:        'absolute',
-    top:             Space[2],
-    right:           Space[2],
-    width:           30,
-    height:          30,
-    borderRadius:    15,
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    alignItems:      'center',
-    justifyContent:  'center',
+    position: 'absolute',
+    top:      Space[2],
+    right:    Space[2],
   },
 
   // ── Scroll to top ─────────────────────────────────────────────────────────────

@@ -201,35 +201,37 @@ const itemStyles = StyleSheet.create({
     color: Colors.ink4,
   },
   name: {
-    fontFamily: FontFamily.serif,
-    fontSize: 14,
-    fontWeight: '400',
-    color: Colors.ink1,
+    fontFamily:    FontFamily.serif,
+    fontSize:      14,
+    fontWeight:    '400',
+    color:         Colors.ink1,
     letterSpacing: -0.1,
-    lineHeight: 14 * 1.35,
+    lineHeight:    14 * 1.45,
   },
   variant: {
     ...Type.caption,
     color: Colors.ink4,
   },
   qtyPriceRow: {
-    flexDirection: 'row',
+    flexDirection:  'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 2,
+    alignItems:     'center',
+    marginTop:      2,
   },
   qty: {
-    fontFamily: FontFamily.mono,
-    fontSize: 10,
-    color: Colors.ink4,
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    color:         Colors.ink4,
     letterSpacing: 0.2,
+    lineHeight:    10 * 1.4,
   },
   price: {
-    fontFamily: FontFamily.serif,
-    fontSize: 14,
-    fontWeight: '400',
-    color: Colors.ink1,
+    fontFamily:    FontFamily.serif,
+    fontSize:      14,
+    fontWeight:    '400',
+    color:         Colors.ink1,
     letterSpacing: -0.1,
+    lineHeight:    14 * 1.2,
   },
 });
 
@@ -372,16 +374,18 @@ const cardStyles = StyleSheet.create({
     gap: Space[1],
   },
   orderNum: {
-    fontFamily: FontFamily.mono,
-    fontSize: 11,
-    color: Colors.ink2,
+    fontFamily:    FontFamily.mono,
+    fontSize:      11,
+    color:         Colors.ink2,
     letterSpacing: 0.4,
+    lineHeight:    11 * 1.4,
   },
   orderDate: {
-    fontFamily: FontFamily.mono,
-    fontSize: 10,
-    color: Colors.ink4,
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    color:         Colors.ink4,
     letterSpacing: 0.2,
+    lineHeight:    10 * 1.4,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -403,25 +407,27 @@ const cardStyles = StyleSheet.create({
     marginBottom: 2,
   },
   totalAmount: {
-    fontFamily: FontFamily.serif,
-    fontSize: 17,
-    fontWeight: '400',
-    color: Colors.ink1,
+    fontFamily:    FontFamily.serif,
+    fontSize:      17,
+    fontWeight:    '400',
+    color:         Colors.ink1,
     letterSpacing: -0.2,
+    lineHeight:    17 * 1.2,
   },
   reorderBtn: {
-    paddingVertical: 8,
+    paddingVertical:   8,
     paddingHorizontal: 18,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Colors.ink1,
+    borderRadius:      Radius.pill,
+    borderWidth:       1,
+    borderColor:       Colors.ink1,
   },
   reorderBtnText: {
-    fontFamily: FontFamily.sans,
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.ink1,
+    fontFamily:    FontFamily.sans,
+    fontSize:      13,
+    fontWeight:    '500',
+    color:         Colors.ink1,
     letterSpacing: 0.1,
+    lineHeight:    13 * 1.4,
   },
 });
 
@@ -451,10 +457,11 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   const [filters, setFilters]             = useState<OrderHistoryFilters>({});
   const [filterVisible, setFilterVisible] = useState(false);
 
-  const fetchingRef  = useRef(false);
-  const pageRef      = useRef(1);
-  const filtersRef   = useRef<OrderHistoryFilters>({});
-  filtersRef.current = filters;
+  const fetchingRef      = useRef(false);
+  const pageRef          = useRef(1);
+  const filtersRef       = useRef<OrderHistoryFilters>({});
+  const hasFetchedOnce   = useRef(false);
+  filtersRef.current     = filters;
 
   const fetchPage = useCallback(async (
     pageNum: number,
@@ -494,6 +501,8 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   useFocusEffect(
     useCallback(() => {
+      if (hasFetchedOnce.current) return;
+      hasFetchedOnce.current = true;
       reload(filtersRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),

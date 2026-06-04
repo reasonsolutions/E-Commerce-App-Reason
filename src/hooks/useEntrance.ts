@@ -24,10 +24,10 @@ export function useEntrance(delay = 0, withScale = false, initialY = 10): Entran
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: withScale ? 700 : 480, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 420, delay, useNativeDriver: true }),
+      Animated.timing(opacity,    { toValue: 1, duration: withScale ? 560 : 320, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 320, delay, useNativeDriver: true }),
       ...(withScale
-        ? [Animated.timing(scale, { toValue: 1, duration: 600, delay, useNativeDriver: true })]
+        ? [Animated.timing(scale, { toValue: 1, duration: 560, delay, useNativeDriver: true })]
         : []),
     ]).start();
   }, [opacity, translateY, scale, delay, withScale]);
