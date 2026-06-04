@@ -25,6 +25,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { getCategories, getBrands } from '../api/product';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { SortBy } from '../config/enum_files/SortBy';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
@@ -137,12 +138,13 @@ const DiscountBadge: React.FC<{ pct: number }> = ({ pct }) => (
 // ── Hero card — first product, cinematic full-bleed ───────────────────────────
 const HeroCard: React.FC<{
   product: ProductByCategoryProductDetails;
-  onPress: () => void;
-}> = React.memo(({ product, onPress }) => {
+  onNavigate: (itemId: number) => void;
+}> = React.memo(({ product, onNavigate }) => {
+  const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
   const { animatedStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
-  const firstImage = product.Images?.split(';').filter(Boolean)[0] ?? null;
+  const firstImage = product.Images ? resolveImageUrl(product.Images.split(';').filter(Boolean)[0]) : null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -231,16 +233,17 @@ const HeroCard: React.FC<{
 // ── Standard 2-column grid tile ───────────────────────────────────────────────
 const GridTile: React.FC<{
   product: ProductByCategoryProductDetails;
-  onPress: () => void;
+  onNavigate: (itemId: number) => void;
   delay: number;
-}> = React.memo(({ product, onPress, delay }) => {
+}> = React.memo(({ product, onNavigate, delay }) => {
+  const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
   const { animatedStyle: entranceStyle } = {
     animatedStyle: useEntrance(delay, false, 12),
   };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
-  const firstImage = product.Images?.split(';').filter(Boolean)[0] ?? null;
+  const firstImage = product.Images ? resolveImageUrl(product.Images.split(';').filter(Boolean)[0]) : null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -309,14 +312,15 @@ const GridTile: React.FC<{
 // ── Featured span card — full-width editorial break ───────────────────────────
 const SpanCard: React.FC<{
   product: ProductByCategoryProductDetails;
-  onPress: () => void;
+  onNavigate: (itemId: number) => void;
   delay: number;
-}> = React.memo(({ product, onPress, delay }) => {
+}> = React.memo(({ product, onNavigate, delay }) => {
+  const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
   const entranceStyle = useEntrance(delay, false, 12);
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
-  const firstImage = product.Images?.split(';').filter(Boolean)[0] ?? null;
+  const firstImage = product.Images ? resolveImageUrl(product.Images.split(';').filter(Boolean)[0]) : null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -475,6 +479,13 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 20;
+
+  const scrollRef         = useRef<ScrollView>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const scrollTopOpacity  = useRef(new Animated.Value(0)).current;
+  const scrollToTop = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
 
   const headerAnim = useEntrance(40, false, 12);
   const heroAnim = useEntrance(160, false, 12);
@@ -720,13 +731,28 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-      const distanceFromBottom =
-        contentSize.height - contentOffset.y - layoutMeasurement.height;
+      const y = contentOffset.y;
+
+      // Infinite scroll
+      const distanceFromBottom = contentSize.height - y - layoutMeasurement.height;
       if (distanceFromBottom < 400 && !loadingMore && hasMore && !loading) {
         loadMore();
       }
+
+      // Scroll to top button
+      const shouldShow = y > 300;
+      setShowScrollTop(prev => {
+        if (prev !== shouldShow) {
+          Animated.timing(scrollTopOpacity, {
+            toValue:         shouldShow ? 1 : 0,
+            duration:        200,
+            useNativeDriver: true,
+          }).start();
+        }
+        return shouldShow;
+      });
     },
-    [loadMore, loadingMore, hasMore, loading],
+    [loadMore, loadingMore, hasMore, loading, scrollTopOpacity],
   );
 
   useEffect(() => {
@@ -908,6 +934,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       </Animated.View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
@@ -942,7 +969,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
               <Animated.View style={heroAnim}>
                 <HeroCard
                   product={heroProduct}
-                  onPress={() => navigateToProduct(heroProduct.Item_Id)}
+                  onNavigate={navigateToProduct}
                 />
               </Animated.View>
             )}
@@ -956,7 +983,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                   <SpanCard
                     key={`span-${row.idx}`}
                     product={row.product}
-                    onPress={() => navigateToProduct(row.product.Item_Id)}
+                    onNavigate={navigateToProduct}
                     delay={delay}
                   />
                 );
@@ -969,13 +996,13 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                 <View key={`pair-${row.leftIdx}`} style={styles.gridRow}>
                   <GridTile
                     product={row.left}
-                    onPress={() => navigateToProduct(row.left.Item_Id)}
+                    onNavigate={navigateToProduct}
                     delay={leftDelay}
                   />
                   {row.right ? (
                     <GridTile
                       product={row.right}
-                      onPress={() => navigateToProduct(row.right!.Item_Id)}
+                      onNavigate={navigateToProduct}
                       delay={rightDelay}
                     />
                   ) : (
@@ -999,6 +1026,19 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           <Text style={styles.endOfResults}>You've seen it all</Text>
         )}
       </ScrollView>
+
+      <Animated.View
+        style={[styles.scrollTopBtn, { opacity: scrollTopOpacity }]}
+        pointerEvents={showScrollTop ? 'box-none' : 'none'}
+      >
+        <TouchableOpacity
+          onPress={scrollToTop}
+          activeOpacity={0.85}
+          style={styles.scrollTopInner}
+        >
+          <Icon name="arrow-up" size={18} color={Colors.ink1} />
+        </TouchableOpacity>
+      </Animated.View>
 
       <FilterSheet
         visible={isSheetOpen}

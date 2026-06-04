@@ -45,3 +45,5 @@ export { TrustCardRow } from './TrustCardRow';
 export { ProductSpecs } from './ProductSpecs';
 export { SellerCard } from './SellerCard';
 export { EditProfileSheet } from './EditProfileSheet';
+export { ChangePasswordSheet } from './ChangePasswordSheet';
+export { ForgotPasswordSheet } from './ForgotPasswordSheet';

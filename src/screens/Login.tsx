@@ -32,7 +32,9 @@ import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { FloatingLabelInput } from '../components/ui/FloatingLabelInput';
+import { ForgotPasswordSheet } from '../components/ui';
 import { useHaptic } from '../hooks/useHaptic';
+import { useAppToast } from '../hooks/useAppToast';
 
 type RootStackParamList = {
   Home: undefined;
@@ -138,13 +140,15 @@ const Login: React.FC = () => {
   const route = useRoute<RouteProp<RootStackParamList, 'Login'>>();
   const skipEntrance = route.params?.skipEntrance ?? false;
   const haptic = useHaptic();
+  const toast  = useAppToast();
   const { setCartCount } = useCart();
 
   // ── Form state ──────────────────────────────────────────────────────────────
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [username,        setUsername]        = useState('');
+  const [password,        setPassword]        = useState('');
+  const [loading,         setLoading]         = useState(false);
+  const [fieldError,      setFieldError]      = useState<string | null>(null);
+  const [forgotVisible,   setForgotVisible]   = useState(false);
 
   // ── Entrance animation values — hero only, fields/CTA always visible ─────────
   const wordmarkAnim = useRef(new Animated.Value(0)).current;
@@ -343,6 +347,14 @@ const Login: React.FC = () => {
 
   return (
     <View style={styles.root}>
+      <ForgotPasswordSheet
+        isOpen={forgotVisible}
+        onClose={() => setForgotVisible(false)}
+        onSuccess={() => {
+          setForgotVisible(false);
+          toast.success({ title: 'Password sent', description: 'Check your email for your new password.' });
+        }}
+      />
       <StatusBar
         barStyle="light-content"
         translucent
@@ -398,6 +410,15 @@ const Login: React.FC = () => {
               error={fieldError}
             />
           </View>
+
+          {/* Forgot password */}
+          <TouchableOpacity
+            onPress={() => setForgotVisible(true)}
+            activeOpacity={0.7}
+            style={styles.forgotLink}
+          >
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
 
           {/* CTA */}
           <Animated.View
@@ -552,6 +573,15 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.ink1,
     fontWeight: '600',
+  },
+  forgotLink: {
+    marginTop:  Space[4],
+    alignItems: 'flex-end',
+  },
+  forgotText: {
+    ...Type.caption,
+    color:              Colors.ink3,
+    textDecorationLine: 'underline',
   },
   guestLink: {
     marginTop: Space[3],

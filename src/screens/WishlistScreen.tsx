@@ -278,31 +278,39 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
       <View style={styles.emptyContent}>
-        <View style={styles.emptyIllustration}>
-          <Icon name="heart-outline" size={48} color={Colors.ink3} />
+        <Icon name="heart-outline" size={36} color={Colors.ink4} />
+        <View style={styles.emptyText}>
+          <Text style={styles.emptyTitle}>Your wishlist is empty.</Text>
+          <Text style={styles.emptyBody}>
+            Save products you love and find them here later.
+          </Text>
         </View>
-        <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
-        <Text style={styles.emptyBody}>
-          Tap the heart on any product to save it here.
-        </Text>
       </View>
       <View style={styles.emptyFooter}>
         <TouchableOpacity
           style={styles.emptyCTA}
           activeOpacity={0.88}
           onPress={() => navigation.navigate('Home')}
+          accessibilityRole="button"
+          accessibilityLabel="Start shopping"
         >
-          <Text style={styles.emptyCTAText}>Browse the collection</Text>
+          <Text style={styles.emptyCTAText}>Start Shopping</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
   const renderSkeleton = () => (
-    <View style={styles.grid}>
-      {[0, 1, 2, 3].map(i => (
-        <SkeletonCard key={i} delay={i * 50} />
-      ))}
+    <View style={styles.stateWrap}>
+      <View style={styles.skeletonGrid}>
+        {[[0, 1], [2, 3]].map((pair, row) => (
+          <View key={row} style={styles.skeletonRow}>
+            {pair.map(i => (
+              <SkeletonCard key={i} delay={i * 50} />
+            ))}
+          </View>
+        ))}
+      </View>
     </View>
   );
 
@@ -336,6 +344,11 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={hasFetched.current && !loading ? renderEmpty : null}
         style={styles.list}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        removeClippedSubviews
       />
     );
   };
@@ -585,13 +598,14 @@ const styles = StyleSheet.create({
   },
 
   // ── Skeleton ──────────────────────────────────────────────────────────────────
-  grid: {
-    flexDirection:  'row',
-    flexWrap:       'wrap',
+  skeletonGrid: {
     paddingHorizontal: Space.screenH,
-    paddingTop:     Space[5],
-    gap:            COL_GAP,
-    rowGap:         Space[5],
+    paddingTop:        Space[5],
+    gap:               Space[5],
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    gap:           COL_GAP,
   },
   skeletonImg: {
     borderRadius:    0,
@@ -625,14 +639,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space[6],
     gap:               Space[4],
   },
-  emptyIllustration: {
-    width:           100,
-    height:          100,
-    borderRadius:    50,
-    backgroundColor: Colors.surfaceSoft,
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginBottom:    Space[2],
+  emptyText: {
+    gap: Space[2],
+    alignItems: 'center',
   },
   emptyTitle: {
     ...Type.title,
@@ -651,14 +660,15 @@ const styles = StyleSheet.create({
     paddingTop:        Space[4],
   },
   emptyCTA: {
-    backgroundColor: Colors.ink1,
+    borderWidth:     1,
+    borderColor:     Colors.ink1,
     borderRadius:    Radius.pill,
     paddingVertical: Space[4],
     alignItems:      'center',
   },
   emptyCTAText: {
     ...Type.bodyStrong,
-    color: '#FFFFFF',
+    color: Colors.ink1,
   },
 });
 

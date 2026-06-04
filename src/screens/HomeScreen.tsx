@@ -261,22 +261,11 @@ function useCustomBackHandler(navigation: NavigationProp) {
   );
 }
 
-// ── Preserved local entrance (HomeScreen exception per CLAUDE.md) ─────────────
-function useEntrance(delay = 0, withScale = false) {
-  const opacity    = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(14)).current;
-  const scale      = useRef(new Animated.Value(withScale ? 0.97 : 1)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: withScale ? 700 : 500, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 440, delay, useNativeDriver: true }),
-      ...(withScale
-        ? [Animated.timing(scale, { toValue: 1, duration: 600, delay, useNativeDriver: true })]
-        : []),
-    ]).start();
-  }, [opacity, translateY, scale, delay, withScale]);
-  return { opacity, transform: withScale ? [{ translateY }, { scale }] : [{ translateY }] };
-}
+
+// Module-level cache — survives remounts within an app session
+let _cachedProducts:   ProductInterface[]   | null = null;
+let _cachedCategories: CategoryInterface[]  | null = null;
+let _cachedBrands:     GetBrandItem[]       | null = null;
 
 type HomeScreenProps = { navigation: NavigationProp };
 
@@ -288,21 +277,37 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // ── Recently viewed ───────────────────────────────────────────────────────────
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
 
+  // ── Scroll to top ─────────────────────────────────────────────────────────────
+  const scrollRef        = useRef<ScrollView>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const scrollTopOpacity = useRef(new Animated.Value(0)).current;
+
+  const handleScroll = useCallback((e: any) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const shouldShow = y > 300;
+    setShowScrollTop(prev => {
+      if (prev !== shouldShow) {
+        Animated.timing(scrollTopOpacity, {
+          toValue:         shouldShow ? 1 : 0,
+          duration:        200,
+          useNativeDriver: true,
+        }).start();
+      }
+      return shouldShow;
+    });
+  }, [scrollTopOpacity]);
+
+  const scrollToTop = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
+
   // ── Resume cart cue ───────────────────────────────────────────────────────────
   const [showResumeCue, setShowResumeCue] = useState(false);
 
-  // ── Data fetches ──────────────────────────────────────────────────────────────
-  const { data: categories, run: runCategories } = useAsyncState<CategoryInterface[]>(null);
-  const { data: products,   run: runProducts   } = useAsyncState<ProductInterface[]>(null);
-  const { data: brands,     run: runBrands     } = useAsyncState<GetBrandItem[]>(null);
-
-  // ── Entrance animations ───────────────────────────────────────────────────────
-  const bannerAnim  = useEntrance(60,  true);
-  const catAnim     = useEntrance(180);
-  const spotAnim    = useEntrance(240);
-  const rail1Anim   = useEntrance(300);
-  const brandsAnim  = useEntrance(360);
-  const rail2Anim   = useEntrance(420);
+  // ── Data fetches — initialised from module-level cache so remounts show data instantly ──
+  const { data: categories, run: runCategories } = useAsyncState<CategoryInterface[]>(_cachedCategories);
+  const { data: products,   run: runProducts   } = useAsyncState<ProductInterface[]>(_cachedProducts);
+  const { data: brands,     run: runBrands     } = useAsyncState<GetBrandItem[]>(_cachedBrands);
 
   // Risk 2 fix: cartCount change only updates the cue, never re-fires API calls
   useEffect(() => {
@@ -313,20 +318,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     useCallback(() => {
       const cancelled = { current: false };
 
-      // Load recently viewed from AsyncStorage
+      // Always refresh recently viewed (cheap, local AsyncStorage read)
       AsyncStorage.getItem(STORAGE_KEYS.recentlyViewed).then(raw => {
         if (raw && !cancelled.current) {
           try { setRecentlyViewed(JSON.parse(raw)); } catch {}
         }
       });
 
-      runCategories(
-        () => getCategories().then((d) => d.result as CategoryInterface[]),
-        cancelled,
-      );
+      // Skip API fetches if data is already loaded — prevents flash on back navigation
+      if (products && categories && brands) {
+        return () => { cancelled.current = true; };
+      }
+
+      runCategories(async () => {
+        const result = await getCategories().then((d) => d.result as CategoryInterface[]);
+        _cachedCategories = result;
+        return result;
+      }, cancelled);
 
       runProducts(async () => {
-        // Independent fetch (Risk 3 fix) — first 4 categories only (Risk 6 fix)
         const catRes = await getCategories().then((d) => d.result as CategoryInterface[]);
         if (!catRes?.length) return [];
         const ids = catRes.slice(0, 4).map((c) => c.CategoryId);
@@ -340,19 +350,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             deduped.push(p);
           }
         }
+        _cachedProducts = deduped;
         return deduped;
       }, cancelled);
 
-      runBrands(
-        () => getBrands().then((d) => {
-          const list: GetBrandItem[] = d?.result ?? [];
-          return list.slice(0, 8);
-        }),
-        cancelled,
-      );
+      runBrands(async () => {
+        const list: GetBrandItem[] = (await getBrands())?.result ?? [];
+        const result = list.slice(0, 8);
+        _cachedBrands = result;
+        return result;
+      }, cancelled);
 
       return () => { cancelled.current = true; };
-    }, [runCategories, runProducts, runBrands]),
+    }, [runCategories, runProducts, runBrands, products, categories, brands]),
   );
 
   // ── Derived data (memoised — recomputes only when source data changes) ────────
@@ -523,20 +533,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       {/* ── Scrollable content ────────────────────────────────────────────────── */}
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         {/* BannerSlot */}
-        <Animated.View style={[{ marginTop: Space[5] }, bannerAnim]}>
+        <View style={{ marginTop: Space[5] }}>
           <BannerSlot
             spots={spotlights}
             onPress={handleBannerPress}
           />
-        </Animated.View>
+        </View>
 
         {/* Category rail */}
-        <Animated.View style={[{ marginTop: Space[6] }, catAnim]}>
+        <View style={{ marginTop: Space[6] }}>
           <SectionHead
             eyebrow="BROWSE"
             title="Categories"
@@ -569,24 +582,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               ))}
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Category spotlight card */}
         {featureCategory ? (
-          <Animated.View style={[{ marginTop: Space[8], paddingHorizontal: Space.screenH }, spotAnim]}>
+          <View style={{ marginTop: Space[8], paddingHorizontal: Space.screenH }}>
             <CategorySpotlightCard
               category={featureCategory}
               onPress={() => navigation.navigate('Result', { categoryId: featureCategory.CategoryId, categoryName: featureCategory.CategoryName })}
             />
-          </Animated.View>
-        ) : deduped === null ? (
+          </View>
+        ) : categories === null ? (
           <View style={{ marginTop: Space[8], paddingHorizontal: Space.screenH }}>
             <Skeleton height={360} radius={22} />
           </View>
         ) : null}
 
         {/* First category product rail */}
-        <Animated.View style={rail1Anim}>
+        <View>
           {categoryRailKeys[0] ? (
             <ProductRail
               eyebrow="CATEGORY"
@@ -605,10 +618,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               onPress={() => {}}
             />
           )}
-        </Animated.View>
+        </View>
 
         {/* Brands rail */}
-        <Animated.View style={[{ marginTop: Space[8] }, brandsAnim]}>
+        <View style={{ marginTop: Space[8] }}>
           <SectionHead
             eyebrow="MERCHANTS"
             title="Brands"
@@ -643,10 +656,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               ))}
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Second category product rail */}
-        <Animated.View style={rail2Anim}>
+        <View>
           {categoryRailKeys[1] ? (
             <ProductRail
               eyebrow="CATEGORY"
@@ -659,7 +672,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
             />
           ) : null}
-        </Animated.View>
+        </View>
 
         {/* Recently viewed — client-side, hidden when empty */}
         {recentlyViewed.length > 0 && (
@@ -694,6 +707,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           onPress={() => navigation.navigate('Result', { categoryName: 'All Products' })}
         />
       </ScrollView>
+
+      {/* ── Scroll to top button ─────────────────────────────────────────────── */}
+      <Animated.View
+        style={[styles.scrollTopBtn, { opacity: scrollTopOpacity }]}
+        pointerEvents={showScrollTop ? 'box-none' : 'none'}
+      >
+        <TouchableOpacity
+          onPress={scrollToTop}
+          activeOpacity={0.85}
+          style={styles.scrollTopInner}
+        >
+          <Icon name="arrow-up" size={18} color={Colors.ink1} />
+        </TouchableOpacity>
+      </Animated.View>
 
       <BottomNavBar
         activeTab="Home"

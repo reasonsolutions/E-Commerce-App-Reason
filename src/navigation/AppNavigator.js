@@ -45,6 +45,10 @@ const AppNavigator = () => {
         initialRouteName={initialRoute}
         screenOptions={{
           headerShown: false,
+          cardStyle: { backgroundColor: Colors.surface },
+          detachPreviousScreen: false,
+          cardOverlayEnabled: true,
+          freezeOnBlur: false,
         }}>
         <Stack.Screen
           name="Login"
@@ -53,7 +57,7 @@ const AppNavigator = () => {
         />
         <Stack.Screen name="Register" component={RegisterScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
         <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
-        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Home" component={HomeScreen} options={{ detachPreviousScreen: false }} />
         <Stack.Screen name="Product" component={ProductScreen} />
         <Stack.Screen name="Cart" component={CartScreen} />
         <Stack.Screen name="Result" component={ResultScreen} />

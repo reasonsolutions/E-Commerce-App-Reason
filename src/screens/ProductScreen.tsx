@@ -52,6 +52,7 @@ import { useProfileCode } from '../hooks/useProfileCode';
 import { useAppToast } from '../hooks/useAppToast';
 import { useAuthGuard } from '../hooks/useAuthGuard';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const HERO_H = SCREEN_W * 0.85;
@@ -111,6 +112,10 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     inputRange:  [HERO_H - 80, HERO_H],
     outputRange: [0, 1],
     extrapolate: 'clamp',
+  });
+  const navBorderColor = navBorderOpacity.interpolate({
+    inputRange:  [0, 1],
+    outputRange: ['rgba(0,0,0,0)', Colors.rule],
   });
 
   // ── Data fetch ───────────────────────────────────────────────────────────────
@@ -189,9 +194,10 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const selectedVariant = variantDetails.find(v => String(v.InventoryId) === selectedVariantId) ?? variantDetails[0] ?? null;
 
   const imageUrls: string[] = productDetails?.Images
-    ? Array.isArray(productDetails.Images)
-      ? (productDetails.Images as unknown as string[]).filter(Boolean)
-      : productDetails.Images.split(';').map(s => s.trim()).filter(Boolean)
+    ? (Array.isArray(productDetails.Images)
+        ? (productDetails.Images as unknown as string[])
+        : productDetails.Images.split(';').map(s => s.trim())
+      ).filter(Boolean).map(resolveImageUrl)
     : [];
 
   const activePrice        = selectedVariant?.PriceDetails?.Price ?? 0;
@@ -360,7 +366,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
       {/* ── Floating nav bar (over hero) ──────────────────────────────────── */}
       <Animated.View
-        style={[styles.navBar, { backgroundColor: navBgColor, top: insets.top, borderBottomColor: navBorderOpacity.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', Colors.rule] }) }]}
+        style={[styles.navBar, { backgroundColor: navBgColor, top: insets.top, borderBottomColor: navBorderColor }]}
         pointerEvents="box-none"
       >
         <Animated.View style={[styles.navPill, { backgroundColor: pillBg }]}>

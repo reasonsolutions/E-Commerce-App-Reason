@@ -19,6 +19,7 @@ import {
   Skeleton,
   ConfirmSheet,
   EditProfileSheet,
+  ChangePasswordSheet,
 } from '../components/ui';
 import { getDeliveryAddresses } from '../api/address';
 import { DeliveryAddress } from './AddressScreen';
@@ -142,8 +143,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   const [session,       setSession]       = useState<LoggedInCustomerInterface | null>(null);
   const [addressCount,  setAddressCount]  = useState<number>(0);
-  const [editVisible,   setEditVisible]   = useState(false);
-  const [logoutVisible, setLogoutVisible] = useState(false);
+  const [editVisible,     setEditVisible]     = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [logoutVisible,   setLogoutVisible]   = useState(false);
 
   useFocusEffect(useCallback(() => {
     let cancelled = false;
@@ -197,6 +199,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           isOpen={editVisible}
           onClose={() => setEditVisible(false)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {session && (
+        <ChangePasswordSheet
+          customerProfileCode={session.CustomerProfileCode}
+          isOpen={passwordVisible}
+          onClose={() => setPasswordVisible(false)}
+          onSaved={() => {
+            setPasswordVisible(false);
+            toast.success({ title: 'Password updated' });
+          }}
         />
       )}
 
@@ -287,6 +301,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             label="Email"
             sub={displayEmail}
             onPress={() => { haptic.light(); setEditVisible(true); }}
+          />
+          <MenuRow
+            icon="lock-closed-outline"
+            label="Change Password"
+            sub="Update your password"
+            onPress={() => { haptic.light(); setPasswordVisible(true); }}
             isLast
           />
         </Animated.View>

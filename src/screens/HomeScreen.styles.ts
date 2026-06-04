@@ -110,6 +110,27 @@ const styles = StyleSheet.create({
     paddingBottom: Space[4],
   },
 
+  // ── Scroll to top ─────────────────────────────────────────────────────────────
+  scrollTopBtn: {
+    position: 'absolute',
+    right:    Space[5],
+    bottom:   80,
+    zIndex:   20,
+  },
+  scrollTopInner: {
+    width:           44,
+    height:          44,
+    borderRadius:    22,
+    backgroundColor: Colors.surface,
+    alignItems:      'center',
+    justifyContent:  'center',
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 2 },
+    shadowOpacity:   0.10,
+    shadowRadius:    8,
+    elevation:       4,
+  },
+
   // ── BannerSlot ───────────────────────────────────────────────────────────────
   bannerSlot: {
     gap: Space[4] - 2,

@@ -13,8 +13,6 @@ interface TrustCardRowProps {
 export const TrustCardRow: React.FC<TrustCardRowProps> = ({ policy, shipping }) => {
   const cards: { icon: string; label: string }[] = [];
 
-  cards.push({ icon: 'shield-checkmark-outline', label: 'Authentic Products' });
-
   if (policy.IsReturnable) {
     cards.push({
       icon:  'refresh-outline',

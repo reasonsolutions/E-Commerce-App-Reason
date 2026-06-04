@@ -50,7 +50,7 @@ function App(): React.JSX.Element {
         <GluestackUIProvider>
           <CartProvider>
             <CartHydrator />
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <StatusBar barStyle="dark-content" backgroundColor="#F5F2EE" />
             <AppNavigator />
             <ToastOverlay />
           </CartProvider>

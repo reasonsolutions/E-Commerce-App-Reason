@@ -229,6 +229,31 @@ const GuestCartRow = React.memo<{
   );
 });
 
+// Stable wrapper so GuestCartRow memo is not broken by inline arrow functions
+const GuestCartRowWrapper = React.memo<{
+  item: GuestCartItem;
+  index: number;
+  onUpdateGuestQuantity: (inventoryId: number, oldQty: number, newQty: number) => void;
+  onRemoveGuest: (inventoryId: number, qty: number) => void;
+}>(({ item, index, onUpdateGuestQuantity, onRemoveGuest }) => {
+  const onUpdateQuantity = useCallback(
+    (newQty: number) => onUpdateGuestQuantity(item.inventoryId, item.quantity, newQty),
+    [item.inventoryId, item.quantity, onUpdateGuestQuantity],
+  );
+  const onRemove = useCallback(
+    () => onRemoveGuest(item.inventoryId, item.quantity),
+    [item.inventoryId, item.quantity, onRemoveGuest],
+  );
+  return (
+    <GuestCartRow
+      item={item}
+      onUpdateQuantity={onUpdateQuantity}
+      onRemove={onRemove}
+      delay={Math.min(80 + index * 55, 360)}
+    />
+  );
+});
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -424,46 +449,35 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       );
     }
 
-    if (isGuest && guestItems.length === 0 && hasFetched) {
+    if ((isGuest && guestItems.length === 0 && hasFetched) ||
+        (cartItems.length === 0 && !loading && hasFetched && !isGuest)) {
       return (
         <View style={styles.fillWrap}>
           <View style={styles.emptyContent}>
-            <View style={styles.emptyIllustration}>
-              <Icon name="bag-outline" size={52} color={Colors.ink3} />
+            <Icon name="bag-outline" size={36} color={Colors.ink4} />
+            <View style={styles.emptyText}>
+              <Text style={styles.emptyTitle}>Your bag is empty.</Text>
+              <Text style={styles.emptyBody}>Add items you love and they'll appear here.</Text>
             </View>
-            <Text style={styles.emptyTitle}>Your bag is empty.</Text>
-            <Text style={styles.emptyBody}>Add something you love to get started.</Text>
           </View>
           <View style={styles.emptyFooter}>
             <TouchableOpacity
               style={styles.emptyCTA}
               activeOpacity={0.88}
               onPress={() => navigation.navigate('Home')}
+              accessibilityRole="button"
+              accessibilityLabel="Start shopping"
             >
-              <Text style={styles.emptyCTAText}>Browse the collection</Text>
+              <Text style={styles.emptyCTAText}>Start Shopping</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      );
-    }
-
-    if (cartItems.length === 0 && !loading && hasFetched && !isGuest) {
-      return (
-        <View style={styles.fillWrap}>
-          <View style={styles.emptyContent}>
-            <View style={styles.emptyIllustration}>
-              <Icon name="bag-outline" size={52} color={Colors.ink3} />
-            </View>
-            <Text style={styles.emptyTitle}>Your bag is empty.</Text>
-            <Text style={styles.emptyBody}>Add something you love to get started.</Text>
-          </View>
-          <View style={styles.emptyFooter}>
             <TouchableOpacity
-              style={styles.emptyCTA}
-              activeOpacity={0.88}
-              onPress={() => navigation.navigate('Home')}
+              style={styles.emptySecondary}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Wishlist')}
+              accessibilityRole="button"
+              accessibilityLabel="View wishlist"
             >
-              <Text style={styles.emptyCTAText}>Browse the collection</Text>
+              <Text style={styles.emptySecondaryText}>View Wishlist</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -483,11 +497,11 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
               ? guestItems.map((item, index) => (
                   <React.Fragment key={`guest-${item.inventoryId}`}>
                     {index > 0 && <View style={styles.itemDivider} />}
-                    <GuestCartRow
+                    <GuestCartRowWrapper
                       item={item}
-                      onUpdateQuantity={(newQty: number) => handleUpdateGuestQuantity(item.inventoryId, item.quantity, newQty)}
-                      onRemove={() => handleRemoveGuestItem(item.inventoryId, item.quantity)}
-                      delay={Math.min(80 + index * 55, 360)}
+                      index={index}
+                      onUpdateGuestQuantity={handleUpdateGuestQuantity}
+                      onRemoveGuest={handleRemoveGuestItem}
                     />
                   </React.Fragment>
                 ))
@@ -682,14 +696,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space[6],
     gap:               Space[4],
   },
-  emptyIllustration: {
-    width:           120,
-    height:          120,
-    borderRadius:    60,
-    backgroundColor: Colors.surfaceSoft,
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginBottom:    Space[2],
+  emptyText: {
+    gap:      Space[2],
+    alignItems: 'center',
   },
   emptyTitle: {
     ...Type.title,
@@ -706,16 +715,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[8],
     paddingTop:        Space[4],
+    gap:               Space[3],
   },
   emptyCTA: {
-    backgroundColor: Colors.ink1,
+    borderWidth:     1,
+    borderColor:     Colors.ink1,
     borderRadius:    Radius.pill,
     paddingVertical: Space[4],
     alignItems:      'center',
   },
   emptyCTAText: {
     ...Type.bodyStrong,
-    color: '#FFFFFF',
+    color: Colors.ink1,
+  },
+  emptySecondary: {
+    alignItems: 'center',
+    paddingVertical: Space[2],
+  },
+  emptySecondaryText: {
+    ...Type.caption,
+    color:              Colors.ink3,
+    textDecorationLine: 'underline',
   },
 
   // ── Body layout — items scroll, summary sticky ────────────────────────────

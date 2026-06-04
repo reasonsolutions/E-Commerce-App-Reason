@@ -63,6 +63,12 @@ export interface postUpdateCustomerInterface {
     CountryCode: number;
 }
 
+export interface ChangePasswordInterface {
+    CustomerProfileCode: number;
+    OldPassword:         string;
+    NewPassword:         string;
+}
+
 export interface postCreateDeliveryAddressInterface {
     CustomerName: string;
     MobileNumber: string;

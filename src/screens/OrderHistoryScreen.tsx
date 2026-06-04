@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -446,6 +446,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   const [fetchError, setFetchError]       = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [reorderError, setReorderError]   = useState<string | null>(null);
+  const [isGuest, setIsGuest]             = useState(false);
 
   const [filters, setFilters]             = useState<OrderHistoryFilters>({});
   const [filterVisible, setFilterVisible] = useState(false);
@@ -464,7 +465,8 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     fetchingRef.current = true;
     try {
       const code = await getProfileCode();
-      if (!code) { setHasFetched(true); return; }
+      if (!code) { setIsGuest(true); setHasFetched(true); return; }
+      setIsGuest(false);
       const { items, hasMore: more } = await postOrderHistory(code, pageNum, activeFilters);
       setOrders(prev => replace ? items : [...prev, ...items]);
       pageRef.current = pageNum;
@@ -554,16 +556,16 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     filters.status && filters.status !== 'all',
   ].filter(Boolean).length;
 
-  const allGroups = groupOrders(orders);
-
-  const groups = filters.status && filters.status !== 'all'
-    ? allGroups.filter(g => {
-        if (filters.status === 'delivered') return g.status === OrderStatusCode.Delivered;
-        if (filters.status === 'cancelled') return g.status === OrderStatusCode.Cancelled;
-        if (filters.status === 'returned')  return g.status === OrderStatusCode.Returned;
-        return true;
-      })
-    : allGroups;
+  const groups = useMemo(() => {
+    const allGroups = groupOrders(orders);
+    if (!filters.status || filters.status === 'all') return allGroups;
+    return allGroups.filter(g => {
+      if (filters.status === 'delivered') return g.status === OrderStatusCode.Delivered;
+      if (filters.status === 'cancelled') return g.status === OrderStatusCode.Cancelled;
+      if (filters.status === 'returned')  return g.status === OrderStatusCode.Returned;
+      return true;
+    });
+  }, [orders, filters.status]);
 
   const groupCount = groups.length;
 
@@ -600,45 +602,89 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   const hasActiveFilters = !!(filters.sortBy && filters.sortBy !== 'desc') || !!filters.dateFrom || !!filters.dateTo || !!(filters.status && filters.status !== 'all');
 
-  const renderEmpty = () => (
-    <View style={styles.emptyWrap}>
-      <View style={styles.emptyContent}>
-        <View style={styles.emptyIllustration}>
-          <Icon name="receipt-outline" size={52} color={Colors.ink3} />
+  const renderEmpty = () => {
+    if (isGuest) {
+      return (
+        <View style={styles.emptyWrap}>
+          <View style={styles.emptyContent}>
+            <Icon name="person-outline" size={36} color={Colors.ink4} />
+            <View style={styles.emptyText}>
+              <Text style={styles.emptyTitle}>Sign in to view your orders.</Text>
+              <Text style={styles.emptyBody}>
+                Your orders, delivery updates, and purchase history will appear here.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.emptyFooter}>
+            <TouchableOpacity
+              style={styles.emptyCTA}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('Login')}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in"
+            >
+              <Text style={styles.emptyCTAText}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.emptySecondary}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Home')}
+              accessibilityRole="button"
+              accessibilityLabel="Continue shopping"
+            >
+              <Text style={styles.emptySecondaryText}>Continue Shopping</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        {hasActiveFilters ? (
-          <>
-            <Text style={styles.emptyTitle}>No orders found.</Text>
-            <Text style={styles.emptyBody}>Try adjusting your filters.</Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.emptyTitle}>No orders yet.</Text>
-            <Text style={styles.emptyBody}>Once you place an order, it will live here.</Text>
-          </>
-        )}
+      );
+    }
+
+    return (
+      <View style={styles.emptyWrap}>
+        <View style={styles.emptyContent}>
+          <Icon name="receipt-outline" size={36} color={Colors.ink4} />
+          <View style={styles.emptyText}>
+            {hasActiveFilters ? (
+              <>
+                <Text style={styles.emptyTitle}>No orders found.</Text>
+                <Text style={styles.emptyBody}>Try adjusting your filters.</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyTitle}>No orders yet.</Text>
+                <Text style={styles.emptyBody}>
+                  When you place an order, your updates will appear here.
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+        <View style={styles.emptyFooter}>
+          {hasActiveFilters ? (
+            <TouchableOpacity
+              style={styles.emptyCTA}
+              activeOpacity={0.88}
+              onPress={handleClearFilters}
+              accessibilityRole="button"
+              accessibilityLabel="Clear filters"
+            >
+              <Text style={styles.emptyCTAText}>Clear Filters</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.emptyCTA}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('Home')}
+              accessibilityRole="button"
+              accessibilityLabel="Start shopping"
+            >
+              <Text style={styles.emptyCTAText}>Start Shopping</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-      <View style={styles.emptyFooter}>
-        {hasActiveFilters ? (
-          <TouchableOpacity
-            style={styles.emptyCTA}
-            activeOpacity={0.88}
-            onPress={handleClearFilters}
-          >
-            <Text style={styles.emptyCTAText}>Clear filters</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.emptyCTA}
-            activeOpacity={0.88}
-            onPress={() => navigation.navigate('Home')}
-          >
-            <Text style={styles.emptyCTAText}>Browse the collection</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderSkeleton = () => (
     <View style={styles.skeletonWrap}>
@@ -699,6 +745,11 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         showsVerticalScrollIndicator={false}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.3}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        removeClippedSubviews
         ListHeaderComponent={
           reorderError ? (
             <ErrorBanner
@@ -899,14 +950,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space[6],
     gap:               Space[4],
   },
-  emptyIllustration: {
-    width:           120,
-    height:          120,
-    borderRadius:    60,
-    backgroundColor: Colors.surfaceSoft,
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginBottom:    Space[2],
+  emptyText: {
+    gap:        Space[2],
+    alignItems: 'center',
   },
   emptyTitle: {
     ...Type.title,
@@ -923,16 +969,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[8],
     paddingTop:        Space[4],
+    gap:               Space[3],
   },
   emptyCTA: {
-    backgroundColor: Colors.ink1,
+    borderWidth:     1,
+    borderColor:     Colors.ink1,
     borderRadius:    Radius.pill,
     paddingVertical: Space[4],
     alignItems:      'center',
   },
   emptyCTAText: {
     ...Type.bodyStrong,
-    color: '#FFFFFF',
+    color: Colors.ink1,
+  },
+  emptySecondary: {
+    alignItems:      'center',
+    paddingVertical: Space[2],
+  },
+  emptySecondaryText: {
+    ...Type.caption,
+    color:              Colors.ink3,
+    textDecorationLine: 'underline',
   },
 });
 

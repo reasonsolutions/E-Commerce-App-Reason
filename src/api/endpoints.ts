@@ -5,6 +5,9 @@ export const authEndpoints = {
   postCreateCustomer:     'ecomm/postCreateCustomer',
   postConfirmCustomer:    'ecomm/postConfirmCustomer',
   postUpdateCustomer:     'ecomm/postUpdateCustomer',
+  changePassword:         'ecomm/changePassword',
+  forgotPassword:         'ecomm/forgotPassword',
+  verifyForgotPasswordOTP:'ecomm/verifyForgotPasswordOTP',
 } as const;
 
 // ─── Products ─────────────────────────────────────────────────────────────────
