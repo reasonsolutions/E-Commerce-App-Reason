@@ -416,7 +416,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
         TotalAmountAfterDiscount:  orderTotal,
         OrderDetails:              orderDetails,
         PaymentDetails: {
-          PaymentModes:   2,
+          PaymentModes:   2, //isCard ? 3:16,
           Remark:         isCard ? 'Card payment via MIPS' : 'Mobile money payment via MIPS',
           ModeOfPayments: modeOfPayments,
         },
