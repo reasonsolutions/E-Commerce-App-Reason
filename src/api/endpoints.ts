@@ -52,6 +52,12 @@ export const wishlistEndpoints = {
   postDeleteWishlist: 'ecomm/postDeleteWishlist',
 } as const;
 
+// ─── Payment ─────────────────────────────────────────────────────────────────
+export const paymentEndpoints = {
+  loadPaymentZone: 'mips/loadPaymentZone',
+  getPaymentStatus: 'mips/getPaymentStatus'
+}
+
 // Flat merged object for any reference that needs a single import
 export const endpoints = {
   ...authEndpoints,
@@ -60,4 +66,5 @@ export const endpoints = {
   ...orderEndpoints,
   ...addressEndpoints,
   ...wishlistEndpoints,
+  ...paymentEndpoints
 } as const;

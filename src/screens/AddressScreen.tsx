@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Animated,
   StatusBar,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { EmptyState, FloatingLabelInput, ErrorBanner } from '../components/ui';
@@ -18,10 +19,8 @@ import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { getDeliveryAddresses, postCreateDeliveryAddress } from '../api/address';
-import { placeOrder } from '../api/order';
-import { getOrgIdForInventory } from '../api/product';
 import { useCart } from '../context/CartContext';
-import { PlaceOrderInterface, SavedCartItemInterface } from '../api/interfaces';
+import { SavedCartItemInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -184,11 +183,13 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     [run],
   );
 
-  useEffect(() => {
-    const cancelled = { current: false };
-    fetchAddresses(cancelled);
-    return () => { cancelled.current = true; };
-  }, [fetchAddresses]);
+  useFocusEffect(
+    useCallback(() => {
+      const cancelled = { current: false };
+      fetchAddresses(cancelled);
+      return () => { cancelled.current = true; };
+    }, [fetchAddresses]),
+  );
 
   const handleChange = (name: string, value: string) => {
     setForm(prev => ({ ...prev, [name]: value }));
@@ -255,12 +256,12 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       return;
     }
 
-    const cartItems = route.params?.cartItems;
-    if (!cartItems || cartItems.length === 0) {
+    const items = route.params?.cartItems;
+    if (!items || items.length === 0) {
       setOrderError('Your cart is empty. Please add items before checking out.');
       return;
     }
-    if (!cartItems[0].CartMasterCode) {
+    if (!items[0].CartMasterCode) {
       setOrderError('There was a problem with your cart. Please go back and try again.');
       return;
     }
@@ -269,97 +270,29 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       return;
     }
 
-    const total = cartItems.reduce((sum: number, item: SavedCartItemInterface) => sum + item.Price * item.Quantity, 0);
-
-    // Group items by OrganisationId — use field from cart API, fall back to product cache
-    const orgMap = new Map<string, SavedCartItemInterface[]>();
-    for (const item of cartItems) {
-      const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId);
-      if (!orgMap.has(orgId)) orgMap.set(orgId, []);
-      orgMap.get(orgId)!.push(item);
-    }
-
-    const orderDetails = Array.from(orgMap.entries()).map(([orgId, items]) => ({
-      OrganisationID: orgId,
-      ItemDetails: items.map((item: SavedCartItemInterface) => ({
-        InventoryId:        item.InventoryId,
-        Quantity:           item.Quantity,
-        Amount:             item.Price * item.Quantity,
-        DeliveryCharges:    0,
-        DeliveryChargesVAT: 0,
-        ItemCharges:        0,
-        ItemChargesVAT:     0,
-        Discount:           0,
-        VAT:                0,
-        OrderStatus:        1,
-        Taxes:              (item.PriceDetails?.Taxes ?? []).map(t => ({
-          TaxId:   t.TaxId,
-          TaxName: '',
-          TaxType: t.TaxType,
-          TaxRate: t.TaxRate,
-          Reason:  '',
-        })),
-      })),
-    }));
-
-    const payload: PlaceOrderInterface = {
-      CustomerProfileCode:       profileCode,
-      OrderDeliveryAddressCode:  selectedAddressCode,
-      CartMasterCode:            cartItems[0].CartMasterCode,
-      TotalAmountBeforeDiscount: total,
-      TotalAmountAfterDiscount:  total,
-      OrderDetails:              orderDetails,
-      PaymentDetails: {
-        PaymentModes:   1,
-        Remark:         'Cash on delivery',
-        ModeOfPayments: [
-          {
-            CashOnDelivery: {
-              ExpectedAmount:      total,
-              CurrencyCode:        'MUR',
-              CollectionReference: `COD-${cartItems[0].CartMasterCode}`,
-            },
-          },
-        ],
-      },
-    };
+    const total = items.reduce(
+      (sum: number, item: SavedCartItemInterface) => sum + item.Price * item.Quantity,
+      0,
+    );
 
     setSubmitting(true);
-    try {
-      const response = await placeOrder(payload);
-      if (response?.statusCode !== 1) {
-        setOrderError(response?.userMessage || 'Could not place your order. Please try again.');
-        return;
-      }
-      setCartCount(0);
-      const selectedAddr = (addresses ?? []).find(
-        a => a.OrderDeliveryAddressCode === selectedAddressCode,
-      );
-      navigation.navigate('OrderSuccess', {
-        orderNumber:    response.result?.OrderNumber ?? '',
-        itemCount:      cartItems.length,
-        orderTotal:     total,
-        orderCurrency:  'MUR',
-        orderTimestamp: response.result?.CreatedDate ?? null,
-        orderStatus:    response.result?.OrderStatus ?? null,
-        deliveryAddress: selectedAddr
-          ? {
-              street: [selectedAddr.Address, selectedAddr.StreetName].filter(Boolean).join(', '),
-              city:   selectedAddr.City ?? '',
-            }
-          : null,
-        cartItems: cartItems.map((item: SavedCartItemInterface) => ({
-          name:     item.Name,
-          quantity: item.Quantity,
-          price:    item.Price,
-          image:    item.Images?.split(';').filter(Boolean)[0] ?? '',
-        })),
-      });
-    } catch (err: any) {
-      setOrderError('Could not place your order. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+
+    // Generate a transaction reference from CartMasterCode + timestamp
+    const transactionId = `TXN-${items[0].CartMasterCode}-${Date.now()}`;
+    await AsyncStorage.setItem(STORAGE_KEYS.orderId, transactionId);
+
+    const selectedAddr = (addresses ?? []).find(
+      a => a.OrderDeliveryAddressCode === selectedAddressCode,
+    );
+
+    setSubmitting(false);
+
+    navigation.navigate('EcomPayment', {
+      profileCode,
+      cartItems: items,
+      selectedAddress: selectedAddr!,
+      orderTotal: total,
+    });
   };
 
   const addressList = addresses ?? [];

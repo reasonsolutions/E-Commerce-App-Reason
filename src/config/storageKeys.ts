@@ -20,6 +20,8 @@ export const STORAGE_KEYS = {
   guestCart: 'guestCart',
   /** Recently viewed products — JSON array of ProductInterface snapshots, max 8, newest-first. */
   recentlyViewed: 'recentlyViewed',
+  /** Order ID from placeOrder — used by PaymentScreen to initialise MIPS payment zone. */
+  orderId: 'orderId',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
