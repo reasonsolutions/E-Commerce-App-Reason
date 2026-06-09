@@ -21,15 +21,15 @@ export async function postCnfOrderDetail(
   const rawRes = await real.postCnfOrderDetail(orderNumber, customerProfileCode);
   const result = rawRes.result ?? { OrderDetails: [], DeliveryDetail: [], Events: [] };
   result.OrderDetails = (result.OrderDetails ?? []).map((item: OrderDetailItemExtendedInterface) => {
-    const raw = item as OrderDetailItemExtendedInterface & { InventoryID?: number; ItemID?: number; BrandName?: string; BrandID?: number; SubOrderNumber?: string; PaymentInfo?: any };
+    const raw = item as OrderDetailItemExtendedInterface & { InventoryID?: number; ItemID?: number; BrandName?: string; BrandID?: number; SubOrder?: { Code: number; Number: string }; PaymentInfo?: any };
     return {
       ...item,
-      Inventory_Id:   item.Inventory_Id   ?? raw.InventoryID      ?? 0,
-      Item_Id:        item.Item_Id        ?? raw.ItemID           ?? 0,
-      SubOrderNumber: item.SubOrderNumber ?? raw.SubOrderNumber   ?? '',
-      Brand_Name:     item.Brand_Name     ?? raw.BrandName        ?? '',
-      Brand_Id:       item.Brand_Id       ?? raw.BrandID          ?? 0,
-      PaymentInfo:    raw.PaymentInfo     ?? undefined,
+      Inventory_Id: item.Inventory_Id ?? raw.InventoryID ?? 0,
+      Item_Id:      item.Item_Id      ?? raw.ItemID      ?? 0,
+      SubOrder:     item.SubOrder     ?? raw.SubOrder    ?? { Code: 0, Number: '' },
+      Brand_Name:   item.Brand_Name   ?? raw.BrandName   ?? '',
+      Brand_Id:     item.Brand_Id     ?? raw.BrandID     ?? 0,
+      PaymentInfo:  raw.PaymentInfo   ?? undefined,
     };
   });
   result.Events = result.Events ?? [];

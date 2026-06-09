@@ -1,8 +1,8 @@
 # Project Modernization Audit — E-Commerce React Native App
 
-**Last updated:** 2026-06-02
+**Last updated:** 2026-06-09
 **Branch:** `dev` (canonical)
-**TypeScript status:** 0 errors, 51+ files compiled clean
+**TypeScript status:** 0 errors, clean compile
 
 ---
 
@@ -34,7 +34,7 @@ This document is the canonical engineering reference for the E-Commerce React Na
 The app is a React Native e-commerce client (iOS + Android) supporting: product browsing, category/search results, product detail, cart, checkout with address management, order history, order detail, wishlist, profile, registration, and OTP verification. Authentication is username/password with JWT stored in Keychain; session validity is checked at startup to determine the initial route.
 
 **Current state:**
-- Feature/domain-organized API layer — all domains (auth, cart, wishlist, address, product, order) are on real APIs. Order detail (`postCnfOrderDetail`) still on mock pending backend verification.
+- Feature/domain-organized API layer — all domains fully on real APIs including `postCnfOrderDetail` and `cancelOrder`.
 - Auth token injection fully implemented — Keychain-backed Bearer token on all non-auth requests, with in-memory cache to avoid repeated Keychain reads.
 - Refresh token flow implemented — 401 → `token/getEcommAccessToken` → retry. Concurrent 401s deduplicated. Both tokens cleared on logout/failed refresh.
 - `getInitialRoute()` always returns `'Home'` — token expiry handled reactively via 401, no clock-based checks.
@@ -44,6 +44,11 @@ The app is a React Native e-commerce client (iOS + Android) supporting: product 
 - `useAsyncState` cancellation-safe async hook across all data-fetching screens.
 - Server-authoritative cart badge via `CartContext`.
 - Phase 3 redesign complete: all 14 screens done. Frozen reference screens: Login, HomeScreen, ProductScreen, OrderSuccessScreen, CartScreen.
+- Cancel order flow implemented — bottom sheet with `CustomerCancellationReason` + `RefundMode` pickers, `SubOrderNumber` from `getOrderStatus` used for payload. Backend `SubOrderNumber` inconsistency pending fix.
+- Order detail tracking timeline — `Events` array from `getOrderStatus` rendered as vertical spine timeline.
+- Order detail payment summary — `PaymentInfo` from `getOrderStatus` rendered (amount paid, discount, delivery, coupon, total).
+- Order history re-fetches on every focus — stale status after cancel resolved.
+- Full enum library in `src/config/enum_files/` — 27 enums matching backend `Enums.cs`, shared with backend team. `OrderStatusCode` defined in `enum_files/OrderStatus.ts`, re-exported from `interfaces.ts`.
 
 ---
 
@@ -182,12 +187,12 @@ All domains except order detail are on the real API:
 
 | Domain | Status | Notes |
 |---|---|---|
-| `product` | **Real** | Hardcodes `false ? mock : real`. Also re-exports `getOrgIdForInventory`. |
+| `product` | **Real** | All functions. Also re-exports `getOrgIdForInventory`. |
 | `auth` | **Real** | All functions: `loginCustomer`, `postCreateCustomer`, `postConfirmCustomer`, `postUpdateCustomer` |
 | `cart` | **Real** | All functions |
 | `address` | **Real** | All functions |
 | `wishlist` | **Real** | All functions |
-| `order` | **Mixed** | `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory` = real (with pagination + filters); `postCnfOrderDetail` = mock (pending backend verification) |
+| `order` | **Real** | `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`, `cancelOrder` all real. `order/index.ts` normalises field name casing (`InventoryID` → `Inventory_Id`, `ItemID` → `Item_Id`, `SubOrderNumber`, `BrandName` → `Brand_Name`, `PaymentInfo`) from `getOrderStatus` response. |
 
 `MOCK_MODE` in `src/config/env.ts` is `__DEV__` but no longer gates any domain — all domains bypass it. The constant remains for `MOCK_DELAY_MS` usage in mock implementations.
 
@@ -248,7 +253,11 @@ Shared sub-interfaces: `VariantTax`, `PhysicalAttributes`, `ProductComplianceInf
 
 ### 4.10 Enums (`src/config/enum_files/`)
 
-Server-side enums — one file each: `TaxType`, `SortBy`, `WeightUnit`, `DimensionUnit`, `VolumeUnit`, `ItemCondition`, `HazardClass`, `HazardLabel`, `WarrantyType`, `ProductDemographic`, `Season`. All are applied to the relevant numeric fields in `interfaces.ts`. Import directly from the specific file — no barrel index.
+Server-side enums — one file each, mirroring the backend `Enums.cs`. Import directly from the specific file — no barrel index. All numeric fields in `interfaces.ts` that have a corresponding enum must use it.
+
+**Customer-facing (actively used):** `OrderStatus` (re-exported as `OrderStatusCode`), `CustomerCancellationReason` (+ `CancellationReasonLabel` map), `RefundMode` (+ `RefundModeLabel` map), `CustomerPlatform`, `PaymentModes`, `TaxType`, `SortBy`, `ItemCondition`, `ProductDemographic`, `Season`, `WeightUnit`, `DimensionUnit`, `VolumeUnit`, `WarrantyType`, `HazardClass`, `HazardLabel`, `VATCategory`, `CouponDiscountType`, `VerificationStatus`.
+
+**Merchant/admin (present for shared reference, not used in customer app):** `MerchantStaffRole`, `Status`, `AdjustmentReason`, `AdjustmentType`, `InventoryStockFilter`, `ReceiptSearchFilter`, `MerchantCancellationReason`, `CountFilter`.
 
 ### 4.11 SortBy — server-side sorting
 
@@ -522,8 +531,8 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | Item | Notes |
 |---|---|
 | `placeOrder` OrganisationID cache cold-start | If a user deep-links straight to checkout without browsing products, `getOrgIdForInventory()` returns an empty string. Cache is populated only when products are fetched. |
-| `postUpdateCustomer` password | `Password` field is required but overwrites the stored password — cannot update profile without setting a new password. Backend discussing fix. |
-| Order detail on mock | `postCnfOrderDetail` still uses mock in `order/index.ts`. Switch to real once `getOrderStatus` endpoint is confirmed working. |
+| `postUpdateCustomer` password | `Password` field is required but overwrites the stored password — cannot update profile without setting a new password. Backend fix pending. |
+| Cancel order `SubOrder.Id` | Backend returns inconsistent `SubOrderNumber` between `getOrderHistory` and `getOrderStatus` for the same order — cancel API rejects the parsed value. `OrderDetailScreen` uses `getOrderStatus` data (`liveItem.SubOrderNumber`) and `orderNumber` from nav param. Backend fix pending. |
 | `useSession` adoption | WishlistScreen and CartScreen migrated to `useProfileCode()`. Still pending: AddressScreen, OrderHistoryScreen, OrderDetailScreen. |
 | Tax display in UI | `ProductScreen`, `CartScreen`, `AddressScreen` don't show tax breakdown. Tax data is available in variant response but not rendered. |
 | `getSavedCartItems` tax verification | Unconfirmed whether cart API returns `PriceDetails.Taxes` populated — needs real response check before tax display work. |
@@ -532,6 +541,8 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | `heroBanner` from legacy `src/data/mockData.js` | HomeScreen still imports from the old mock file. Should migrate to `api/mock/mockData.ts`. |
 | No error boundary at app root | Render exceptions crash the whole app. Add one in `App.tsx`. |
 | No unit test coverage | `useAsyncState`, `apiError`, domain routers, CartContext have no tests. Jest config exists. |
+| OTP resend | No resend button on OTPVerificationScreen — user has no recovery if OTP expires. |
+| Cart badge on logout | Badge count not reset to 0 on logout — shows stale count until next focus. |
 
 ### Resolved (for reference)
 
@@ -544,7 +555,12 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | Tax data in order payload | Fixed — `AddressScreen` maps `PriceDetails.Taxes` from cart items into `PlaceOrderTax[]` |
 | `ProductInterface` partial typing | Fully typed against live API — includes `PhysicalAttributes`, `ComplianceInfo`, `Taxes`, `StockStatus`, all nested objects |
 | Server-side sorting | Implemented — `allProducts` payload sends `sortBy: SortBy | null`; `ResultScreen` maps sort keys |
-| Enum files | Created — `src/config/enum_files/` with 11 enums applied to `interfaces.ts` |
+| Enum files | 27 enums in `src/config/enum_files/` mirroring backend `Enums.cs`. `OrderStatusCode` moved here, re-exported from `interfaces.ts`. |
+| Cancel order | `cancelOrder` endpoint wired — `merchant/postCancelledPlaceOrderByCustomer`. Bottom sheet in `OrderDetailScreen` with reason + refund mode pickers. Pending backend fix on `SubOrderNumber` inconsistency. |
+| Order tracking timeline | `Events` array from `getOrderStatus` rendered as vertical spine timeline in `OrderDetailScreen`. |
+| Order payment summary | `PaymentInfo` from `getOrderStatus` rendered in `OrderDetailScreen` — amount paid, discount, delivery, coupon, total. |
+| Order history stale after cancel | `OrderHistoryScreen` now re-fetches on every focus — fixed via removing `hasFetchedOnce` guard. |
+| `postCnfOrderDetail` on mock | Switched to real. Field mapping normalised in `order/index.ts` (`InventoryID`, `ItemID`, `SubOrderNumber`, `BrandName`, `PaymentInfo`). |
 | Cart/WishlistScreen reading AsyncStorage directly | Migrated to `useProfileCode()` hook |
 | `endpoints.js` plain JS | Migrated to `endpoints.ts` with `as const` domain objects |
 | `url.js` base URL config | Deleted — base URL lives in `.env` |
@@ -560,22 +576,24 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 
 ## 10. Screen Status
 
-| Screen | Phase | Status | Notes |
+| Screen | APIs Called | Key Features | Known Gaps |
 |---|---|---|---|
-| Login | 2 | **Complete** | Dark hero / light form split. Staggered spring entrance. Seeds cart count post-login. |
-| HomeScreen | 2 | **Complete** | Local entrance animation (exception to shared hook — intentional). |
-| ProductScreen | 2 | **Complete** | NativeWind reference implementation. |
-| CartScreen | 2 | **Complete** | Hairline dividers, no card boxing. |
-| OrderSuccessScreen | 2 | **Complete** | Ember ring animation on Carry curve. |
-| RegisterScreen | 3 | **Complete** | `postCreateCustomer` → navigates to OTPVerification with params. |
-| OTPVerificationScreen | 3 | **Complete** | `postConfirmCustomer` → navigates to Login on success. 6-digit OTP input. |
-| AddressManagementScreen | 3 | **Complete** | Full CRUD for delivery addresses. Inline form with `FloatingLabelInput`. Uses `useAsyncState`. |
-| ProfileScreen | 3 | **Complete** | Redesigned to frozen standard. |
-| AddressScreen | 3 | **Complete** | Redesigned. Uses `getOrgIdForInventory` for order payload. Still reads AsyncStorage directly (not yet on `useProfileCode`). |
-| ResultScreen | 3 | **Complete** | Server-side SortBy wired. |
-| WishlistScreen | 3 | **Complete** | On `useProfileCode`. |
-| OrderHistoryScreen | 3 | **Complete** | Hairline rows, StatusBadge, pull-to-refresh, infinite scroll pagination, sort/date filters via OrderFilterSheet. |
-| OrderDetailScreen | 3 | **Complete** | `postCnfOrderDetail` still on mock pending backend verification. |
+| **Login** | `loginCustomer`, `getSavedCartItems` (post-login) | Dark hero / light form split. Staggered spring entrance. Seeds cart count post-login via `getSavedCartItems`. Sets Keychain tokens + AsyncStorage user data. | — |
+| **RegisterScreen** | `postCreateCustomer` | `FloatingLabelInput` fields. On success → navigates to `OTPVerification` with phone + profile code params. | — |
+| **OTPVerificationScreen** | `postConfirmCustomer`, `postCreateCustomer` (resend) | 6-digit OTP input. Confirms registration → navigates to Login. | No resend button — user has no recovery if OTP expires. |
+| **HomeScreen** | `getProductsByCategory`, `getCategories`, `getBrands` | Module-level cache for categories/products/brands (survives re-focus). Recently viewed rail (AsyncStorage). Greeting from `userData`. Category rail, brand rail, smart buys, discounted products. | No banners/promotions. Local entrance animation (500ms/440ms) — intentional exception to shared hook. |
+| **SearchScreen** | `allProducts` (via axiosInstance direct) | Recent searches (AsyncStorage, max 8). Submits → `ResultScreen`. | No trending/popular searches. |
+| **ResultScreen** | `allProducts`, `getCategories`, `getBrands`, `addToWishlist` | Infinite scroll, server-side `SortBy` (LowToHigh/HighToLow), client-side newest/default sort. Filter sheet (category, brand, price range, discount, sort). Wishlist toggle inline. | — |
+| **ProductScreen** | `getProductByItemId`, `postSaveCartItems`, `addToWishlist`, `removeFromWishlist`, `getWishlist`, `addToGuestCart` | Variant picker (`VariantSheet`). Wishlist toggle. Add to cart (auth-guarded). Guest cart support. Writes `recentlyViewed` to AsyncStorage. `useAuthGuard` for protected actions. | No reviews/ratings section. No related/similar products. No size guide. |
+| **CartScreen** | `getSavedCartItems`, `postDeleteCartItem`, `updateCartItemQuantity`, `getGuestCart`, `updateGuestCartItem`, `removeFromGuestCart`, `clearGuestCart` | Auth + guest cart support. Qty stepper with optimistic updates. Remove item. `PriceDetails` summary panel. Proceeds to `AddressScreen` (auth-guarded). Merges guest cart on login. | No coupon/promo code input (`CouponAvailed` exists in API). Tax breakdown not shown. |
+| **AddressScreen** | `getDeliveryAddresses`, `postCreateDeliveryAddress`, `placeOrder` | Selects/creates delivery address. Builds full order payload (org map, taxes, payment modes). Stores `orderId` to AsyncStorage → navigates to `EcomPayment`. Still reads AsyncStorage directly (not on `useProfileCode`). | `OrganisationID` cold-start risk if user reaches checkout without browsing products. |
+| **PaymentScreen** | MIPS `token/create`, MIPS `mips/loadPaymentZone`, MIPS `mips/getPaymentStatus`, `placeOrder` | WebView MIPS payment gateway. 5-min countdown. Polls payment status (15s initial delay, 5s interval, 60 max attempts). Finalises order on `StatusCode=1`. Clears cart on success → `OrderSuccess`. | Credentials hardcoded pending backend config. `customerProfileCode` hardcoded to test value pending backend fix. |
+| **OrderSuccessScreen** | None (params only) | Ember ring scales 0.52→1.0 on Carry curve. `haptic.success()` at draw completion. Staggered Settle content entrance. Shows order number, items, total, address, timestamp. | — |
+| **OrderHistoryScreen** | `postOrderHistory`, `postSaveCartItems` (reorder) | Infinite scroll pagination (page size 10). Pull-to-refresh. Sort + date range filters (`OrderFilterSheet`). Order progress bar with active step label. Reorder button (adds all items to cart). Re-fetches on every focus. Auth-guarded (shows `LoginPromptSheet` for guests). | Order count in header is current-page count, not server total. |
+| **OrderDetailScreen** | `postCnfOrderDetail`, `cancelOrder` | Tracking timeline (`Events` array as vertical spine). Payment summary (`PaymentInfo`). Delivery address section. Cancel order bottom sheet (`CustomerCancellationReason` + `RefundMode` pickers, auth-guarded by `liveItem` from `getOrderStatus`). Cancel only shown for New/Confirmed/Processing. | Cancel `SubOrder.Id` pending backend fix (`SubOrderNumber` inconsistency between `getOrderHistory` and `getOrderStatus`). |
+| **WishlistScreen** | `getWishlist`, `removeFromWishlist`, `postSaveCartItems` | Auth-guarded (shows `LoginPromptSheet` for guests). Remove from wishlist. Add to cart from wishlist. Navigate to product on tap. On `useProfileCode`. | — |
+| **ProfileScreen** | `getDeliveryAddresses`, AsyncStorage (`userData`) | Shows user info from `userData`. Address count from `getDeliveryAddresses`. Links to Wishlist, Orders, AddressManagement. Logout (clears session). | `postUpdateCustomer` password issue — overwrites stored password, backend fix pending. No order count summary. |
+| **AddressManagementScreen** | `getDeliveryAddresses`, `postCreateDeliveryAddress`, `postUpdateDeliveryAddress`, `postDeleteDeliveryAddress` | Full CRUD for delivery addresses. Inline form (`FloatingLabelInput`). Set primary address. `useAsyncState` + `useFocusEffect`. | — |
 
 ---
 

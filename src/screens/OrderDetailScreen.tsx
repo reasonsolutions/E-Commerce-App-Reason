@@ -8,7 +8,7 @@ import {
   StatusBar,
   TouchableOpacity,
   Platform,
-  Alert,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
@@ -112,6 +112,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const [selectedRefundMode, setSelectedRefundMode] = useState<RefundMode | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
 
   const fetchOrderDetails = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -160,7 +161,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         CustomerPlatform:           Platform.OS === 'ios' ? CustomerPlatform.IOS : CustomerPlatform.Android,
         OrderNumber:                orderNumber,
         SubOrder: [{
-          Id:          parseInt(liveItem.SubOrderNumber.replace('SORDNO-', ''), 10),
+          Id:          liveItem.SubOrder.Code,
           InventoryId: liveItem.Inventory_Id,
         }],
         CustomerCancellationReason: selectedReason,
@@ -175,11 +176,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
 
       haptic.success();
       cancelSheetRef.current?.close();
-      Alert.alert(
-        'Order Cancelled',
-        response.userMessage ?? 'Your order has been cancelled successfully.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }],
-      );
+      setCancelSuccess(true);
     } catch (err: any) {
       setCancelError(err?.response?.data?.userMessage ?? 'Something went wrong. Please try again.');
     } finally {
@@ -429,6 +426,30 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           </Animated.View>
         ) : null}
       </ScrollView>
+
+      {/* ── Cancel success modal ── */}
+      <Modal
+        visible={cancelSuccess}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Order Cancelled</Text>
+            <Text style={styles.modalBody}>
+              Your order #{orderNumber} has been cancelled successfully.
+            </Text>
+            <TouchableOpacity
+              style={styles.modalCta}
+              activeOpacity={0.8}
+              onPress={() => { setCancelSuccess(false); navigation.goBack(); }}
+            >
+              <Text style={styles.modalCtaText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Cancel order bottom sheet ── */}
       <BottomSheet
@@ -713,6 +734,45 @@ const styles = StyleSheet.create({
   },
   sheetCta: {
     marginTop: Space[6],
+  },
+
+  // ── Cancel success modal ──────────────────────────────────────────────────────
+  modalOverlay: {
+    flex:            1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent:  'center',
+    alignItems:      'center',
+    paddingHorizontal: Space.screenH,
+  },
+  modalCard: {
+    width:           '100%',
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.md,
+    padding:         Space[6],
+    gap:             Space[3],
+  },
+  modalTitle: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      22,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.3,
+  },
+  modalBody: {
+    ...Type.body,
+    color:      Colors.ink3,
+    lineHeight: 22,
+  },
+  modalCta: {
+    marginTop:       Space[2],
+    backgroundColor: Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingVertical: Space[4],
+    alignItems:      'center',
+  },
+  modalCtaText: {
+    ...Type.bodyStrong,
+    color: Colors.surface,
   },
 
   // ── Loading skeleton ──────────────────────────────────────────────────────────

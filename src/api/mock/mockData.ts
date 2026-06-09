@@ -554,10 +554,10 @@ export const mockOrderHistory: (postOrderHistoryDetailsInterface & { OrderNumber
 export const mockOrderDetail: { OrderDetails: OrderDetailItemExtendedInterface[]; DeliveryDetail: DeliveryAddressInterface[] } = {
   OrderDetails: [
     {
-      Inventory_Id:   65,
-      Item_Id:        31,
-      SubOrderNumber: 'SORDNO-00031',
-      Variant:        'UK 5.5',
+      Inventory_Id: 65,
+      Item_Id:      31,
+      SubOrder:     { Code: 31, Number: 'SORDNO-00031' },
+      Variant:      'UK 5.5',
       Name: "Air Jordan 40 PF 'Blue Suede'",
       Images: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/fe12ac0f-c417-429f-9c91-085e283c332f/AIR+JORDAN+40+PF.png;',
       Quantity: 1,

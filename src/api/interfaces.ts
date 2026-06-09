@@ -675,24 +675,29 @@ import { OrderStatusCode } from '../config/enum_files/OrderStatus';
 export { OrderStatusCode };
 
 export interface OrderHistoryItemInterface {
-    Inventory_Id:   number;
-    Item_Id:        number;
-    SubOrderNumber: string;
-    Variant:        string;
-    Name:           string;
-    Brand_Name:     string;
-    Brand_Id:       number;
-    Images:         string;
-    Quantity:       number;
-    Amount:         number;
-    OrderStatus:    OrderStatusCode;
-    OrderNumber:    string;
-    OrderedDate:    string;
-    PaymentInfo?:   OrderPaymentInfoInterface;
+    Inventory_Id: number;
+    Item_Id:      number;
+    SubOrder:     SubOrderDetail;
+    Variant:      string;
+    Name:         string;
+    Brand_Name:   string;
+    Brand_Id:     number;
+    Images:       string;
+    Quantity:     number;
+    Amount:       number;
+    OrderStatus:  OrderStatusCode;
+    OrderNumber:  string;
+    OrderedDate:  string;
+    PaymentInfo?: OrderPaymentInfoInterface;
 }
 
 export interface OrderDetailItemExtendedInterface extends OrderHistoryItemInterface {
     CreatedDate: string;
+}
+
+export interface SubOrderDetail {
+    Code:   number;
+    Number: string;
 }
 
 export interface OrderPaymentInfoInterface {

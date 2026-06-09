@@ -87,11 +87,13 @@ All responses: `{ statusCode: 1|0, result: {...}, userMessage: string }`. Unwrap
 
 ### Domain mock/real status
 
-Read each domain's `index.ts` before assuming mock or real. Currently: auth/cart/wishlist/address/product = real. Order = mixed — `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory` are real; `postCnfOrderDetail` is still on mock pending backend verification.
+Read each domain's `index.ts` before assuming mock or real. Currently: all domains are real. Order = `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`, `cancelOrder` all real.
 
 ### Enums
 
-Server-side enums live in `src/config/enum_files/` — one file per enum (e.g. `TaxType.ts`, `SortBy.ts`). Import directly from the specific file, no barrel index. These are used in `src/api/interfaces.ts` to type numeric fields from API responses. Do not use raw `number` for fields that have a corresponding enum.
+Server-side enums live in `src/config/enum_files/` — one file per enum. Import directly from the specific file, no barrel index. These are used in `src/api/interfaces.ts` to type numeric fields from API responses. Do not use raw `number` for fields that have a corresponding enum.
+
+Full enum list: `OrderStatus` (re-exported as `OrderStatusCode` from `interfaces.ts`), `CustomerCancellationReason` (+ `CancellationReasonLabel`), `RefundMode` (+ `RefundModeLabel`), `CustomerPlatform`, `PaymentModes`, `TaxType`, `VATCategory`, `CouponDiscountType`, `SortBy`, `ItemCondition`, `ProductDemographic`, `Season`, `WeightUnit`, `DimensionUnit`, `VolumeUnit`, `WarrantyType`, `HazardClass`, `HazardLabel`, `MerchantStaffRole`, `VerificationStatus`, `Status`, `AdjustmentReason`, `AdjustmentType`, `InventoryStockFilter`, `ReceiptSearchFilter`, `MerchantCancellationReason`, `CountFilter`.
 
 ### SortBy
 
@@ -305,7 +307,7 @@ All 14 screens are open for redesign when explicitly requested. Login, HomeScree
 
 | Item | Notes |
 |---|---|
-| ~~`postCnfOrderDetail` on mock~~ | Switched to real; `Brand_Name` fallback mapping added |
+| ~~`postCnfOrderDetail` on mock~~ | Switched to real; `Brand_Name`, `InventoryID`, `ItemID`, `SubOrderNumber` fallback mapping added in `order/index.ts` |
 | ~~401 session clearing~~ | Done — `axiosInstance` response interceptor calls `clearSession()` + `resetToLogin()` |
 | ~~Refresh token flow~~ | Done — 401 → refresh → retry wired in `axiosInstance.ts`. Both tokens cleared on logout. |
 | ~~Clock-based token expiry~~ | Removed — expiry is server-driven via 401, not `exp` decode |
@@ -320,6 +322,7 @@ All 14 screens are open for redesign when explicitly requested. Login, HomeScree
 | Cart badge on logout | Badge count not reset to 0 on logout — shows stale count until next focus |
 | API response types | `axiosInstance` responses untyped (`any`) — incremental hardening deferred |
 | Navigation prop typing | Most screens use `any`-typed nav props — should use `StackNavigationProp` generics |
+| Cancel order testing | `getOrderStatus` now returns `SubOrder: { Code, Number }`. Cancel payload uses `SubOrder.Code` directly. Pending end-to-end test confirmation. |
 
 ---
 

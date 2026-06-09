@@ -8,17 +8,17 @@ import type {
 } from '../interfaces';
 
 interface RawOrderHistoryItem {
-  InventoryID:     number;
-  ItemID:          number;
-  BrandID:         number;
-  BrandName:       string;
-  SubOrderNumber:  string;
-  Price:           number;
-  Quantity:        number;
-  Name:            string;
-  Variant:         string;
-  Images:          string;
-  OrderStatus:     number;
+  InventoryID:  number;
+  ItemID:       number;
+  BrandID:      number;
+  BrandName:    string;
+  SubOrder?:    { Code: number; Number: string };
+  Price:        number;
+  Quantity:     number;
+  Name:         string;
+  Variant:      string;
+  Images:       string;
+  OrderStatus:  number;
   [key: string]: unknown;
 }
 
@@ -70,10 +70,10 @@ export const postOrderHistory = async (
       ...item,
       OrderNumber:  order.OrderNumber,
       OrderedDate:  order.OrderedDate,
-      Inventory_Id:   item.InventoryID,
-      Item_Id:        item.ItemID,
-      SubOrderNumber: item.SubOrderNumber,
-      Brand_Id:       item.BrandID,
+      Inventory_Id: item.InventoryID,
+      Item_Id:      item.ItemID,
+      SubOrder:     item.SubOrder ?? { Code: 0, Number: '' },
+      Brand_Id:     item.BrandID,
       Brand_Name:   item.BrandName,
       Amount:       item.Price ?? 0,
     })),
