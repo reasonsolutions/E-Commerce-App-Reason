@@ -34,6 +34,7 @@ export const orderEndpoints = {
   placeOrder:      'ecomm/placeOrder',
   getOrderHistory: 'ecomm/getOrderHistory',
   getOrderStatus:  'ecomm/getOrderStatus',
+  cancelOrder:     'merchant/postCancelledPlaceOrderByCustomer',
 } as const;
 
 // ─── Addresses ────────────────────────────────────────────────────────────────

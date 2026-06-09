@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,23 +6,31 @@ import {
   ScrollView,
   Animated,
   StatusBar,
+  TouchableOpacity,
+  Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import { postCnfOrderDetail } from '../api/order';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { postCnfOrderDetail, cancelOrder } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
-import { Skeleton, SkeletonRow, StatusBadge, DarkHeader } from '../components/ui';
+import { Skeleton, SkeletonRow, StatusBadge, DarkHeader, PrimaryButton } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
+import { useHaptic } from '../hooks/useHaptic';
 import { formatDate } from '../utils/formatDate';
 import { orderStatusLabel } from '../utils/orderStatus';
-import type { OrderDetailItemExtendedInterface, OrderDetailResponseInterface } from '../api/interfaces';
+import type { OrderDetailItemExtendedInterface, OrderDetailResponseInterface, OrderStatusCode, OrderEventInterface } from '../api/interfaces';
+import { CustomerCancellationReason, CancellationReasonLabel } from '../config/enum_files/CustomerCancellationReason';
+import { RefundMode, RefundModeLabel } from '../config/enum_files/RefundMode';
+import { CustomerPlatform } from '../config/enum_files/CustomerPlatform';
 
 // 4:5 portrait — canonical card ratio
 const IMG_W = 88;
@@ -85,15 +93,25 @@ const detailStyles = StyleSheet.create({
   },
 });
 
+const CANCELLABLE_STATUSES: OrderStatusCode[] = [1, 2, 3]; // New, Confirmed, Processing
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const haptic = useHaptic();
   const route  = useRoute<RouteProp<{ params: OrderDetailScreenRouteParams }, 'params'>>();
   const orderItem   = route.params?.orderItem;
   const orderNumber = orderItem?.OrderNumber;
 
   const { data: orderDetails, loading, isError, error, run } =
     useAsyncState<OrderDetailResponseInterface>(null);
+
+  // ── Cancel order state ─────────────────────────────────────────────────────
+  const cancelSheetRef = useRef<BottomSheet>(null);
+  const [selectedReason, setSelectedReason] = useState<CustomerCancellationReason | null>(null);
+  const [selectedRefundMode, setSelectedRefundMode] = useState<RefundMode | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const fetchOrderDetails = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -113,10 +131,68 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     return () => { cancelled.current = true; };
   }, [fetchOrderDetails, orderNumber]);
 
-  const headerAnim  = useEntrance(0);
-  const productAnim = useEntrance(80);
-  const orderAnim   = useEntrance(160);
-  const deliveryAnim = useEntrance(240);
+  const openCancelSheet = () => {
+    setCancelError(null);
+    setSelectedReason(null);
+    setSelectedRefundMode(null);
+    haptic.light();
+    cancelSheetRef.current?.expand();
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!selectedReason || !selectedRefundMode) {
+      setCancelError('Please select a reason and a refund mode.');
+      return;
+    }
+    const liveItem = orderDetails?.OrderDetails[0];
+    if (!liveItem || !orderNumber) return;
+
+    try {
+      setCancelLoading(true);
+      setCancelError(null);
+
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+      if (!raw) throw new Error('Session expired. Please log in again.');
+      const user = JSON.parse(raw);
+
+      const response = await cancelOrder({
+        CustomerProfileCode:        user.CustomerProfileCode,
+        CustomerPlatform:           Platform.OS === 'ios' ? CustomerPlatform.IOS : CustomerPlatform.Android,
+        OrderNumber:                orderNumber,
+        SubOrder: [{
+          Id:          parseInt(liveItem.SubOrderNumber.replace('SORDNO-', ''), 10),
+          InventoryId: liveItem.Inventory_Id,
+        }],
+        CustomerCancellationReason: selectedReason,
+        RefundMode:                 selectedRefundMode,
+        Remarks:                    CancellationReasonLabel[selectedReason],
+      });
+
+      if (response?.statusCode !== 1) {
+        setCancelError(response?.userMessage ?? 'Could not cancel this order. Please try again.');
+        return;
+      }
+
+      haptic.success();
+      cancelSheetRef.current?.close();
+      Alert.alert(
+        'Order Cancelled',
+        response.userMessage ?? 'Your order has been cancelled successfully.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
+    } catch (err: any) {
+      setCancelError(err?.response?.data?.userMessage ?? 'Something went wrong. Please try again.');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  const headerAnim   = useEntrance(0);
+  const productAnim  = useEntrance(80);
+  const orderAnim    = useEntrance(160);
+  const paymentAnim  = useEntrance(220);
+  const deliveryAnim = useEntrance(280);
+  const eventsAnim   = useEntrance(360);
 
   const Header = (
     <Animated.View style={headerAnim}>
@@ -168,8 +244,10 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
 
   const order    = orderItem ?? orderDetails?.OrderDetails[0];
   const delivery = orderDetails?.DeliveryDetail[0];
+  const events   = orderDetails?.Events ?? [];
   const firstImg = order?.Images?.split(';').filter(Boolean)[0] ?? '';
   const status   = order ? orderStatusLabel(order.OrderStatus) : undefined;
+  const isCancellable = order ? CANCELLABLE_STATUSES.includes(order.OrderStatus as OrderStatusCode) : false;
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (!order) {
@@ -275,7 +353,32 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           )}
         </Animated.View>
 
-        {/* ── Delivery section — hidden until getOrderStatus is wired ── */}
+        {/* ── Payment section ── */}
+        {order.PaymentInfo ? (
+          <Animated.View style={[styles.section, paymentAnim]}>
+            <Text style={styles.sectionEyebrow}>PAYMENT</Text>
+            <DetailRow label="AMOUNT PAID"  value={`Rs ${order.PaymentInfo.AmountPaid.toFixed(2)}`} />
+            {order.PaymentInfo.Discount > 0 ? (
+              <DetailRow label="DISCOUNT" value={`− Rs ${order.PaymentInfo.Discount.toFixed(2)}`} />
+            ) : null}
+            {order.PaymentInfo.DeliveryCharges > 0 ? (
+              <DetailRow label="DELIVERY" value={`Rs ${order.PaymentInfo.DeliveryCharges.toFixed(2)}`} />
+            ) : null}
+            {order.PaymentInfo.isFreeShipping ? (
+              <DetailRow label="DELIVERY" value="Free" />
+            ) : null}
+            {order.PaymentInfo.CouponAvailed ? (
+              <DetailRow label="COUPON" value={order.PaymentInfo.CouponAvailed} />
+            ) : null}
+            <DetailRow
+              label="TOTAL"
+              value={`Rs ${order.PaymentInfo.TotalAmountAfterDiscount.toFixed(2)}`}
+              isLast
+            />
+          </Animated.View>
+        ) : null}
+
+        {/* ── Delivery section ── */}
         {delivery ? (
           <Animated.View style={[styles.section, deliveryAnim]}>
             <Text style={styles.sectionEyebrow}>DELIVERY</Text>
@@ -284,7 +387,109 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             <DetailRow label="ADDRESS" value={[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).join(', ')} isLast />
           </Animated.View>
         ) : null}
+
+        {/* ── Order timeline ── */}
+        {events.length > 0 ? (
+          <Animated.View style={[styles.section, eventsAnim]}>
+            <Text style={styles.sectionEyebrow}>TRACKING</Text>
+            {events.map((event: OrderEventInterface, index: number) => {
+              const isLast = index === events.length - 1;
+              return (
+                <View key={index} style={styles.eventRow}>
+                  {/* Spine */}
+                  <View style={styles.eventSpine}>
+                    <View style={[styles.eventDot, event.IsCompleted && styles.eventDotCompleted]} />
+                    {!isLast ? (
+                      <View style={[styles.eventLine, event.IsCompleted && styles.eventLineCompleted]} />
+                    ) : null}
+                  </View>
+                  {/* Content */}
+                  <View style={styles.eventContent}>
+                    <Text style={[styles.eventDescription, event.IsCompleted && styles.eventDescriptionCompleted]}>
+                      {event.Description}
+                    </Text>
+                    {event.Date ? (
+                      <Text style={styles.eventMeta}>
+                        {formatDate(event.Date)}{event.Location ? `  ·  ${event.Location}` : ''}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+          </Animated.View>
+        ) : null}
+
+        {/* ── Cancel order CTA — only for cancellable statuses ── */}
+        {isCancellable ? (
+          <Animated.View style={[styles.cancelWrap, eventsAnim]}>
+            <TouchableOpacity onPress={openCancelSheet} style={styles.cancelLink} activeOpacity={0.6}>
+              <Text style={styles.cancelLinkText}>Cancel this order</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        ) : null}
       </ScrollView>
+
+      {/* ── Cancel order bottom sheet ── */}
+      <BottomSheet
+        ref={cancelSheetRef}
+        index={-1}
+        snapPoints={['75%']}
+        enablePanDownToClose
+        backgroundStyle={styles.sheetBg}
+        handleIndicatorStyle={styles.sheetHandle}
+      >
+        <BottomSheetScrollView
+          contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + Space[6] }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.sheetTitle}>Cancel Order</Text>
+          <Text style={styles.sheetSubtitle}>#{orderNumber}</Text>
+
+          {/* Reason picker */}
+          <Text style={styles.sheetSectionLabel}>REASON FOR CANCELLATION</Text>
+          {(Object.values(CustomerCancellationReason).filter(v => typeof v === 'number') as CustomerCancellationReason[]).map(reason => (
+            <TouchableOpacity
+              key={reason}
+              onPress={() => { haptic.light(); setSelectedReason(reason); }}
+              style={[styles.optionRow, selectedReason === reason && styles.optionRowSelected]}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.optionRadio, selectedReason === reason && styles.optionRadioSelected]} />
+              <Text style={[styles.optionLabel, selectedReason === reason && styles.optionLabelSelected]}>
+                {CancellationReasonLabel[reason]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          {/* Refund mode picker */}
+          <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>REFUND METHOD</Text>
+          {(Object.values(RefundMode).filter(v => typeof v === 'number') as RefundMode[]).map(mode => (
+            <TouchableOpacity
+              key={mode}
+              onPress={() => { haptic.light(); setSelectedRefundMode(mode); }}
+              style={[styles.optionRow, selectedRefundMode === mode && styles.optionRowSelected]}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.optionRadio, selectedRefundMode === mode && styles.optionRadioSelected]} />
+              <Text style={[styles.optionLabel, selectedRefundMode === mode && styles.optionLabelSelected]}>
+                {RefundModeLabel[mode]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          {cancelError ? (
+            <Text style={styles.sheetError}>{cancelError}</Text>
+          ) : null}
+
+          <PrimaryButton
+            label="Confirm Cancellation"
+            onPress={handleConfirmCancel}
+            loading={cancelLoading}
+            style={styles.sheetCta}
+          />
+        </BottomSheetScrollView>
+      </BottomSheet>
     </View>
   );
 };
@@ -375,6 +580,139 @@ const styles = StyleSheet.create({
     ...Type.label,
     color:        Colors.ink4,
     marginBottom: Space[2],
+  },
+
+  // ── Order timeline ────────────────────────────────────────────────────────────
+  eventRow: {
+    flexDirection: 'row',
+    gap:           Space[3],
+    paddingBottom: Space[4],
+  },
+  eventSpine: {
+    alignItems:  'center',
+    width:       16,
+    flexShrink:  0,
+    marginTop:   3,
+  },
+  eventDot: {
+    width:        10,
+    height:       10,
+    borderRadius: 5,
+    borderWidth:  1.5,
+    borderColor:  Colors.rule,
+    backgroundColor: Colors.surface,
+  },
+  eventDotCompleted: {
+    borderColor:     Colors.ink1,
+    backgroundColor: Colors.ink1,
+  },
+  eventLine: {
+    width:           1.5,
+    flex:            1,
+    marginTop:       3,
+    backgroundColor: Colors.rule,
+  },
+  eventLineCompleted: {
+    backgroundColor: Colors.ink1,
+  },
+  eventContent: {
+    flex:         1,
+    paddingBottom: Space[1],
+  },
+  eventDescription: {
+    ...Type.body,
+    color: Colors.ink4,
+  },
+  eventDescriptionCompleted: {
+    color: Colors.ink1,
+  },
+  eventMeta: {
+    ...Type.caption,
+    color:     Colors.ink4,
+    marginTop: Space[1],
+  },
+
+  // ── Cancel link ───────────────────────────────────────────────────────────────
+  cancelWrap: {
+    marginTop:  Space[8],
+    alignItems: 'center',
+  },
+  cancelLink: {
+    paddingVertical: Space[2],
+  },
+  cancelLinkText: {
+    ...Type.caption,
+    color:             Colors.danger,
+    textDecorationLine: 'underline',
+  },
+
+  // ── Cancel sheet ──────────────────────────────────────────────────────────────
+  sheetBg: {
+    backgroundColor: Colors.surface,
+  },
+  sheetHandle: {
+    backgroundColor: Colors.rule,
+  },
+  sheetContent: {
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[4],
+  },
+  sheetTitle: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      22,
+    color:         Colors.ink1,
+    letterSpacing: -0.3,
+  },
+  sheetSubtitle: {
+    ...Type.label,
+    color:        Colors.ink4,
+    marginTop:    Space[1],
+    marginBottom: Space[5],
+  },
+  sheetSectionLabel: {
+    ...Type.label,
+    color:        Colors.ink4,
+    marginBottom: Space[3],
+  },
+  optionRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               Space[3],
+    paddingVertical:   Space[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  optionRowSelected: {
+    // no background change — radio dot is the indicator
+  },
+  optionRadio: {
+    width:        16,
+    height:       16,
+    borderRadius: 8,
+    borderWidth:  1.5,
+    borderColor:  Colors.ink4,
+    flexShrink:   0,
+  },
+  optionRadioSelected: {
+    borderColor:     Colors.ink1,
+    backgroundColor: Colors.ink1,
+  },
+  optionLabel: {
+    ...Type.body,
+    color: Colors.ink3,
+    flex:  1,
+  },
+  optionLabelSelected: {
+    color: Colors.ink1,
+  },
+  sheetError: {
+    ...Type.caption,
+    color:     Colors.danger,
+    marginTop: Space[4],
+    textAlign: 'center',
+  },
+  sheetCta: {
+    marginTop: Space[6],
   },
 
   // ── Loading skeleton ──────────────────────────────────────────────────────────

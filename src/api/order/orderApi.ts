@@ -4,19 +4,21 @@ import type {
   PlaceOrderInterface,
   OrderHistoryRequest,
   OrderDetailRequest,
+  CancelOrderInterface,
 } from '../interfaces';
 
 interface RawOrderHistoryItem {
-  InventoryID:  number;
-  ItemID:       number;
-  BrandID:      number;
-  BrandName:    string;
-  Price:        number;
-  Quantity:     number;
-  Name:         string;
-  Variant:      string;
-  Images:       string;
-  OrderStatus:  number;
+  InventoryID:     number;
+  ItemID:          number;
+  BrandID:         number;
+  BrandName:       string;
+  SubOrderNumber:  string;
+  Price:           number;
+  Quantity:        number;
+  Name:            string;
+  Variant:         string;
+  Images:          string;
+  OrderStatus:     number;
   [key: string]: unknown;
 }
 
@@ -68,9 +70,10 @@ export const postOrderHistory = async (
       ...item,
       OrderNumber:  order.OrderNumber,
       OrderedDate:  order.OrderedDate,
-      Inventory_Id: item.InventoryID,
-      Item_Id:      item.ItemID,
-      Brand_Id:     item.BrandID,
+      Inventory_Id:   item.InventoryID,
+      Item_Id:        item.ItemID,
+      SubOrderNumber: item.SubOrderNumber,
+      Brand_Id:       item.BrandID,
       Brand_Name:   item.BrandName,
       Amount:       item.Price ?? 0,
     })),
@@ -79,6 +82,11 @@ export const postOrderHistory = async (
   // hasMore is true only if the server returned a full page of groups —
   // a partial page means we've reached the end.
   return { items, hasMore: raw.result.length >= PAGE_SIZE };
+};
+
+export const cancelOrder = async (data: CancelOrderInterface) => {
+  const response = await axiosInstance.post(orderEndpoints.cancelOrder, data);
+  return response.data;
 };
 
 export const postCnfOrderDetail = async (OrderMasterCode: string, CustomerProfileCode: number) => {

@@ -5,14 +5,12 @@ import {
   Alert,
   StyleSheet,
   StatusBar,
-  Platform,
 } from 'react-native';
 import WebView from 'react-native-webview';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import axiosInstance from '../api/axiosInstance';
 import { paymentEndpoints } from '../api/endpoints';
 import { placeOrder } from '../api/order';
 import { useCart } from '../context/CartContext';
@@ -93,9 +91,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
           Password:    '#mu@76*3',
           MachineName: 'ecom',
         });
-        console.log(tokenRes)
         const mipsAuthToken: string = tokenRes.data?.result ?? '';
-        console.log(mipsAuthToken)
         if (!mipsAuthToken) {
           setLoadError('Failed to authenticate with payment gateway. Please try again.');
           return;

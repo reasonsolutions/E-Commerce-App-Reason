@@ -1,0 +1,16 @@
+export enum MerchantCancellationReason {
+  ItemOutOfStock                 = 1,
+  ItemDamagedInWarehouse         = 2,
+  ItemDiscontinued               = 3,
+  IncorrectPriceListed           = 4,
+  IncorrectProductDetails        = 5,
+  UnableToFulfillInTime          = 6,
+  DeliveryLocationNotServiceable = 7,
+  OperationalIssue               = 8,
+  RestrictedItemForRegion        = 9,
+  AgeVerificationFailed          = 10,
+  HazmatShippingRestriction      = 11,
+  SuspectedFraudulentOrder       = 12,
+  PaymentVerificationFailed      = 13,
+  ForceMajeure                   = 14,
+}

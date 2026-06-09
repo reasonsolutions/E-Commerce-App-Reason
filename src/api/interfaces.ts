@@ -36,6 +36,21 @@ export interface OrderDetailRequest {
     CustomerProfileCode: number;
 }
 
+export interface CancelOrderSubItem {
+    Id:          number;
+    InventoryId: number;
+}
+
+export interface CancelOrderInterface {
+    CustomerProfileCode:        number;
+    CustomerPlatform:           number;
+    OrderNumber:                string;
+    SubOrder:                   CancelOrderSubItem[];
+    CustomerCancellationReason: number;
+    RefundMode:                 number;
+    Remarks:                    string;
+}
+
 export interface CartQuantityRequest {
     CartDetailsCode: number;
     Inventory_Id: number;
@@ -656,37 +671,50 @@ export interface postOrderHistoryDetailsInterface {
     Brand_Name: string
 }
 
-export enum OrderStatusCode {
-  New        = 1,
-  Confirmed  = 2,
-  Processing = 3,
-  Fulfilled  = 4,
-  Shipped    = 5,
-  Delivered  = 6,
-  Cancelled  = 7,
-  Returned   = 8,
-}
+import { OrderStatusCode } from '../config/enum_files/OrderStatus';
+export { OrderStatusCode };
 
 export interface OrderHistoryItemInterface {
-    Inventory_Id:  number;
-    Item_Id:       number;
-    Variant:       string;
-    Name:          string;
-    Brand_Name:    string;
-    Brand_Id:      number;
-    Images:        string;
-    Quantity:      number;
-    Amount:        number;
-    OrderStatus:   OrderStatusCode;
-    OrderNumber:   string;
-    OrderedDate:   string;
+    Inventory_Id:   number;
+    Item_Id:        number;
+    SubOrderNumber: string;
+    Variant:        string;
+    Name:           string;
+    Brand_Name:     string;
+    Brand_Id:       number;
+    Images:         string;
+    Quantity:       number;
+    Amount:         number;
+    OrderStatus:    OrderStatusCode;
+    OrderNumber:    string;
+    OrderedDate:    string;
+    PaymentInfo?:   OrderPaymentInfoInterface;
 }
 
 export interface OrderDetailItemExtendedInterface extends OrderHistoryItemInterface {
     CreatedDate: string;
 }
 
+export interface OrderPaymentInfoInterface {
+    AmountPaid:                  number;
+    TotalAmountBeforeDiscount:   number;
+    TotalAmountAfterDiscount:    number;
+    Discount:                    number;
+    CouponAvailed:               string | null;
+    DeliveryCharges:             number;
+    isFreeShipping:              boolean;
+}
+
+export interface OrderEventInterface {
+    StatusCode:  number;
+    Description: string;
+    Date:        string;
+    Location:    string | null;
+    IsCompleted: boolean;
+}
+
 export interface OrderDetailResponseInterface {
     OrderDetails:   OrderDetailItemExtendedInterface[];
     DeliveryDetail: DeliveryAddressInterface[];
+    Events:         OrderEventInterface[];
 }

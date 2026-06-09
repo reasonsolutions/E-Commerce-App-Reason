@@ -102,6 +102,17 @@ function groupOrders(items: OrderHistoryItemInterface[]): OrderGroup[] {
 }
 
 // ── Order progress bar ────────────────────────────────────────────────────────
+const PROGRESS_LABELS: Record<OrderStatusCode, string> = {
+  [OrderStatusCode.New]:        'Placed',
+  [OrderStatusCode.Confirmed]:  'Confirmed',
+  [OrderStatusCode.Processing]: 'Processing',
+  [OrderStatusCode.Fulfilled]:  'Packed',
+  [OrderStatusCode.Shipped]:    'Shipped',
+  [OrderStatusCode.Delivered]:  'Delivered',
+  [OrderStatusCode.Cancelled]:  'Cancelled',
+  [OrderStatusCode.Returned]:   'Returned',
+};
+
 const OrderProgressBar: React.FC<{ status: OrderStatusCode }> = ({ status }) => {
   const currentIdx = PROGRESS_STEPS.indexOf(status);
   if (currentIdx < 0) return null;
@@ -109,17 +120,20 @@ const OrderProgressBar: React.FC<{ status: OrderStatusCode }> = ({ status }) => 
   return (
     <View style={progStyles.container}>
       {PROGRESS_STEPS.map((step, i) => {
-        const filled = i <= currentIdx;
+        const filled   = i <= currentIdx;
         const isActive = i === currentIdx;
         return (
           <View key={step} style={progStyles.stepWrap}>
             <View
               style={[
                 progStyles.segment,
-                filled && progStyles.segmentFilled,
-                isActive && progStyles.segmentActive,
+                filled    && progStyles.segmentFilled,
+                isActive  && progStyles.segmentActive,
               ]}
             />
+            {isActive ? (
+              <Text style={progStyles.stepLabel}>{PROGRESS_LABELS[step]}</Text>
+            ) : null}
           </View>
         );
       })}
@@ -130,16 +144,18 @@ const OrderProgressBar: React.FC<{ status: OrderStatusCode }> = ({ status }) => 
 const progStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 3,
-    marginTop: 10,
-    marginBottom: 2,
+    gap:           3,
+    marginTop:     10,
+    marginBottom:  2,
   },
   stepWrap: {
-    flex: 1,
+    flex:      1,
+    alignItems: 'center',
   },
   segment: {
-    height: 3,
-    borderRadius: 2,
+    width:           '100%',
+    height:          3,
+    borderRadius:    2,
     backgroundColor: Colors.rule,
   },
   segmentFilled: {
@@ -147,6 +163,14 @@ const progStyles = StyleSheet.create({
   },
   segmentActive: {
     backgroundColor: Colors.accent,
+  },
+  stepLabel: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      8,
+    letterSpacing: 0.3,
+    color:         Colors.accent,
+    marginTop:     3,
+    textAlign:     'center',
   },
 });
 
@@ -501,8 +525,9 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   useFocusEffect(
     useCallback(() => {
-      if (hasFetchedOnce.current) return;
-      hasFetchedOnce.current = true;
+      if (!hasFetchedOnce.current) {
+        hasFetchedOnce.current = true;
+      }
       reload(filtersRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),

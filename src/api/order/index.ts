@@ -4,6 +4,7 @@ export type { OrderHistoryFilters } from './orderApi';
 
 export const placeOrder              = real.placeOrder;
 export const postPlacedMultipleOrder = real.postPlacedMultipleOrder;
+export const cancelOrder             = real.cancelOrder;
 
 export async function postOrderHistory(
   customerProfileCode: number,
@@ -17,11 +18,20 @@ export async function postCnfOrderDetail(
   orderNumber: string,
   customerProfileCode: number,
 ): Promise<OrderDetailResponseInterface> {
-  const raw = await real.postCnfOrderDetail(orderNumber, customerProfileCode);
-  const result = raw.result ?? { OrderDetails: [], DeliveryDetail: [] };
-  result.OrderDetails = (result.OrderDetails ?? []).map((item: OrderDetailItemExtendedInterface) => ({
-    ...item,
-    Brand_Name: item.Brand_Name ?? (item as OrderDetailItemExtendedInterface & { BrandName?: string }).BrandName,
-  }));
+  const rawRes = await real.postCnfOrderDetail(orderNumber, customerProfileCode);
+  const result = rawRes.result ?? { OrderDetails: [], DeliveryDetail: [], Events: [] };
+  result.OrderDetails = (result.OrderDetails ?? []).map((item: OrderDetailItemExtendedInterface) => {
+    const raw = item as OrderDetailItemExtendedInterface & { InventoryID?: number; ItemID?: number; BrandName?: string; BrandID?: number; SubOrderNumber?: string; PaymentInfo?: any };
+    return {
+      ...item,
+      Inventory_Id:   item.Inventory_Id   ?? raw.InventoryID      ?? 0,
+      Item_Id:        item.Item_Id        ?? raw.ItemID           ?? 0,
+      SubOrderNumber: item.SubOrderNumber ?? raw.SubOrderNumber   ?? '',
+      Brand_Name:     item.Brand_Name     ?? raw.BrandName        ?? '',
+      Brand_Id:       item.Brand_Id       ?? raw.BrandID          ?? 0,
+      PaymentInfo:    raw.PaymentInfo     ?? undefined,
+    };
+  });
+  result.Events = result.Events ?? [];
   return result;
 }
