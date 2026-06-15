@@ -23,13 +23,14 @@ import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/storageKeys';
+import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
 import {
   SearchBar, Skeleton, BottomNavBar,
   SectionHead, BrandTile, CategoryTile, ProductRail,
   TrustStrip, DeptFooter,
 } from '../components/ui';
+import { ErrorState } from '../components/system';
 import { Colors, Space } from '../theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -305,41 +306,54 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [showResumeCue, setShowResumeCue] = useState(false);
 
   // ── Data fetches — initialised from module-level cache so remounts show data instantly ──
-  const { data: categories, run: runCategories } = useAsyncState<CategoryInterface[]>(_cachedCategories);
-  const { data: products,   run: runProducts   } = useAsyncState<ProductInterface[]>(_cachedProducts);
-  const { data: brands,     run: runBrands     } = useAsyncState<GetBrandItem[]>(_cachedBrands);
+  const { data: categories, run: runCategories, isError: categoriesError } = useAsyncState<CategoryInterface[]>(_cachedCategories);
+  const { data: products,   run: runProducts,   isError: productsError   } = useAsyncState<ProductInterface[]>(_cachedProducts);
+  const { data: brands,     run: runBrands,     isError: brandsError     } = useAsyncState<GetBrandItem[]>(_cachedBrands);
 
   // Risk 2 fix: cartCount change only updates the cue, never re-fires API calls
   useEffect(() => {
     setShowResumeCue(cartCount > 0);
   }, [cartCount]);
 
+  // Tracks whether fetches have been initiated this session — prevents re-firing
+  // when individual fetches complete and change the state that deps previously read.
+  const fetchInitiated = useRef(false);
+
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
 
-      // Always refresh recently viewed (cheap, local AsyncStorage read)
-      AsyncStorage.getItem(STORAGE_KEYS.recentlyViewed).then(raw => {
+      // Always refresh recently viewed — read from user-scoped key
+      AsyncStorage.getItem(STORAGE_KEYS.userData).then(userRaw => {
+        const code: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
+        return AsyncStorage.getItem(scopedKey('recentlyViewed', code));
+      }).then(raw => {
         if (raw && !cancelled.current) {
           try { setRecentlyViewed(JSON.parse(raw)); } catch {}
         }
-      });
+      }).catch(() => {});
 
-      // Skip API fetches if data is already loaded — prevents flash on back navigation
-      if (products && categories && brands) {
+      // Skip if already fetching or if all data is cached — prevents re-firing on
+      // focus events and prevents the dep-change loop (completed fetch changes state
+      // → callback recreates → fetches restart → cancels previous in-flight results).
+      if (fetchInitiated.current || (_cachedCategories && _cachedProducts && _cachedBrands)) {
         return () => { cancelled.current = true; };
       }
 
+      fetchInitiated.current = true;
+
       runCategories(async () => {
-        const result = await getCategories().then((d) => d.result as CategoryInterface[]);
+        const res = await getCategories();
+        const result: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result)) ? res.result : [];
         _cachedCategories = result;
         return result;
       }, cancelled);
 
       runProducts(async () => {
-        const catRes = await getCategories().then((d) => d.result as CategoryInterface[]);
-        if (!catRes?.length) return [];
-        const ids = catRes.slice(0, 4).map((c) => c.CategoryId);
+        const catRes = await getCategories();
+        const cats: CategoryInterface[] = (catRes?.statusCode === 1 && Array.isArray(catRes.result)) ? catRes.result : [];
+        if (!cats.length) return [];
+        const ids = cats.slice(0, 4).map((c) => c.CategoryId);
         const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
         const merged = results.flat() as ProductInterface[];
         const seen = new Set<number>();
@@ -355,15 +369,58 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       }, cancelled);
 
       runBrands(async () => {
-        const list: GetBrandItem[] = (await getBrands())?.result ?? [];
+        const res = await getBrands();
+        const list: GetBrandItem[] = (Array.isArray(res?.result)) ? res.result : [];
         const result = list.slice(0, 8);
         _cachedBrands = result;
         return result;
       }, cancelled);
 
       return () => { cancelled.current = true; };
-    }, [runCategories, runProducts, runBrands, products, categories, brands]),
+    }, [runCategories, runProducts, runBrands]),
   );
+
+  // ── Retry all fetches — clears module cache so useFocusEffect re-fires ──────────
+  const handleRetryFeed = useCallback(() => {
+    _cachedCategories = null;
+    _cachedProducts   = null;
+    _cachedBrands     = null;
+    fetchInitiated.current = false;
+    const cancelled = { current: false };
+    runCategories(async () => {
+      const res = await getCategories();
+      const result: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result)) ? res.result : [];
+      _cachedCategories = result;
+      return result;
+    }, cancelled);
+    runProducts(async () => {
+      const catRes = await getCategories();
+      const cats: CategoryInterface[] = (catRes?.statusCode === 1 && Array.isArray(catRes.result)) ? catRes.result : [];
+      if (!cats.length) return [];
+      const ids = cats.slice(0, 4).map((c) => c.CategoryId);
+      const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
+      const merged = results.flat() as ProductInterface[];
+      const seen = new Set<number>();
+      const deduped: ProductInterface[] = [];
+      for (const p of merged) {
+        if (!seen.has(p.ItemID)) { seen.add(p.ItemID); deduped.push(p); }
+      }
+      _cachedProducts = deduped;
+      return deduped;
+    }, cancelled);
+    runBrands(async () => {
+      const res = await getBrands();
+      const list: GetBrandItem[] = Array.isArray(res?.result) ? res.result : [];
+      const result = list.slice(0, 8);
+      _cachedBrands = result;
+      return result;
+    }, cancelled);
+  }, [runCategories, runProducts, runBrands]);
+
+  // Feed is in error when all three fetches failed and there is no cached data at all
+  // Any single fetch error is enough to show the error state when there's no cached data
+  const feedError = (categoriesError || productsError || brandsError)
+    && !categories && !products && !brands;
 
   // ── Derived data (memoised — recomputes only when source data changes) ────────
   const deduped = useMemo(
@@ -457,7 +514,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   }, [navigation]);
 
   const clearRecentlyViewed = useCallback(async () => {
-    await AsyncStorage.removeItem(STORAGE_KEYS.recentlyViewed);
+    const userRaw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+    const code: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
+    await AsyncStorage.removeItem(scopedKey('recentlyViewed', code));
     setRecentlyViewed([]);
   }, []);
 
@@ -540,139 +599,159 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        {/* BannerSlot */}
-        <View style={{ marginTop: Space[5] }}>
-          <BannerSlot
-            spots={spotlights}
-            onPress={handleBannerPress}
+        {/* Feed error — shown when all three fetches fail with no cached data */}
+        {feedError ? (
+          <ErrorState
+            title="Feed didn't load."
+            message="Check your connection and try again."
+            onRetry={handleRetryFeed}
+            retryLoading={categoriesError && productsError && brandsError && !categories && !products && !brands}
           />
-        </View>
+        ) : null}
+
+        {/* BannerSlot */}
+        {!feedError && (
+          <View style={{ marginTop: Space[5] }}>
+            <BannerSlot
+              spots={spotlights}
+              onPress={handleBannerPress}
+            />
+          </View>
+        )}
 
         {/* Category rail */}
-        <View style={{ marginTop: Space[6] }}>
-          <SectionHead
-            eyebrow="BROWSE"
-            title="Categories"
-            action="All"
-            onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
-          />
-          {categories ? (
-            <FlatList
-              data={categories}
-              keyExtractor={(item) => String(item.CategoryId)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryRail}
-              renderItem={({ item, index }) => (
-                <CategoryTile
-                  name={item.CategoryName}
-                  imageUri={item.CategoryImage}
-                  index={index}
-                  onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
-                />
-              )}
+        {!feedError && (
+          <View style={{ marginTop: Space[6] }}>
+            <SectionHead
+              eyebrow="BROWSE"
+              title="Categories"
+              action="All"
+              onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
             />
-          ) : (
-            <View style={styles.categoryRail}>
-              {[0, 1, 2, 3].map((i) => (
-                <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 76 }}>
-                  <Skeleton width={76} height={76} radius={20} />
-                  <Skeleton width={50} height={9} />
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+            {categories ? (
+              <FlatList
+                data={categories}
+                keyExtractor={(item) => String(item.CategoryId)}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryRail}
+                renderItem={({ item, index }) => (
+                  <CategoryTile
+                    name={item.CategoryName}
+                    imageUri={item.CategoryImage}
+                    index={index}
+                    onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
+                  />
+                )}
+              />
+            ) : !categoriesError ? (
+              <View style={styles.categoryRail}>
+                {[0, 1, 2, 3].map((i) => (
+                  <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 76 }}>
+                    <Skeleton width={76} height={76} radius={20} />
+                    <Skeleton width={50} height={9} />
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        )}
 
         {/* Category spotlight card */}
-        {featureCategory ? (
+        {!feedError && (featureCategory ? (
           <View style={{ marginTop: Space[8], paddingHorizontal: Space.screenH }}>
             <CategorySpotlightCard
               category={featureCategory}
               onPress={() => navigation.navigate('Result', { categoryId: featureCategory.CategoryId, categoryName: featureCategory.CategoryName })}
             />
           </View>
-        ) : categories === null ? (
+        ) : categories === null && !categoriesError ? (
           <View style={{ marginTop: Space[8], paddingHorizontal: Space.screenH }}>
             <Skeleton height={360} radius={22} />
           </View>
-        ) : null}
+        ) : null)}
 
         {/* First category product rail */}
-        <View>
-          {categoryRailKeys[0] ? (
-            <ProductRail
-              eyebrow="CATEGORY"
-              title={categoryRailKeys[0]}
-              items={byCategory?.[categoryRailKeys[0]] ?? null}
-              onSeeAll={() => {
-                const cat = categories?.find(c => c.CategoryName === categoryRailKeys[0]);
-                navigation.navigate('Result', { categoryId: cat?.CategoryId, categoryName: categoryRailKeys[0] });
-              }}
-              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-            />
-          ) : (
-            <ProductRail
-              title="Products"
-              items={null}
-              onPress={() => {}}
-            />
-          )}
-        </View>
+        {!feedError && (
+          <View>
+            {categoryRailKeys[0] ? (
+              <ProductRail
+                eyebrow="CATEGORY"
+                title={categoryRailKeys[0]}
+                items={byCategory?.[categoryRailKeys[0]] ?? null}
+                onSeeAll={() => {
+                  const cat = categories?.find(c => c.CategoryName === categoryRailKeys[0]);
+                  navigation.navigate('Result', { categoryId: cat?.CategoryId, categoryName: categoryRailKeys[0] });
+                }}
+                onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+              />
+            ) : !productsError ? (
+              <ProductRail
+                title="Products"
+                items={null}
+                onPress={() => {}}
+              />
+            ) : null}
+          </View>
+        )}
 
         {/* Brands rail */}
-        <View style={{ marginTop: Space[8] }}>
-          <SectionHead
-            eyebrow="MERCHANTS"
-            title="Brands"
-            action="View all"
-            onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
-          />
-          {brands ? (
-            <FlatList
-              data={brands}
-              keyExtractor={(item) => String(item.BrandId)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.brandsRail}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity
-                  style={styles.brandChip}
-                  activeOpacity={0.75}
-                  onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
-                >
-                  <BrandTile name={item.BrandName} imageUri={item.BrandImage} index={index} />
-                  <Text style={styles.brandLabel} numberOfLines={1}>{item.BrandName}</Text>
-                </TouchableOpacity>
-              )}
+        {!feedError && (
+          <View style={{ marginTop: Space[8] }}>
+            <SectionHead
+              eyebrow="MERCHANTS"
+              title="Brands"
+              action="View all"
+              onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
             />
-          ) : (
-            <View style={styles.brandsRail}>
-              {[0, 1, 2, 3].map((i) => (
-                <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 70 }}>
-                  <Skeleton width={70} height={70} radius={35} />
-                  <Skeleton width={48} height={9} />
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+            {brands ? (
+              <FlatList
+                data={brands}
+                keyExtractor={(item) => String(item.BrandId)}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.brandsRail}
+                renderItem={({ item, index }) => (
+                  <TouchableOpacity
+                    style={styles.brandChip}
+                    activeOpacity={0.75}
+                    onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
+                  >
+                    <BrandTile name={item.BrandName} imageUri={item.BrandImage} index={index} />
+                    <Text style={styles.brandLabel} numberOfLines={1}>{item.BrandName}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            ) : !brandsError ? (
+              <View style={styles.brandsRail}>
+                {[0, 1, 2, 3].map((i) => (
+                  <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 70 }}>
+                    <Skeleton width={70} height={70} radius={35} />
+                    <Skeleton width={48} height={9} />
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        )}
 
         {/* Second category product rail */}
-        <View>
-          {categoryRailKeys[1] ? (
-            <ProductRail
-              eyebrow="CATEGORY"
-              title={categoryRailKeys[1]}
-              items={byCategory?.[categoryRailKeys[1]] ?? null}
-              onSeeAll={() => {
-                const cat = categories?.find(c => c.CategoryName === categoryRailKeys[1]);
-                navigation.navigate('Result', { categoryId: cat?.CategoryId, categoryName: categoryRailKeys[1] });
-              }}
-              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-            />
-          ) : null}
-        </View>
+        {!feedError && (
+          <View>
+            {categoryRailKeys[1] ? (
+              <ProductRail
+                eyebrow="CATEGORY"
+                title={categoryRailKeys[1]}
+                items={byCategory?.[categoryRailKeys[1]] ?? null}
+                onSeeAll={() => {
+                  const cat = categories?.find(c => c.CategoryName === categoryRailKeys[1]);
+                  navigation.navigate('Result', { categoryId: cat?.CategoryId, categoryName: categoryRailKeys[1] });
+                }}
+                onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+              />
+            ) : null}
+          </View>
+        )}
 
         {/* Recently viewed — client-side, hidden when empty */}
         {recentlyViewed.length > 0 && (

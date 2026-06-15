@@ -10,7 +10,7 @@ import { LoginPromptSheet, type LoginPromptContext } from './LoginPromptSheet';
 
 export type NavTab = 'Home' | 'Orders' | 'Wishlist' | 'Cart' | 'Profile';
 
-const PROTECTED_TABS: NavTab[] = ['Orders', 'Wishlist', 'Profile'];
+const PROTECTED_TABS: NavTab[] = ['Orders', 'Wishlist'];
 
 interface BottomNavBarProps {
   activeTab: NavTab;

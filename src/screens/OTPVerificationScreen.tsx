@@ -117,7 +117,12 @@ const OTPVerificationScreen: React.FC = () => {
 
       haptic.success();
       Keyboard.dismiss();
-      navigation.reset({ index: 0, routes: [{ name: 'Login', params: { skipEntrance: true } }] });
+      // Wait for the keyboard-dismiss animation to finish before mounting Login —
+      // otherwise its KeyboardAvoidingView reacts to the closing keyboard and the
+      // form content below the password field jumps/flickers on arrival.
+      setTimeout(() => {
+        navigation.reset({ index: 0, routes: [{ name: 'Login', params: { skipEntrance: true } }] });
+      }, 250);
     } catch (err: any) {
       setLoading(false);
       setError(err?.message ?? 'Something went wrong. Please try again.');

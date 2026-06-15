@@ -283,6 +283,26 @@ export const styles = StyleSheet.create({
     right:    Space[2],
   },
 
+  // ── Empty state CTAs ──────────────────────────────────────────────────────────
+  emptyPrimaryBtn: {
+    height:          44,
+    backgroundColor: Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingHorizontal: Space[6],
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginTop:       Space[2],
+  },
+  emptyPrimaryBtnText: {
+    ...Type.bodyStrong,
+    color:    '#FFFFFF',
+    fontSize: 15,
+  },
+  stateSecondaryAction: {
+    alignSelf:  'center',
+    marginTop:  Space[3],
+  },
+
   // ── Scroll to top ─────────────────────────────────────────────────────────────
   scrollTopBtn: {
     position: 'absolute',

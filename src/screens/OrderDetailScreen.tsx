@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Platform,
   Modal,
+  Clipboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
@@ -17,7 +18,13 @@ import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { postCnfOrderDetail, cancelOrder } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
-import { Skeleton, SkeletonRow, StatusBadge, DarkHeader, PrimaryButton } from '../components/ui';
+import {
+  Skeleton,
+  SkeletonRow,
+  DarkHeader,
+  PrimaryButton,
+  OrderProgressBar,
+} from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -26,15 +33,28 @@ import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { formatDate } from '../utils/formatDate';
-import { orderStatusLabel } from '../utils/orderStatus';
-import type { OrderDetailItemExtendedInterface, OrderDetailResponseInterface, OrderStatusCode, OrderEventInterface } from '../api/interfaces';
+import { ORDER_STATUS_LABELS } from '../utils/orderStatus';
+import type {
+  OrderDetailItemExtendedInterface,
+  OrderDetailResponseInterface,
+  OrderStatusCode,
+  OrderEventInterface,
+} from '../api/interfaces';
 import { CustomerCancellationReason, CancellationReasonLabel } from '../config/enum_files/CustomerCancellationReason';
 import { RefundMode, RefundModeLabel } from '../config/enum_files/RefundMode';
 import { CustomerPlatform } from '../config/enum_files/CustomerPlatform';
+import { toastEmitter } from '../utils/toastEmitter';
 
 // 4:5 portrait — canonical card ratio
 const IMG_W = 88;
 const IMG_H = 110;
+
+const ACTION_BAR_HEIGHT = 64;
+
+const CANCELLABLE_STATUSES: OrderStatusCode[] = [1, 2, 3]; // New, Confirmed, Processing
+
+// Active statuses that map to a progress step (terminal states return null from OrderProgressBar)
+const ACTIVE_PROGRESS_STATUSES: OrderStatusCode[] = [1, 2, 3, 4, 5, 6];
 
 type OrderDetailScreenRouteParams = {
   orderItem: OrderDetailItemExtendedInterface;
@@ -43,7 +63,6 @@ type OrderDetailScreenRouteParams = {
 type OrderDetailScreenProps = {
   navigation: StackNavigationProp<any>;
 };
-
 
 // ── Flat detail row — label left, value right ────────────────────────────────
 const DetailRow: React.FC<{
@@ -81,8 +100,8 @@ const detailStyles = StyleSheet.create({
     flexShrink: 0,
   },
   rowRight: {
-    flex:           1,
-    alignItems:     'flex-end',
+    flex:       1,
+    alignItems: 'flex-end',
   },
   rowValue: {
     fontFamily:    FontFamily.mono,
@@ -93,7 +112,116 @@ const detailStyles = StyleSheet.create({
   },
 });
 
-const CANCELLABLE_STATUSES: OrderStatusCode[] = [1, 2, 3]; // New, Confirmed, Processing
+// ── Status Hero — progress + human-readable label ────────────────────────────
+const StatusHero: React.FC<{ status: OrderStatusCode }> = ({ status }) => {
+  const label = ORDER_STATUS_LABELS[status] ?? 'In Progress';
+
+  const isDelivered  = status === 6; // OrderStatusCode.Delivered
+  const isTerminal   = status === 7 || status === 8; // Cancelled, Returned
+  const showProgress = ACTIVE_PROGRESS_STATUSES.includes(status);
+
+  const bgColor = isDelivered
+    ? Colors.successTint
+    : isTerminal
+    ? Colors.dangerTint
+    : Colors.accentTint;
+
+  const labelColor = isDelivered
+    ? Colors.success
+    : isTerminal
+    ? Colors.danger
+    : Colors.accent;
+
+  return (
+    <View style={[heroStyles.wrap, { backgroundColor: bgColor }]}>
+      {showProgress ? <OrderProgressBar status={status} /> : null}
+      <Text style={[heroStyles.label, { color: labelColor }]}>{label}</Text>
+    </View>
+  );
+};
+
+const heroStyles = StyleSheet.create({
+  wrap: {
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[4],
+    paddingBottom:     Space[3],
+  },
+  label: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      20,
+    fontWeight:    '400',
+    letterSpacing: -0.3,
+    lineHeight:    20 * 1.25,
+    marginTop:     Space[2],
+  },
+});
+
+// ── Fixed bottom action bar ───────────────────────────────────────────────────
+const OrderActionBar: React.FC<{
+  isCancellable: boolean;
+  onCancel: () => void;
+  bottomInset: number;
+}> = ({ isCancellable, onCancel, bottomInset }) => (
+  <View style={[barStyles.bar, { paddingBottom: bottomInset + Space[3] }]}>
+    <TouchableOpacity
+      style={[barStyles.btn, barStyles.ghost, isCancellable && barStyles.btnHalf]}
+      activeOpacity={0.7}
+      onPress={() => console.warn('Need Help: navigation not yet wired')}
+    >
+      <Text style={barStyles.ghostText}>Need Help</Text>
+    </TouchableOpacity>
+
+    {isCancellable ? (
+      <TouchableOpacity
+        style={[barStyles.btn, barStyles.danger]}
+        activeOpacity={0.8}
+        onPress={onCancel}
+      >
+        <Text style={barStyles.dangerText}>Cancel Order</Text>
+      </TouchableOpacity>
+    ) : null}
+  </View>
+);
+
+const barStyles = StyleSheet.create({
+  bar: {
+    flexDirection:     'row',
+    gap:               Space[3],
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[3],
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
+    backgroundColor:   Colors.surface,
+  },
+  btn: {
+    flex:            1,
+    height:          44,
+    borderRadius:    Radius.pill,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  btnHalf: {
+    flex: 1,
+  },
+  ghost: {
+    borderWidth:  1,
+    borderColor:  Colors.rule,
+    backgroundColor: Colors.surface,
+  },
+  danger: {
+    backgroundColor: Colors.dangerTint,
+    borderWidth:     1,
+    borderColor:     Colors.dangerBorder,
+  },
+  ghostText: {
+    ...Type.bodyStrong,
+    color: Colors.ink2,
+  },
+  dangerText: {
+    ...Type.bodyStrong,
+    color: Colors.danger,
+  },
+});
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => {
@@ -108,11 +236,11 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
 
   // ── Cancel order state ─────────────────────────────────────────────────────
   const cancelSheetRef = useRef<BottomSheet>(null);
-  const [selectedReason, setSelectedReason] = useState<CustomerCancellationReason | null>(null);
+  const [selectedReason, setSelectedReason]         = useState<CustomerCancellationReason | null>(null);
   const [selectedRefundMode, setSelectedRefundMode] = useState<RefundMode | null>(null);
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [cancelError, setCancelError] = useState<string | null>(null);
-  const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [cancelLoading, setCancelLoading]           = useState(false);
+  const [cancelError, setCancelError]               = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess]           = useState(false);
 
   const fetchOrderDetails = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -184,21 +312,39 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     }
   };
 
+  const handleCopyOrderNumber = () => {
+    if (!orderNumber) return;
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — RN built-in Clipboard is deprecated but no community package is installed
+    Clipboard.setString(String(orderNumber));
+    toastEmitter.emit('success', 'Order number copied');
+  };
+
   const headerAnim   = useEntrance(0);
-  const productAnim  = useEntrance(80);
-  const orderAnim    = useEntrance(160);
-  const paymentAnim  = useEntrance(220);
-  const deliveryAnim = useEntrance(280);
-  const eventsAnim   = useEntrance(360);
+  const heroAnim     = useEntrance(60);
+  const productAnim  = useEntrance(120);
+  const trackingAnim = useEntrance(180);
+  const deliveryAnim = useEntrance(240);
+  const paymentAnim  = useEntrance(300);
 
   const Header = (
     <Animated.View style={headerAnim}>
       <DarkHeader
-        eyebrow="YOUR ORDER"
+        eyebrow={orderItem?.OrderedDate ? `YOUR ORDER  ·  ${formatDate(orderItem.OrderedDate)}` : 'YOUR ORDER'}
         title={orderNumber ? `#${orderNumber}` : 'Details'}
         titleFont="mono"
         onBack={() => navigation.goBack()}
         paddingTop={insets.top + Space[2]}
+        rightSlot={
+          orderNumber ? (
+            <TouchableOpacity
+              onPress={handleCopyOrderNumber}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={copyStyles.icon}>⎘</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
       />
     </Animated.View>
   );
@@ -243,7 +389,6 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const delivery = orderDetails?.DeliveryDetail[0];
   const events   = orderDetails?.Events ?? [];
   const firstImg = order?.Images?.split(';').filter(Boolean)[0] ?? '';
-  const status   = order ? orderStatusLabel(order.OrderStatus) : undefined;
   const isCancellable = order ? CANCELLABLE_STATUSES.includes(order.OrderStatus as OrderStatusCode) : false;
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
@@ -256,10 +401,13 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + Space[10] },
+            { paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + Space[10] },
           ]}
         >
-          {/* Product skeleton */}
+          <View style={styles.skeletonHero}>
+            <Skeleton height={3} width="100%" style={{ marginBottom: Space[3] }} />
+            <Skeleton height={20} width="55%" />
+          </View>
           <View style={styles.skeletonProductRow}>
             <Skeleton width={IMG_W} height={IMG_H} radius={Radius.sm} />
             <View style={styles.skeletonMeta}>
@@ -298,9 +446,14 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + Space[10] },
+          { paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + Space[8] },
         ]}
       >
+        {/* ── Status Hero ── */}
+        <Animated.View style={heroAnim}>
+          <StatusHero status={order.OrderStatus as OrderStatusCode} />
+        </Animated.View>
+
         {/* ── Product summary ── */}
         <Animated.View style={[styles.productRow, productAnim]}>
           {firstImg ? (
@@ -329,26 +482,58 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           </View>
         </Animated.View>
 
-        {/* ── Order details section ── */}
-        <Animated.View style={[styles.section, orderAnim]}>
-          <Text style={styles.sectionEyebrow}>ORDER</Text>
-          {order.OrderNumber ? (
-            <DetailRow label="NUMBER" value={`#${order.OrderNumber}`} />
-          ) : null}
-          {order.CreatedDate ? (
-            <DetailRow label="DATE" value={formatDate(order.CreatedDate)} />
-          ) : null}
-          <DetailRow label="QUANTITY" value={String(order.Quantity)} />
-          {status ? (
-            <DetailRow
-              label="STATUS"
-              value={<StatusBadge status={status} />}
-              isLast
-            />
-          ) : (
-            <DetailRow label="STATUS" value={String(order.OrderStatus)} isLast />
-          )}
-        </Animated.View>
+        {/* ── Tracking timeline ── */}
+        {events.length > 0 ? (
+          <Animated.View style={[styles.section, trackingAnim]}>
+            <Text style={styles.sectionEyebrow}>TRACKING</Text>
+            {events.map((event: OrderEventInterface, index: number) => {
+              const isLast = index === events.length - 1;
+              return (
+                <View key={index} style={styles.eventRow}>
+                  <View style={styles.eventSpine}>
+                    <View style={[styles.eventDot, event.IsCompleted && styles.eventDotCompleted]} />
+                    {!isLast ? (
+                      <View style={[styles.eventLine, event.IsCompleted && styles.eventLineCompleted]} />
+                    ) : null}
+                  </View>
+                  <View style={styles.eventContent}>
+                    <Text style={[styles.eventDescription, event.IsCompleted && styles.eventDescriptionCompleted]}>
+                      {event.Description}
+                    </Text>
+                    {event.Date ? (
+                      <Text style={styles.eventMeta}>
+                        {formatDate(event.Date)}{event.Location ? `  ·  ${event.Location}` : ''}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+          </Animated.View>
+        ) : null}
+
+        {/* ── Delivery address ── */}
+        {delivery ? (
+          <Animated.View style={[styles.section, deliveryAnim]}>
+            <Text style={styles.sectionEyebrow}>DELIVERY</Text>
+            <View style={styles.addressCard}>
+              <Text style={styles.addressName}>{delivery.CustomerName}</Text>
+              {[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode]
+                .filter(Boolean)
+                .join(', ')
+                .length > 0 ? (
+                <Text style={styles.addressLine}>
+                  {[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode]
+                    .filter(Boolean)
+                    .join(', ')}
+                </Text>
+              ) : null}
+              {delivery.MobileNumber ? (
+                <Text style={styles.addressPhone}>{String(delivery.MobileNumber)}</Text>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* ── Payment section ── */}
         {order.PaymentInfo ? (
@@ -374,58 +559,14 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             />
           </Animated.View>
         ) : null}
-
-        {/* ── Delivery section ── */}
-        {delivery ? (
-          <Animated.View style={[styles.section, deliveryAnim]}>
-            <Text style={styles.sectionEyebrow}>DELIVERY</Text>
-            <DetailRow label="NAME"    value={delivery.CustomerName} />
-            <DetailRow label="MOBILE"  value={String(delivery.MobileNumber)} />
-            <DetailRow label="ADDRESS" value={[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).join(', ')} isLast />
-          </Animated.View>
-        ) : null}
-
-        {/* ── Order timeline ── */}
-        {events.length > 0 ? (
-          <Animated.View style={[styles.section, eventsAnim]}>
-            <Text style={styles.sectionEyebrow}>TRACKING</Text>
-            {events.map((event: OrderEventInterface, index: number) => {
-              const isLast = index === events.length - 1;
-              return (
-                <View key={index} style={styles.eventRow}>
-                  {/* Spine */}
-                  <View style={styles.eventSpine}>
-                    <View style={[styles.eventDot, event.IsCompleted && styles.eventDotCompleted]} />
-                    {!isLast ? (
-                      <View style={[styles.eventLine, event.IsCompleted && styles.eventLineCompleted]} />
-                    ) : null}
-                  </View>
-                  {/* Content */}
-                  <View style={styles.eventContent}>
-                    <Text style={[styles.eventDescription, event.IsCompleted && styles.eventDescriptionCompleted]}>
-                      {event.Description}
-                    </Text>
-                    {event.Date ? (
-                      <Text style={styles.eventMeta}>
-                        {formatDate(event.Date)}{event.Location ? `  ·  ${event.Location}` : ''}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })}
-          </Animated.View>
-        ) : null}
-
-        {/* ── Cancel order CTA — only for cancellable statuses ── */}
-        {isCancellable ? (
-          <Animated.View style={[styles.cancelWrap, eventsAnim]}>
-            <TouchableOpacity onPress={openCancelSheet} style={styles.cancelLink} activeOpacity={0.6}>
-              <Text style={styles.cancelLinkText}>Cancel this order</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        ) : null}
       </ScrollView>
+
+      {/* ── Fixed bottom action bar ── */}
+      <OrderActionBar
+        isCancellable={isCancellable}
+        onCancel={openCancelSheet}
+        bottomInset={insets.bottom}
+      />
 
       {/* ── Cancel success modal ── */}
       <Modal
@@ -467,7 +608,6 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           <Text style={styles.sheetTitle}>Cancel Order</Text>
           <Text style={styles.sheetSubtitle}>#{orderNumber}</Text>
 
-          {/* Reason picker */}
           <Text style={styles.sheetSectionLabel}>REASON FOR CANCELLATION</Text>
           {(Object.values(CustomerCancellationReason).filter(v => typeof v === 'number') as CustomerCancellationReason[]).map(reason => (
             <TouchableOpacity
@@ -483,7 +623,6 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             </TouchableOpacity>
           ))}
 
-          {/* Refund mode picker */}
           <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>REFUND METHOD</Text>
           {(Object.values(RefundMode).filter(v => typeof v === 'number') as RefundMode[]).map(mode => (
             <TouchableOpacity
@@ -515,28 +654,34 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   );
 };
 
+const copyStyles = StyleSheet.create({
+  icon: {
+    fontSize:  16,
+    color:     'rgba(255,255,255,0.55)',
+    lineHeight: 20,
+  },
+});
+
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    flex:            1,
     backgroundColor: Colors.surface,
   },
 
-  // ── State wrappers ────────────────────────────────────────────────────────────
   stateWrap: {
     flex: 1,
   },
 
-  // ── Scroll ───────────────────────────────────────────────────────────────────
   scrollContent: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[5],
+    paddingTop: 0,
   },
 
-  // ── Product row ───────────────────────────────────────────────────────────────
+  // ── Product row ──────────────────────────────────────────────────────────────
   productRow: {
-    flexDirection: 'row',
-    gap:           Space[4],
-    paddingBottom: Space[5],
+    flexDirection:     'row',
+    gap:               Space[4],
+    paddingHorizontal: Space.screenH,
+    paddingVertical:   Space[5],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.rule,
   },
@@ -553,8 +698,8 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   productMeta: {
-    flex: 1,
-    gap:  4,
+    flex:           1,
+    gap:            4,
     justifyContent: 'flex-start',
   },
   brand: {
@@ -593,14 +738,41 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ── Section ───────────────────────────────────────────────────────────────────
+  // ── Section ──────────────────────────────────────────────────────────────────
   section: {
-    marginTop: Space[6],
+    marginTop:         Space[6],
+    paddingHorizontal: Space.screenH,
   },
   sectionEyebrow: {
     ...Type.label,
     color:        Colors.ink4,
     marginBottom: Space[2],
+  },
+
+  // ── Delivery address card ─────────────────────────────────────────────────────
+  addressCard: {
+    gap: Space[1],
+  },
+  addressName: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      15,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.1,
+    lineHeight:    15 * 1.35,
+  },
+  addressLine: {
+    ...Type.caption,
+    color:      Colors.ink3,
+    lineHeight: 18,
+    marginTop:  2,
+  },
+  addressPhone: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      11,
+    color:         Colors.ink4,
+    letterSpacing: 0.3,
+    marginTop:     2,
   },
 
   // ── Order timeline ────────────────────────────────────────────────────────────
@@ -610,17 +782,17 @@ const styles = StyleSheet.create({
     paddingBottom: Space[4],
   },
   eventSpine: {
-    alignItems:  'center',
-    width:       16,
-    flexShrink:  0,
-    marginTop:   3,
+    alignItems: 'center',
+    width:      16,
+    flexShrink: 0,
+    marginTop:  3,
   },
   eventDot: {
-    width:        10,
-    height:       10,
-    borderRadius: 5,
-    borderWidth:  1.5,
-    borderColor:  Colors.rule,
+    width:           10,
+    height:          10,
+    borderRadius:    5,
+    borderWidth:     1.5,
+    borderColor:     Colors.rule,
     backgroundColor: Colors.surface,
   },
   eventDotCompleted: {
@@ -637,7 +809,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ink1,
   },
   eventContent: {
-    flex:         1,
+    flex:          1,
     paddingBottom: Space[1],
   },
   eventDescription: {
@@ -651,20 +823,6 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color:     Colors.ink4,
     marginTop: Space[1],
-  },
-
-  // ── Cancel link ───────────────────────────────────────────────────────────────
-  cancelWrap: {
-    marginTop:  Space[8],
-    alignItems: 'center',
-  },
-  cancelLink: {
-    paddingVertical: Space[2],
-  },
-  cancelLinkText: {
-    ...Type.caption,
-    color:             Colors.danger,
-    textDecorationLine: 'underline',
   },
 
   // ── Cancel sheet ──────────────────────────────────────────────────────────────
@@ -703,9 +861,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.rule,
   },
-  optionRowSelected: {
-    // no background change — radio dot is the indicator
-  },
+  optionRowSelected: {},
   optionRadio: {
     width:        16,
     height:       16,
@@ -738,10 +894,10 @@ const styles = StyleSheet.create({
 
   // ── Cancel success modal ──────────────────────────────────────────────────────
   modalOverlay: {
-    flex:            1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent:  'center',
-    alignItems:      'center',
+    flex:              1,
+    backgroundColor:   'rgba(0,0,0,0.5)',
+    justifyContent:    'center',
+    alignItems:        'center',
     paddingHorizontal: Space.screenH,
   },
   modalCard: {
@@ -776,17 +932,25 @@ const styles = StyleSheet.create({
   },
 
   // ── Loading skeleton ──────────────────────────────────────────────────────────
+  skeletonHero: {
+    paddingHorizontal: Space.screenH,
+    paddingVertical:   Space[4],
+    backgroundColor:   Colors.accentTint,
+    gap:               Space[2],
+  },
   skeletonProductRow: {
-    flexDirection: 'row',
-    gap:           Space[4],
-    paddingBottom: Space[5],
+    flexDirection:     'row',
+    gap:               Space[4],
+    paddingHorizontal: Space.screenH,
+    paddingVertical:   Space[5],
   },
   skeletonMeta: {
-    flex: 1,
+    flex:       1,
     paddingTop: Space[1],
   },
   skeletonSection: {
-    marginTop: Space[6],
+    marginTop:         Space[6],
+    paddingHorizontal: Space.screenH,
   },
 });
 

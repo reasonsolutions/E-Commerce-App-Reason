@@ -13,20 +13,23 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { EmptyState, FloatingLabelInput, ErrorBanner } from '../components/ui';
+import { EmptyState, FloatingLabelInput, ErrorBanner, Skeleton, TrustLine } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { getDeliveryAddresses, postCreateDeliveryAddress } from '../api/address';
+import { placeOrder } from '../api/order';
 import { useCart } from '../context/CartContext';
-import { SavedCartItemInterface } from '../api/interfaces';
+import { SavedCartItemInterface, PlaceOrderInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { getOrgIdForInventory } from '../api/product';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
+import { PaymentModes } from '../config/enum_files/PaymentModes';
 
 export interface DeliveryAddress {
   OrderDeliveryAddressCode: number;
@@ -150,14 +153,16 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     useAsyncState<DeliveryAddress[]>([]);
 
   const [selectedAddressCode, setSelectedAddressCode] = useState<number | null>(null);
+  const [showForm, setShowForm]   = useState(false);
   const [form, setForm]           = useState(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState(EMPTY_ERRORS);
   const [profileCode, setProfileCode] = useState<number | null>(null);
-  const [submitting, setSubmitting]   = useState(false);
-  const [orderError, setOrderError]   = useState<string | null>(null);
-  const [addError, setAddError]       = useState<string | null>(null);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderError, setOrderError]     = useState<string | null>(null);
+  const [addError, setAddError]         = useState<string | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<'card' | 'cod'>('card');
 
-  const headerAnim = useEntrance(0);
   const footerAnim = useEntrance(120);
 
   const fetchAddresses = useCallback(
@@ -216,7 +221,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
   const handleAddAddress = async () => {
     if (!validateForm() || !profileCode) return;
     setAddError(null);
-    setSubmitting(true);
+    setSavingAddress(true);
     try {
       const response = await postCreateDeliveryAddress({
         CustomerName:        form.CustomerName.trim(),
@@ -243,12 +248,12 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     } catch {
       setAddError("Couldn't save your address. Tap retry to try again.");
     } finally {
-      setSubmitting(false);
+      setSavingAddress(false);
     }
   };
 
   const buyProducts = async () => {
-    if (submitting) return;
+    if (orderSubmitting) return;
     setOrderError(null);
 
     if (!selectedAddressCode) {
@@ -275,46 +280,116 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       0,
     );
 
-    setSubmitting(true);
-
-    // Generate a transaction reference from CartMasterCode + timestamp
-    const transactionId = `TXN-${items[0].CartMasterCode}-${Date.now()}`;
-    await AsyncStorage.setItem(STORAGE_KEYS.orderId, transactionId);
-
     const selectedAddr = (addresses ?? []).find(
       a => a.OrderDeliveryAddressCode === selectedAddressCode,
     );
 
-    setSubmitting(false);
+    setOrderSubmitting(true);
 
-    navigation.navigate('EcomPayment', {
-      profileCode,
-      cartItems: items,
-      selectedAddress: selectedAddr!,
-      orderTotal: total,
-    });
+    if (selectedPayment === 'card') {
+      const transactionId = `TXN-${items[0].CartMasterCode}-${Date.now()}`;
+      await AsyncStorage.setItem(STORAGE_KEYS.orderId, transactionId);
+      setOrderSubmitting(false);
+      navigation.navigate('EcomPayment', {
+        profileCode,
+        cartItems: items,
+        selectedAddress: selectedAddr!,
+        orderTotal: total,
+      });
+      return;
+    }
+
+    // COD — place order directly
+    try {
+      const orgMap = new Map<string, SavedCartItemInterface[]>();
+      for (const item of items) {
+        const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId);
+        if (!orgMap.has(orgId)) orgMap.set(orgId, []);
+        orgMap.get(orgId)!.push(item);
+      }
+
+      const orderDetails = Array.from(orgMap.entries()).map(([orgId, orgItems]) => ({
+        OrganisationID: orgId,
+        ItemDetails: orgItems.map((item: SavedCartItemInterface) => ({
+          InventoryId:        item.InventoryId,
+          Quantity:           item.Quantity,
+          Amount:             item.Price * item.Quantity,
+          DeliveryCharges:    0,
+          DeliveryChargesVAT: 0,
+          ItemCharges:        0,
+          ItemChargesVAT:     0,
+          Discount:           0,
+          VAT:                0,
+          OrderStatus:        1,
+          Taxes: (item.PriceDetails?.Taxes ?? []).map(t => ({
+            TaxId:   t.TaxId,
+            TaxName: '',
+            TaxType: t.TaxType,
+            TaxRate: t.TaxRate,
+            Reason:  '',
+          })),
+        })),
+      }));
+
+      const payload: PlaceOrderInterface = {
+        CustomerProfileCode:       profileCode,
+        OrderDeliveryAddressCode:  selectedAddressCode,
+        CartMasterCode:            items[0].CartMasterCode,
+        TotalAmountBeforeDiscount: total,
+        TotalAmountAfterDiscount:  total,
+        OrderDetails:              orderDetails,
+        PaymentDetails: {
+          PaymentModes:   PaymentModes.CashOnDelivery,
+          Remark:         'Cash on delivery',
+          ModeOfPayments: [{
+            CashOnDelivery: {
+              ExpectedAmount:      total,
+              CurrencyCode:        'MUR',
+              CollectionReference: `COD-${items[0].CartMasterCode}-${Date.now()}`,
+            },
+          }],
+        },
+      };
+
+      const response = await placeOrder(payload);
+
+      if (response?.statusCode !== 1) {
+        setOrderError(response?.userMessage ?? 'Could not place your order. Please try again.');
+        return;
+      }
+
+      setCartCount(0);
+      navigation.navigate('OrderSuccess', {
+        orderNumber:    response.result?.OrderNumber ?? '',
+        itemCount:      items.length,
+        orderTotal:     total,
+        orderCurrency:  'MUR',
+        orderTimestamp: response.result?.CreatedDate ?? null,
+        orderStatus:    response.result?.OrderStatus ?? null,
+        deliveryAddress: {
+          street: [selectedAddr?.Address, selectedAddr?.StreetName].filter(Boolean).join(', '),
+          city:   selectedAddr?.City ?? '',
+        },
+        cartItems: items.map((item: SavedCartItemInterface) => ({
+          name:     item.Name,
+          quantity: item.Quantity,
+          price:    item.Price,
+          image:    item.Images?.split(';').filter(Boolean)[0] ?? '',
+        })),
+      });
+    } catch (err: any) {
+      setOrderError(err?.response?.data?.userMessage ?? 'Something went wrong. Please try again.');
+    } finally {
+      setOrderSubmitting(false);
+    }
   };
 
   const addressList = addresses ?? [];
+  const showSkeleton = fetchLoading && addressList.length === 0;
+  const showEmptyState = !fetchLoading && !fetchError && addressList.length === 0 && !showForm;
 
-  // ── List sections ─────────────────────────────────────────────────────────
-  const ListHeader = (
-    <>
-      <Text style={styles.sectionEyebrow}>DELIVERY TO</Text>
-      {fetchError ? (
-        <View style={styles.fetchErrorWrap}>
-          <ErrorState
-            title="Couldn't load your addresses."
-            message={fetchErrorMsg ?? 'Tap retry to try again.'}
-            onRetry={() => fetchAddresses()}
-            retryLoading={fetchLoading}
-          />
-        </View>
-      ) : null}
-    </>
-  );
-
-  const ListFooter = (
+  // ── Address form — shown when user taps "Add Address" or has existing addresses ─
+  const AddressForm = (
     <View style={styles.formSection}>
       <Text style={styles.sectionEyebrow}>ADD NEW ADDRESS</Text>
       <View style={styles.formFields}>
@@ -380,44 +455,93 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
           onRetry={() => setAddError(null)}
         />
       ) : null}
-      {/* Save address — secondary ink pill, not primary CTA weight */}
       <TouchableOpacity
-        style={[styles.saveBtn, submitting && styles.saveBtnDisabled]}
+        style={[styles.saveBtn, savingAddress && styles.saveBtnDisabled]}
         onPress={handleAddAddress}
-        disabled={submitting}
+        disabled={savingAddress}
         activeOpacity={0.82}
       >
         <Text style={styles.saveBtnText}>
-          {submitting ? 'Saving…' : 'Save Address'}
+          {savingAddress ? 'Saving…' : 'Save Address'}
         </Text>
       </TouchableOpacity>
     </View>
   );
 
+  // ── List sections ─────────────────────────────────────────────────────────
+  const ListHeader = (
+    <>
+      <Text style={styles.sectionEyebrow}>DELIVERY TO</Text>
+      {fetchError ? (
+        <View style={styles.fetchErrorWrap}>
+          <ErrorState
+            title="Couldn't load addresses."
+            message={fetchErrorMsg ?? 'Check your connection and try again.'}
+            onRetry={() => fetchAddresses()}
+            retryLoading={fetchLoading}
+          />
+        </View>
+      ) : null}
+      {/* Skeleton rows during initial fetch */}
+      {showSkeleton ? (
+        <View style={styles.skeletonWrap}>
+          {[0, 1].map(i => (
+            <View key={i} style={styles.skeletonRow}>
+              <Skeleton width={20} height={20} radius={10} />
+              <View style={styles.skeletonLines}>
+                <Skeleton width="55%" height={11} />
+                <Skeleton width="85%" height={9} style={styles.skeletonLine} />
+                <Skeleton width="70%" height={9} style={styles.skeletonLine} />
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </>
+  );
+
+  const ListFooter = showEmptyState ? (
+    // Empty state — form hidden, outline CTA reveals it
+    <View style={styles.emptyStateWrap}>
+      <EmptyState
+        icon={<Icon name="location-outline" size={22} color={Colors.ink4} />}
+        title="No delivery address."
+        body="Add an address to continue to payment."
+        trustLine={<TrustLine message="Your details are encrypted" />}
+        action={
+          <TouchableOpacity
+            style={styles.emptyAddBtn}
+            onPress={() => setShowForm(true)}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="Add address"
+          >
+            <Text style={styles.emptyAddBtnText}>Add Address</Text>
+          </TouchableOpacity>
+        }
+      />
+    </View>
+  ) : showForm || addressList.length > 0 ? (
+    AddressForm
+  ) : null;
+
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
-      {/* Dark editorial header */}
-      <Animated.View
-        style={[styles.header, { paddingTop: insets.top + Space[2] }, headerAnim]}
-      >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Icon name="chevron-back" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <View style={styles.headerTitleBlock}>
-            <Text style={styles.headerEyebrow}>CHECKOUT</Text>
-            <Text style={styles.headerTitle}>Delivery</Text>
-          </View>
-          <View style={styles.headerRight} />
-        </View>
-        <View style={styles.headerSeam} />
-      </Animated.View>
+      <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.6}
+        >
+          <Icon name="chevron-back" size={22} color={Colors.ink1} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Delivery</Text>
+        <View style={styles.headerRight} />
+      </View>
+      <View style={styles.headerDivider} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -433,15 +557,6 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
           ]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={ListHeader}
-          ListEmptyComponent={
-            fetchError ? null : (
-              <EmptyState
-                icon={<Icon name="location-outline" size={26} color={Colors.ink4} />}
-                title="No saved addresses."
-                body="Add a delivery address below."
-              />
-            )
-          }
           renderItem={({ item, index }) => (
             <AddressRow
               item={item}
@@ -462,6 +577,24 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
             footerAnim,
           ]}
         >
+          {/* Payment method picker */}
+          <Text style={styles.paymentLabel}>PAYMENT METHOD</Text>
+          <View style={styles.paymentRow}>
+            {(['card', 'cod'] as const).map(method => (
+              <TouchableOpacity
+                key={method}
+                style={[styles.paymentOption, selectedPayment === method && styles.paymentOptionSelected]}
+                onPress={() => setSelectedPayment(method)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.paymentRadio, selectedPayment === method && styles.paymentRadioSelected]} />
+                <Text style={[styles.paymentOptionText, selectedPayment === method && styles.paymentOptionTextSelected]}>
+                  {method === 'card' ? 'Card / Online' : 'Cash on Delivery'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {orderError ? (
             <ErrorBanner
               body={orderError ?? undefined}
@@ -470,8 +603,8 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
           ) : null}
           <PlaceOrderButton
             onPress={buyProducts}
-            submitting={submitting}
-            disabled={!selectedAddressCode || submitting}
+            submitting={orderSubmitting}
+            disabled={!selectedAddressCode || orderSubmitting}
           />
         </Animated.View>
       </KeyboardAvoidingView>
@@ -484,51 +617,39 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.surface,
   },
-  flex: {
-    flex: 1,
-  },
 
   // ── Header ───────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor:   Colors.ink1,
+    flexDirection:     'row',
+    alignItems:        'center',
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[4],
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
+    backgroundColor:   Colors.surface,
   },
   backBtn: {
-    width:  36,
-    height: 36,
-    justifyContent: 'center',
+    width:          36,
+    height:         36,
     alignItems:     'center',
-  },
-  headerTitleBlock: {
-    flex: 1,
-    paddingHorizontal: Space[3],
-    gap: 3,
-  },
-  headerEyebrow: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.30)',
+    justifyContent: 'center',
+    marginLeft:     -Space[2],
   },
   headerTitle: {
+    flex:          1,
     fontFamily:    FontFamily.serif,
-    fontSize:      26,
+    fontSize:      22,
     fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.5,
-    lineHeight:    26 * 1.1,
+    color:         Colors.ink1,
+    letterSpacing: -0.3,
   },
   headerRight: {
     width: 36,
   },
-  headerSeam: {
-    height:           StyleSheet.hairlineWidth,
-    backgroundColor:  'rgba(255,255,255,0.06)',
-    marginTop:        Space[4],
-    marginHorizontal: -Space.screenH,
+  headerDivider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+  },
+  flex: {
+    flex: 1,
   },
 
   // ── List ──────────────────────────────────────────────────────────────────────
@@ -652,6 +773,53 @@ const styles = StyleSheet.create({
     color: Colors.ink1,
   },
 
+  // ── Payment method picker ─────────────────────────────────────────────────────
+  paymentLabel: {
+    ...Type.label,
+    color:        Colors.ink4,
+    marginBottom: Space[2],
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    gap:           Space[3],
+  },
+  paymentOption: {
+    flex:            1,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             Space[2],
+    paddingVertical: Space[3],
+    paddingHorizontal: Space[3],
+    borderRadius:    Radius.sm,
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     Colors.rule,
+    backgroundColor: Colors.surfaceSoft,
+  },
+  paymentOptionSelected: {
+    borderColor:     Colors.ink1,
+    backgroundColor: Colors.surface,
+  },
+  paymentRadio: {
+    width:        14,
+    height:       14,
+    borderRadius: 7,
+    borderWidth:  1.5,
+    borderColor:  Colors.ink4,
+    flexShrink:   0,
+  },
+  paymentRadioSelected: {
+    borderColor:     Colors.ink1,
+    backgroundColor: Colors.ink1,
+  },
+  paymentOptionText: {
+    ...Type.caption,
+    color: Colors.ink3,
+    flex:  1,
+  },
+  paymentOptionTextSelected: {
+    color: Colors.ink1,
+  },
+
   // ── Footer — anchored Place Order ─────────────────────────────────────────────
   footer: {
     paddingHorizontal: Space.screenH,
@@ -674,6 +842,46 @@ const styles = StyleSheet.create({
   ctaBtnText: {
     ...Type.bodyStrong,
     color: '#FFFFFF',
+  },
+
+  // ── Address fetch skeleton ────────────────────────────────────────────────────
+  skeletonWrap: {
+    gap: Space[1],
+    marginBottom: Space[2],
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Space[3],
+    paddingVertical: Space[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  skeletonLines: {
+    flex: 1,
+    gap:  Space[1],
+  },
+  skeletonLine: {
+    marginTop: Space[1],
+  },
+
+  // ── Empty state (no addresses yet) ───────────────────────────────────────────
+  emptyStateWrap: {
+    marginTop: Space[4],
+  },
+  emptyAddBtn: {
+    height:          44,
+    borderWidth:     1.5,
+    borderColor:     Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingHorizontal: Space[6],
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginTop:       Space[2],
+  },
+  emptyAddBtnText: {
+    ...Type.bodyStrong,
+    color: Colors.ink1,
   },
 });
 

@@ -10,6 +10,7 @@ import {
   Dimensions,
   ListRenderItemInfo,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -17,8 +18,9 @@ import { useProfileCode } from '../hooks/useProfileCode';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
 import { postSaveCartItems } from '../api/cart';
 import type { WishlistItemInterface } from '../api/interfaces';
-import { BottomNavBar, Price } from '../components/ui';
+import { BottomNavBar, Price, SkeletonGrid, TrustLine } from '../components/ui';
 import { ErrorState } from '../components/system';
+import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -170,23 +172,6 @@ const WishlistCard: React.FC<{
   );
 };
 
-// ── Skeleton card ─────────────────────────────────────────────────────────────
-const SkeletonCard: React.FC<{ delay: number }> = ({ delay }) => {
-  const entrance = useEntrance(delay);
-  return (
-    <Animated.View style={[styles.cardWrap, entrance]}>
-      <View style={styles.card}>
-        <View style={[styles.imgWrap, styles.skeletonImg]} />
-        <View style={styles.info}>
-          <View style={[styles.skeletonLine, { width: '45%' }]} />
-          <View style={[styles.skeletonLine, { width: '80%', marginTop: Space[1] + 2 }]} />
-          <View style={[styles.skeletonLine, { width: '35%', marginTop: Space[2] }]} />
-        </View>
-        <View style={styles.skeletonBtn} />
-      </View>
-    </Animated.View>
-  );
-};
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
@@ -200,6 +185,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   const [items, setItems]         = useState<WishlistItemInterface[]>([]);
   const [addingIds, setAddingIds] = useState<Set<number>>(new Set());
+  const [isFTU, setIsFTU]         = useState(false);
   const hasFetched = useRef(false);
 
   const fetchWishlist = useCallback(
@@ -209,6 +195,18 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         const response = await getWishlist(profileCode);
         const result = response.statusCode === 1 ? (response.result || []) : [];
         hasFetched.current = true;
+        // FTU detection: empty result + wishlistSeen not yet set
+        if (result.length === 0) {
+          const seen = await AsyncStorage.getItem(scopedKey('wishlistSeen', profileCode));
+          if (!seen) {
+            setIsFTU(true);
+            await AsyncStorage.setItem(scopedKey('wishlistSeen', profileCode), '1');
+          } else {
+            setIsFTU(false);
+          }
+        } else {
+          setIsFTU(false);
+        }
         return result;
       }, cancelled),
     [run, profileCode],
@@ -275,42 +273,59 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     />
   );
 
-  const renderEmpty = () => (
-    <View style={styles.emptyWrap}>
-      <View style={styles.emptyContent}>
-        <Icon name="heart-outline" size={36} color={Colors.ink4} />
-        <View style={styles.emptyText}>
-          <Text style={styles.emptyTitle}>Your wishlist is empty.</Text>
+  const renderEmpty = () => {
+    if (isFTU) {
+      return (
+        <View style={[styles.listContentEmpty, styles.stateWrap]}>
+          <View style={styles.emptyInner}>
+            <View style={styles.emptyIconCircle}>
+              <Icon name="heart-outline" size={22} color={Colors.ink4} />
+            </View>
+            <Text style={styles.emptyTitle}>Save things you love.</Text>
+            <Text style={styles.emptyBody}>
+              While browsing, tap ♡ on any product to find it here later.
+            </Text>
+            <TrustLine message="Your wishlist is private to your account" />
+            <TouchableOpacity
+              style={styles.emptyCTA}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('Home')}
+              accessibilityRole="button"
+              accessibilityLabel="Start shopping"
+            >
+              <Text style={styles.emptyCTAText}>Start Shopping</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.listContentEmpty, styles.stateWrap]}>
+        <View style={styles.emptyInner}>
+          <View style={styles.emptyIconCircle}>
+            <Icon name="heart-outline" size={22} color={Colors.ink4} />
+          </View>
+          <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
           <Text style={styles.emptyBody}>
-            Save products you love and find them here later.
+            Tap ♡ on any product to save it here for later.
           </Text>
+          <TouchableOpacity
+            style={styles.emptyCTA}
+            activeOpacity={0.88}
+            onPress={() => navigation.navigate('Home')}
+            accessibilityRole="button"
+            accessibilityLabel="Start shopping"
+          >
+            <Text style={styles.emptyCTAText}>Start Shopping</Text>
+          </TouchableOpacity>
         </View>
       </View>
-      <View style={styles.emptyFooter}>
-        <TouchableOpacity
-          style={styles.emptyCTA}
-          activeOpacity={0.88}
-          onPress={() => navigation.navigate('Home')}
-          accessibilityRole="button"
-          accessibilityLabel="Start shopping"
-        >
-          <Text style={styles.emptyCTAText}>Start Shopping</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderSkeleton = () => (
     <View style={styles.stateWrap}>
-      <View style={styles.skeletonGrid}>
-        {[[0, 1], [2, 3]].map((pair, row) => (
-          <View key={row} style={styles.skeletonRow}>
-            {pair.map(i => (
-              <SkeletonCard key={i} delay={i * 50} />
-            ))}
-          </View>
-        ))}
-      </View>
+      <SkeletonGrid cols={2} rows={2} showPriceLine showButton />
     </View>
   );
 
@@ -597,51 +612,28 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Skeleton ──────────────────────────────────────────────────────────────────
-  skeletonGrid: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[5],
-    gap:               Space[5],
-  },
-  skeletonRow: {
-    flexDirection: 'row',
-    gap:           COL_GAP,
-  },
-  skeletonImg: {
-    borderRadius:    0,
-    backgroundColor: Colors.surfaceDeep,
-  },
-  skeletonLine: {
-    height:          9,
-    borderRadius:    Radius.xs,
-    backgroundColor: Colors.surfaceDeep,
-  },
-  skeletonBtn: {
-    marginTop:       Space[2] + 2,
-    height:          28,
-    borderRadius:    Radius.pill,
-    backgroundColor: Colors.surfaceDeep,
-  },
-
   // ── State wrappers ────────────────────────────────────────────────────────────
   stateWrap: {
     flex: 1,
+    paddingTop: Space[5],
   },
 
   // ── Empty state ───────────────────────────────────────────────────────────────
-  emptyWrap: {
-    flex: 1,
-  },
-  emptyContent: {
+  emptyInner: {
     flex:              1,
     alignItems:        'center',
     justifyContent:    'center',
     paddingHorizontal: Space[6],
-    gap:               Space[4],
+    paddingVertical:   Space[8],
+    gap:               Space[3],
   },
-  emptyText: {
-    gap: Space[2],
-    alignItems: 'center',
+  emptyIconCircle: {
+    width:          42,
+    height:         42,
+    borderRadius:   21,
+    backgroundColor: Colors.surfaceSoft,
+    alignItems:     'center',
+    justifyContent: 'center',
   },
   emptyTitle: {
     ...Type.title,
@@ -652,23 +644,21 @@ const styles = StyleSheet.create({
     ...Type.caption,
     textAlign: 'center',
     color:     Colors.ink3,
-    maxWidth:  240,
-  },
-  emptyFooter: {
-    paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[8],
-    paddingTop:        Space[4],
+    maxWidth:  260,
   },
   emptyCTA: {
-    borderWidth:     1,
-    borderColor:     Colors.ink1,
+    marginTop:       Space[2],
+    height:          44,
+    backgroundColor: Colors.ink1,
     borderRadius:    Radius.pill,
-    paddingVertical: Space[4],
+    paddingHorizontal: Space[6],
     alignItems:      'center',
+    justifyContent:  'center',
   },
   emptyCTAText: {
     ...Type.bodyStrong,
-    color: Colors.ink1,
+    color:    '#FFFFFF',
+    fontSize: 15,
   },
 });
 

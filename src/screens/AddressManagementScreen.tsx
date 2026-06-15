@@ -9,7 +9,6 @@ import {
   Platform,
   Animated,
   StatusBar,
-  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -121,8 +120,6 @@ const AddressRow: React.FC<{
 // ── Screen ────────────────────────────────────────────────────────────────────
 const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const haptic = useHaptic();
-
   const { data: addresses, loading: fetchLoading, isError: fetchError, error: fetchErrorMsg, run } =
     useAsyncState<DeliveryAddress[]>([]);
 
@@ -132,8 +129,6 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
   const [submitting, setSubmitting]     = useState(false);
   const [formError, setFormError]       = useState<string | null>(null);
   const [editingCode, setEditingCode]   = useState<number | null>(null);
-
-  const headerAnim = useEntrance(0);
 
   const fetchAddresses = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -349,25 +344,21 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
-      <Animated.View style={[styles.header, { paddingTop: insets.top + Space[2] }, headerAnim]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Icon name="chevron-back" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <View style={styles.headerTitleBlock}>
-            <Text style={styles.headerEyebrow}>ACCOUNT</Text>
-            <Text style={styles.headerTitle}>Addresses</Text>
-          </View>
-          <View style={styles.headerRight} />
-        </View>
-        <View style={styles.headerSeam} />
-      </Animated.View>
+      <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.6}
+        >
+          <Icon name="chevron-back" size={22} color={Colors.ink1} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Addresses</Text>
+        <View style={styles.headerRight} />
+      </View>
+      <View style={styles.headerDivider} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -425,42 +416,31 @@ const styles = StyleSheet.create({
 
   // ── Header ───────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor:   Colors.ink1,
+    flexDirection:     'row',
+    alignItems:        'center',
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[4],
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
+    backgroundColor:   Colors.surface,
   },
   backBtn: {
-    width: 36, height: 36,
-    justifyContent: 'center',
+    width:          36,
+    height:         36,
     alignItems:     'center',
-  },
-  headerTitleBlock: {
-    flex: 1,
-    paddingHorizontal: Space[3],
-    gap: 3,
-  },
-  headerEyebrow: {
-    ...Type.label,
-    color: 'rgba(255,255,255,0.30)',
+    justifyContent: 'center',
+    marginLeft:     -Space[2],
   },
   headerTitle: {
+    flex:          1,
     fontFamily:    FontFamily.serif,
-    fontSize:      26,
+    fontSize:      22,
     fontWeight:    '400',
-    color:         '#FFFFFF',
-    letterSpacing: -0.5,
-    lineHeight:    26 * 1.1,
+    color:         Colors.ink1,
+    letterSpacing: -0.3,
   },
   headerRight: { width: 36 },
-  headerSeam: {
-    height:           StyleSheet.hairlineWidth,
-    backgroundColor:  'rgba(255,255,255,0.06)',
-    marginTop:        Space[4],
-    marginHorizontal: -Space.screenH,
+  headerDivider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
   },
 
   // ── List ─────────────────────────────────────────────────────────────────────

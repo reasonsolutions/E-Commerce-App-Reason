@@ -1,6 +1,6 @@
 # Project Modernization Audit — E-Commerce React Native App
 
-**Last updated:** 2026-06-09
+**Last updated:** 2026-06-11 (rev 3)
 **Branch:** `dev` (canonical)
 **TypeScript status:** 0 errors, clean compile
 
@@ -44,11 +44,19 @@ The app is a React Native e-commerce client (iOS + Android) supporting: product 
 - `useAsyncState` cancellation-safe async hook across all data-fetching screens.
 - Server-authoritative cart badge via `CartContext`.
 - Phase 3 redesign complete: all 14 screens done. Frozen reference screens: Login, HomeScreen, ProductScreen, OrderSuccessScreen, CartScreen.
-- Cancel order flow implemented — bottom sheet with `CustomerCancellationReason` + `RefundMode` pickers, `SubOrderNumber` from `getOrderStatus` used for payload. Backend `SubOrderNumber` inconsistency pending fix.
+- Cancel order flow implemented and confirmed working — `SubOrder: { Code, Number }` from `getOrderStatus`, cancel payload uses `SubOrder.Code`. Success shown via styled `Modal` (not native Alert).
 - Order detail tracking timeline — `Events` array from `getOrderStatus` rendered as vertical spine timeline.
 - Order detail payment summary — `PaymentInfo` from `getOrderStatus` rendered (amount paid, discount, delivery, coupon, total).
 - Order history re-fetches on every focus — stale status after cancel resolved.
-- Full enum library in `src/config/enum_files/` — 27 enums matching backend `Enums.cs`, shared with backend team. `OrderStatusCode` defined in `enum_files/OrderStatus.ts`, re-exported from `interfaces.ts`.
+- Full enum library in `src/config/enum_files/` — 27 enums matching backend `Enums.cs`. `OrderStatusCode` defined in `enum_files/OrderStatus.ts`, re-exported from `interfaces.ts`.
+- COD payment method on `AddressScreen` — payment picker (Card / Cash on Delivery) in footer. COD calls `placeOrder` directly with `PaymentModes.CashOnDelivery` → `OrderSuccess`. Card proceeds to MIPS as before.
+- `AddressScreen` `submitting` state split into `savingAddress` (add address form) and `orderSubmitting` (place order CTA) — were incorrectly shared.
+- `OrderProgressBar` component added — segmented 6-step bar (Placed → Delivered) with ember active step. Shown inline on active order cards in `OrderHistoryScreen` and inside `StatusHero` on `OrderDetailScreen`.
+- `orderStatus.ts` extended with `ORDER_STATUS_LABELS` record (customer-facing display copy per status code) alongside the existing `orderStatusLabel()` function.
+- State experience sprint complete — `SkeletonGrid`, `TrustLine` components added; `EmptyState` gains `trustLine` prop; `ErrorState` wired to HomeScreen, ResultScreen, SearchScreen; dual empty states (filter vs. collection) on ResultScreen; FTU state on WishlistScreen and SearchScreen; AddressScreen empty state separated from form; all skeleton states break correctly on API error or empty response.
+- User-scoped AsyncStorage keys — `scopedKey()` utility in `storageKeys.ts` scopes `recentlyViewed`, `recentSearches`, `wishlistSeen` per `CustomerProfileCode` (or `_guest`). Prevents data bleeding between accounts on a shared device.
+- Header consistency — `AddressScreen` and `AddressManagementScreen` migrated from dark editorial header to light surface header matching WishlistScreen/CartScreen.
+- HomeScreen fetch loop fixed — `useFocusEffect` dep array no longer includes `products`/`categories`/`brands`; `fetchInitiated` ref prevents re-firing on state changes. All three fetch functions now guard against `statusCode !== 1` responses and return `[]` instead of `undefined`, preventing indefinite skeleton states.
 
 ---
 
@@ -123,7 +131,7 @@ The app is a React Native e-commerce client (iOS + Android) supporting: product 
     │   └── CategoryItem.tsx
     ├── config/
     │   ├── env.ts                   — MOCK_MODE = __DEV__, MOCK_DELAY_MS
-    │   ├── storageKeys.ts           — Typed STORAGE_KEYS constant (userData, authToken)
+    │   ├── storageKeys.ts           — Typed STORAGE_KEYS constant + scopedKey(base, profileCode) utility for per-user namespacing
     │   └── reactotron.ts            — Dev-only Reactotron configuration
     ├── constants/
     │   └── storage.ts               — Re-export shim (backward compat — still exists)
@@ -158,7 +166,7 @@ The app is a React Native e-commerce client (iOS + Android) supporting: product 
     └── utils/
         ├── auth.ts                  — getInitialRoute() (JWT expiry check) + clearSession()
         ├── formatDate.ts            — ISO date → display string
-        ├── orderStatus.ts           — OrderStatusCode → label
+        ├── orderStatus.ts           — orderStatusLabel() (code → OrderStatus string) + ORDER_STATUS_LABELS (code → customer-facing display copy)
         ├── resolveImageUrl.ts       — Prepends base URL to relative API image paths; fallbackImageUrl() for picsum
         ├── toastEmitter.ts          — Pub/sub event emitter for ToastOverlay
         └── unsplashImage.ts         — Unsplash API wrapper with AsyncStorage cache
@@ -192,7 +200,7 @@ All domains except order detail are on the real API:
 | `cart` | **Real** | All functions |
 | `address` | **Real** | All functions |
 | `wishlist` | **Real** | All functions |
-| `order` | **Real** | `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`, `cancelOrder` all real. `order/index.ts` normalises field name casing (`InventoryID` → `Inventory_Id`, `ItemID` → `Item_Id`, `SubOrderNumber`, `BrandName` → `Brand_Name`, `PaymentInfo`) from `getOrderStatus` response. |
+| `order` | **Real** | All functions real: `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`, `cancelOrder`. `order/index.ts` normalises field name casing (`InventoryID` → `Inventory_Id`, `ItemID` → `Item_Id`, `SubOrderNumber`, `BrandName` → `Brand_Name`, `PaymentInfo`) from `getOrderStatus` response. |
 
 `MOCK_MODE` in `src/config/env.ts` is `__DEV__` but no longer gates any domain — all domains bypass it. The constant remains for `MOCK_DELAY_MS` usage in mock implementations.
 
@@ -358,14 +366,17 @@ Thin NativeWind-ready wrappers over React Native core components. Enables `class
 | `StatusBadge` | Active | 5 order statuses |
 | `SearchBar` | Active | Search input with icon |
 | `FloatingLabelInput` | Active | Static-label underline input. Used in Login, RegisterScreen, AddressScreen, AddressManagementScreen |
-| `EmptyState` | Active | Editorial copy ("Nothing saved yet." not "Your wishlist is empty") |
+| `EmptyState` | Active | Props: `icon`, `title`, `body`, `trustLine?` (optional trust signal slot), `action?`. Use `TrustLine` in the `trustLine` slot on checkout/account screens. |
 | `ErrorBanner` | Active | Inline error within loaded screens — for mutation errors |
-| `Skeleton` / `SkeletonRow` | Active | Skeleton loading placeholders |
+| `Skeleton` / `SkeletonRow` | Active | Skeleton loading placeholders — shimmer sweep 1400ms |
+| `SkeletonGrid` | Active | 2-column (or 1-column) product grid skeleton. Props: `cols`, `rows`, `showPriceLine`, `showButton`. Uses `Skeleton` internally. Used by WishlistScreen, ResultScreen, SearchScreen. |
+| `TrustLine` | Active | Lock icon + caption text in `ink4`. Used on AddressScreen empty state and WishlistScreen FTU state. |
 | `Toast` / `AppToast` | Active | Toast component — rendered via `ToastOverlay` |
 | `ToastOverlay` | Active | Portal-style overlay — subscribes to `toastEmitter`, renders `AppToast` at top of screen with spring entrance. Auto-dismisses after 3.5s. Mount once in `App.tsx`. |
 | `VariantSheet` | Active | Bottom sheet for variant selection — uses `gluestack/Actionsheet` |
 | `FilterSheet` | Active | Bottom sheet for sort/category/brand/price/discount filters. Uses RN `Modal`. Owns all draft filter state via props. |
 | `OrderFilterSheet` | Active | Lightweight filter sheet for order history — sort (asc/desc) + date range. Uses RN `Modal`. |
+| `OrderProgressBar` | Active | 6-step segmented progress bar (Placed → Delivered). Active step rendered in ember (`Colors.accent`), prior steps in `Colors.ink3`, pending in `Colors.rule`. Shows active step label below. Returns null for terminal statuses (Cancelled, Returned). Used in `OrderHistoryScreen` (active order cards) and `OrderDetailScreen` (`StatusHero`). |
 | `HeroNavButton` | Active | Floating nav button (ProductScreen) |
 | `Rating` | Deprecated | `@deprecated` JSDoc present. Zero screen usage. Adopt before use. |
 | `SectionLabel` | Deprecated | `@deprecated` JSDoc present. Zero screen usage. Migrate HomeScreen section headers here before adopting. |
@@ -532,8 +543,7 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 |---|---|
 | `placeOrder` OrganisationID cache cold-start | If a user deep-links straight to checkout without browsing products, `getOrgIdForInventory()` returns an empty string. Cache is populated only when products are fetched. |
 | `postUpdateCustomer` password | `Password` field is required but overwrites the stored password — cannot update profile without setting a new password. Backend fix pending. |
-| Cancel order `SubOrder.Id` | Backend returns inconsistent `SubOrderNumber` between `getOrderHistory` and `getOrderStatus` for the same order — cancel API rejects the parsed value. `OrderDetailScreen` uses `getOrderStatus` data (`liveItem.SubOrderNumber`) and `orderNumber` from nav param. Backend fix pending. |
-| `useSession` adoption | WishlistScreen and CartScreen migrated to `useProfileCode()`. Still pending: AddressScreen, OrderHistoryScreen, OrderDetailScreen. |
+| `useSession` adoption | WishlistScreen and CartScreen migrated to `useProfileCode()`. Still pending: OrderHistoryScreen, OrderDetailScreen. AddressScreen reads AsyncStorage directly by design (needs `profileCode` inside fetch). |
 | Tax display in UI | `ProductScreen`, `CartScreen`, `AddressScreen` don't show tax breakdown. Tax data is available in variant response but not rendered. |
 | `getSavedCartItems` tax verification | Unconfirmed whether cart API returns `PriceDetails.Taxes` populated — needs real response check before tax display work. |
 | API response types | `axiosInstance` responses are untyped (`any`). Incremental hardening deferred. |
@@ -556,7 +566,7 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | `ProductInterface` partial typing | Fully typed against live API — includes `PhysicalAttributes`, `ComplianceInfo`, `Taxes`, `StockStatus`, all nested objects |
 | Server-side sorting | Implemented — `allProducts` payload sends `sortBy: SortBy | null`; `ResultScreen` maps sort keys |
 | Enum files | 27 enums in `src/config/enum_files/` mirroring backend `Enums.cs`. `OrderStatusCode` moved here, re-exported from `interfaces.ts`. |
-| Cancel order | `cancelOrder` endpoint wired — `merchant/postCancelledPlaceOrderByCustomer`. Bottom sheet in `OrderDetailScreen` with reason + refund mode pickers. Pending backend fix on `SubOrderNumber` inconsistency. |
+| Cancel order | `cancelOrder` endpoint wired and confirmed working. `SubOrder: { Code, Number }` shape from `getOrderStatus`. Uses `SubOrder.Code` as `SubOrder.Id`. Success shown via styled `Modal`. |
 | Order tracking timeline | `Events` array from `getOrderStatus` rendered as vertical spine timeline in `OrderDetailScreen`. |
 | Order payment summary | `PaymentInfo` from `getOrderStatus` rendered in `OrderDetailScreen` — amount paid, discount, delivery, coupon, total. |
 | Order history stale after cancel | `OrderHistoryScreen` now re-fetches on every focus — fixed via removing `hasFetchedOnce` guard. |
@@ -571,6 +581,12 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | Login 55KB inline SVG | Eliminated — pure RN gradient composition |
 | All domains on mock | auth, cart, wishlist, address now all real |
 | P1-01 Cart badge cold-start zero | Fixed in `Login.tsx` — `getSavedCartItems` called post-login to seed `cartCount` before navigating to Home |
+| Cancel order `SubOrder.Id` | Resolved — `getOrderStatus` returns `SubOrder: { Code, Number }`. Cancel payload uses `SubOrder.Code` as `SubOrder.Id`. Success shown via styled `Modal`. End-to-end confirmed working. |
+| Order progress bar | `OrderProgressBar` (`src/components/ui/OrderProgressBar.tsx`) — 6-step segmented bar shown on active orders in `OrderHistoryScreen` and `StatusHero` in `OrderDetailScreen`. `orderStatus.ts` extended with `ORDER_STATUS_LABELS` record for customer-facing display copy. |
+| HomeScreen infinite skeleton | Fixed — fetch functions now guard `statusCode !== 1` and return `[]`; `fetchInitiated` ref prevents re-fetch loop; skeleton branches break on `isError`. |
+| Recently viewed / recent searches account bleed | Fixed — `scopedKey(base, profileCode)` in `storageKeys.ts` namespaces keys per user (`recentlyViewed_100094`) or guest (`recentlyViewed_guest`). ProductScreen, HomeScreen, SearchScreen, WishlistScreen updated. |
+| Dark header on AddressScreen / AddressManagementScreen | Fixed — both screens now use light surface header (serif 22px, `ink1`, hairline divider) matching WishlistScreen/CartScreen. |
+| State experience gaps (HomeScreen, ResultScreen, SearchScreen, WishlistScreen, AddressScreen) | Fixed — full state coverage sprint. `SkeletonGrid` and `TrustLine` added. Dual empty states on ResultScreen. FTU states on WishlistScreen and SearchScreen. |
 
 ---
 
@@ -581,19 +597,19 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | **Login** | `loginCustomer`, `getSavedCartItems` (post-login) | Dark hero / light form split. Staggered spring entrance. Seeds cart count post-login via `getSavedCartItems`. Sets Keychain tokens + AsyncStorage user data. | — |
 | **RegisterScreen** | `postCreateCustomer` | `FloatingLabelInput` fields. On success → navigates to `OTPVerification` with phone + profile code params. | — |
 | **OTPVerificationScreen** | `postConfirmCustomer`, `postCreateCustomer` (resend) | 6-digit OTP input. Confirms registration → navigates to Login. | No resend button — user has no recovery if OTP expires. |
-| **HomeScreen** | `getProductsByCategory`, `getCategories`, `getBrands` | Module-level cache for categories/products/brands (survives re-focus). Recently viewed rail (AsyncStorage). Greeting from `userData`. Category rail, brand rail, smart buys, discounted products. | No banners/promotions. Local entrance animation (500ms/440ms) — intentional exception to shared hook. |
-| **SearchScreen** | `allProducts` (via axiosInstance direct) | Recent searches (AsyncStorage, max 8). Submits → `ResultScreen`. | No trending/popular searches. |
-| **ResultScreen** | `allProducts`, `getCategories`, `getBrands`, `addToWishlist` | Infinite scroll, server-side `SortBy` (LowToHigh/HighToLow), client-side newest/default sort. Filter sheet (category, brand, price range, discount, sort). Wishlist toggle inline. | — |
+| **HomeScreen** | `getProductsByCategory`, `getCategories`, `getBrands` | Module-level cache + `fetchInitiated` ref (prevents re-fetch loop on state change). `ErrorState` wired for total fetch failure. Skeleton breaks on `isError` or empty response. Recently viewed uses `scopedKey`. | No banners/promotions. Local entrance animation (500ms/440ms) — intentional exception to shared hook. |
+| **SearchScreen** | `allProducts` (via axiosInstance direct) | Recent searches scoped via `scopedKey`. FTU "Popular right now" chips when no recent searches. `EmptyState` for no-results with "Browse All Products" CTA. `ErrorState` for fetch failure with retry. | — |
+| **ResultScreen** | `allProducts`, `getCategories`, `getBrands`, `addToWishlist` | Infinite scroll, server-side `SortBy`. Filter sheet. Dual empty states: filter-active ("No matches found." + Clear Filters) vs. collection-empty ("Nothing here yet." + Browse All). `ErrorState` with "Go back" secondary CTA. | — |
 | **ProductScreen** | `getProductByItemId`, `postSaveCartItems`, `addToWishlist`, `removeFromWishlist`, `getWishlist`, `addToGuestCart` | Variant picker (`VariantSheet`). Wishlist toggle. Add to cart (auth-guarded). Guest cart support. Writes `recentlyViewed` to AsyncStorage. `useAuthGuard` for protected actions. | No reviews/ratings section. No related/similar products. No size guide. |
 | **CartScreen** | `getSavedCartItems`, `postDeleteCartItem`, `updateCartItemQuantity`, `getGuestCart`, `updateGuestCartItem`, `removeFromGuestCart`, `clearGuestCart` | Auth + guest cart support. Qty stepper with optimistic updates. Remove item. `PriceDetails` summary panel. Proceeds to `AddressScreen` (auth-guarded). Merges guest cart on login. | No coupon/promo code input (`CouponAvailed` exists in API). Tax breakdown not shown. |
-| **AddressScreen** | `getDeliveryAddresses`, `postCreateDeliveryAddress`, `placeOrder` | Selects/creates delivery address. Builds full order payload (org map, taxes, payment modes). Stores `orderId` to AsyncStorage → navigates to `EcomPayment`. Still reads AsyncStorage directly (not on `useProfileCode`). | `OrganisationID` cold-start risk if user reaches checkout without browsing products. |
+| **AddressScreen** | `getDeliveryAddresses`, `postCreateDeliveryAddress`, `placeOrder` | Light surface header (consistent with WishlistScreen/CartScreen). Address-row skeleton during fetch. Empty state separated from form — `showForm` state revealed by outline "Add Address" CTA. `TrustLine` on empty state. `savingAddress` and `orderSubmitting` are separate states. Reads AsyncStorage directly for `profileCode` (by design — needed inside fetch). | `OrganisationID` cold-start risk if user reaches checkout without browsing products. |
 | **PaymentScreen** | MIPS `token/create`, MIPS `mips/loadPaymentZone`, MIPS `mips/getPaymentStatus`, `placeOrder` | WebView MIPS payment gateway. 5-min countdown. Polls payment status (15s initial delay, 5s interval, 60 max attempts). Finalises order on `StatusCode=1`. Clears cart on success → `OrderSuccess`. | Credentials hardcoded pending backend config. `customerProfileCode` hardcoded to test value pending backend fix. |
 | **OrderSuccessScreen** | None (params only) | Ember ring scales 0.52→1.0 on Carry curve. `haptic.success()` at draw completion. Staggered Settle content entrance. Shows order number, items, total, address, timestamp. | — |
-| **OrderHistoryScreen** | `postOrderHistory`, `postSaveCartItems` (reorder) | Infinite scroll pagination (page size 10). Pull-to-refresh. Sort + date range filters (`OrderFilterSheet`). Order progress bar with active step label. Reorder button (adds all items to cart). Re-fetches on every focus. Auth-guarded (shows `LoginPromptSheet` for guests). | Order count in header is current-page count, not server total. |
-| **OrderDetailScreen** | `postCnfOrderDetail`, `cancelOrder` | Tracking timeline (`Events` array as vertical spine). Payment summary (`PaymentInfo`). Delivery address section. Cancel order bottom sheet (`CustomerCancellationReason` + `RefundMode` pickers, auth-guarded by `liveItem` from `getOrderStatus`). Cancel only shown for New/Confirmed/Processing. | Cancel `SubOrder.Id` pending backend fix (`SubOrderNumber` inconsistency between `getOrderHistory` and `getOrderStatus`). |
-| **WishlistScreen** | `getWishlist`, `removeFromWishlist`, `postSaveCartItems` | Auth-guarded (shows `LoginPromptSheet` for guests). Remove from wishlist. Add to cart from wishlist. Navigate to product on tap. On `useProfileCode`. | — |
+| **OrderHistoryScreen** | `postOrderHistory`, `postSaveCartItems` (reorder) | Infinite scroll pagination (page size 10). Pull-to-refresh. Sort + date range filters (`OrderFilterSheet`). `OrderProgressBar` shown inline on active order cards (New/Confirmed/Processing/Fulfilled/Shipped). Left status strip color varies by state (accent/ink3/danger). Reorder button (adds all items to cart). Re-fetches on every focus. Auth-guarded (shows `LoginPromptSheet` for guests). | Order count in header is current-page count, not server total. |
+| **OrderDetailScreen** | `postCnfOrderDetail`, `cancelOrder` | `StatusHero` with tinted background (accentTint/successTint/dangerTint per status) + `OrderProgressBar` for active statuses + `ORDER_STATUS_LABELS` display copy. Tracking timeline (`Events` array as vertical spine). Payment summary (`PaymentInfo`). Delivery address section. Cancel order bottom sheet (`CustomerCancellationReason` + `RefundMode` pickers). Cancel only shown for New/Confirmed/Processing. Success shown via styled `Modal`. Copy-to-clipboard on order number. | — |
+| **WishlistScreen** | `getWishlist`, `removeFromWishlist`, `postSaveCartItems` | Auth-guarded. `SkeletonGrid` (2×2, shimmer) during load. FTU empty state ("Save things you love." + `TrustLine`) on first visit with empty wishlist — detected via `scopedKey('wishlistSeen', profileCode)`. Return-user empty state ("Nothing saved yet.") on subsequent visits. | — |
 | **ProfileScreen** | `getDeliveryAddresses`, AsyncStorage (`userData`) | Shows user info from `userData`. Address count from `getDeliveryAddresses`. Links to Wishlist, Orders, AddressManagement. Logout (clears session). | `postUpdateCustomer` password issue — overwrites stored password, backend fix pending. No order count summary. |
-| **AddressManagementScreen** | `getDeliveryAddresses`, `postCreateDeliveryAddress`, `postUpdateDeliveryAddress`, `postDeleteDeliveryAddress` | Full CRUD for delivery addresses. Inline form (`FloatingLabelInput`). Set primary address. `useAsyncState` + `useFocusEffect`. | — |
+| **AddressManagementScreen** | `getDeliveryAddresses`, `postCreateDeliveryAddress`, `postUpdateDeliveryAddress`, `postDeleteDeliveryAddress` | Full CRUD for delivery addresses. Light surface header (consistent with rest of app). Inline form (`FloatingLabelInput`). Set primary address. `useAsyncState` + `useFocusEffect`. | — |
 
 ---
 
@@ -608,7 +624,7 @@ Rather than requiring the backend to add `OrganisationID` to the cart response, 
 | Cart | **Real** | All functions |
 | Address | **Real** | All functions |
 | Wishlist | **Real** | All functions |
-| Order | **Mixed** | `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory` = real (pagination + filters); `postCnfOrderDetail` = mock |
+| Order | **Real** | All functions live: `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`, `cancelOrder`. |
 
 ### Image resolution
 

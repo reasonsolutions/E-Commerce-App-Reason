@@ -15,3 +15,16 @@ const STATUS_MAP: Record<OrderStatusCode, OrderStatus> = {
 export function orderStatusLabel(code: number): OrderStatus {
   return STATUS_MAP[code as OrderStatusCode] ?? 'New';
 }
+
+// Customer-facing display copy — used in StatusHero on OrderDetailScreen.
+// Codes match OrderStatusCode enum exactly (New=1 … Returned=8).
+export const ORDER_STATUS_LABELS: Record<number, string> = {
+  [OrderStatusCode.New]:        'Order Placed',
+  [OrderStatusCode.Confirmed]:  'Order Confirmed',
+  [OrderStatusCode.Processing]: 'Being Prepared',
+  [OrderStatusCode.Fulfilled]:  'Packed',
+  [OrderStatusCode.Shipped]:    'Shipped',
+  [OrderStatusCode.Delivered]:  'Delivered',
+  [OrderStatusCode.Cancelled]:  'Order Cancelled',
+  [OrderStatusCode.Returned]:   'Return Initiated',
+};

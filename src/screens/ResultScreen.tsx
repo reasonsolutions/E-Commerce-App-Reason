@@ -35,6 +35,7 @@ import {
   Skeleton,
   EmptyState,
   FilterSheet,
+  TextLinkButton,
 } from '../components/ui';
 import type { SortKey } from '../components/ui';
 import { ErrorState } from '../components/system';
@@ -747,6 +748,27 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     setDraftSortKey('default');
   }, []);
 
+  // ── Clear all committed filters and refetch ────────────────────────────────
+  const clearFilters = useCallback(() => {
+    haptic.light();
+    setFilterCategories([]);
+    setFilterBrands([]);
+    setFilterPriceMin('');
+    setFilterPriceMax('');
+    setFilterDiscount(false);
+    setSortKey('default');
+    setDraftCategories([]);
+    setDraftBrands([]);
+    setDraftPriceMin('');
+    setDraftPriceMax('');
+    setDraftDiscount(false);
+    setDraftSortKey('default');
+    fetchProducts({
+      cats: [], brands: [], priceMin: '', priceMax: '',
+      discount: false, sort: 'default',
+    });
+  }, [haptic, fetchProducts]);
+
   const toggleDraftCategory = useCallback(
     (id: number) => {
       haptic.light();
@@ -895,18 +917,55 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         ) : isError ? (
           <View style={styles.stateWrap}>
             <ErrorState
-              title="Couldn't load products."
-              message={error ?? 'Tap retry to try again.'}
+              title="Products didn't load."
+              message={error ?? 'Check your connection and try again.'}
               onRetry={() => fetchProducts()}
               retryLoading={loading}
+            />
+            <View style={styles.stateSecondaryAction}>
+              <TextLinkButton
+                label="Go back"
+                onPress={() => navigation.goBack()}
+              />
+            </View>
+          </View>
+        ) : deduplicated.length === 0 && activeFilterCount > 0 ? (
+          <View style={styles.stateWrap}>
+            <EmptyState
+              icon={<Icon name="options-outline" size={22} color={Colors.ink4} />}
+              title="No matches found."
+              body="Remove a filter to see more products."
+              action={
+                <TouchableOpacity
+                  style={styles.emptyPrimaryBtn}
+                  onPress={clearFilters}
+                  activeOpacity={0.88}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.emptyPrimaryBtnText}>Clear All Filters</Text>
+                </TouchableOpacity>
+              }
             />
           </View>
         ) : deduplicated.length === 0 ? (
           <View style={styles.stateWrap}>
             <EmptyState
-              icon={<Icon name="bag-outline" size={28} color={Colors.ink4} />}
+              icon={<Icon name="grid-outline" size={22} color={Colors.ink4} />}
               title="Nothing here yet."
-              body="This collection is empty. Check back soon."
+              body="This collection is still being built. Explore other categories."
+              action={
+                <TouchableOpacity
+                  style={styles.emptyPrimaryBtn}
+                  onPress={() => navigation.navigate('Result', {
+                    categoryName: 'All Products',
+                    searchQuery: '%',
+                  })}
+                  activeOpacity={0.88}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.emptyPrimaryBtnText}>Browse All Products</Text>
+                </TouchableOpacity>
+              }
             />
           </View>
         ) : (

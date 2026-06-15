@@ -54,7 +54,10 @@ const AppNavigator = () => {
         <Stack.Screen
           name="Login"
           component={Login}
-          options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }}
+          options={{
+            cardStyleInterpolator: CardStyleInterpolators.forNoAnimation,
+            cardStyle: { backgroundColor: Colors.ink1 },
+          }}
         />
         <Stack.Screen name="Register" component={RegisterScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
         <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />

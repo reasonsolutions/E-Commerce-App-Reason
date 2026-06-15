@@ -26,6 +26,7 @@ import {
   Skeleton,
   OrderFilterSheet,
   ErrorBanner,
+  OrderProgressBar,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
@@ -53,16 +54,6 @@ type OrderHistoryScreenProps = {
 
 const IMG_W = 56;
 const IMG_H = 70;
-
-// Progress steps for active orders (not terminal states)
-const PROGRESS_STEPS: OrderStatusCode[] = [
-  OrderStatusCode.New,
-  OrderStatusCode.Confirmed,
-  OrderStatusCode.Processing,
-  OrderStatusCode.Fulfilled,
-  OrderStatusCode.Shipped,
-  OrderStatusCode.Delivered,
-];
 
 const ACTIVE_STATUSES = new Set([
   OrderStatusCode.New,
@@ -100,79 +91,6 @@ function groupOrders(items: OrderHistoryItemInterface[]): OrderGroup[] {
   }
   return Array.from(map.values());
 }
-
-// ── Order progress bar ────────────────────────────────────────────────────────
-const PROGRESS_LABELS: Record<OrderStatusCode, string> = {
-  [OrderStatusCode.New]:        'Placed',
-  [OrderStatusCode.Confirmed]:  'Confirmed',
-  [OrderStatusCode.Processing]: 'Processing',
-  [OrderStatusCode.Fulfilled]:  'Packed',
-  [OrderStatusCode.Shipped]:    'Shipped',
-  [OrderStatusCode.Delivered]:  'Delivered',
-  [OrderStatusCode.Cancelled]:  'Cancelled',
-  [OrderStatusCode.Returned]:   'Returned',
-};
-
-const OrderProgressBar: React.FC<{ status: OrderStatusCode }> = ({ status }) => {
-  const currentIdx = PROGRESS_STEPS.indexOf(status);
-  if (currentIdx < 0) return null;
-
-  return (
-    <View style={progStyles.container}>
-      {PROGRESS_STEPS.map((step, i) => {
-        const filled   = i <= currentIdx;
-        const isActive = i === currentIdx;
-        return (
-          <View key={step} style={progStyles.stepWrap}>
-            <View
-              style={[
-                progStyles.segment,
-                filled    && progStyles.segmentFilled,
-                isActive  && progStyles.segmentActive,
-              ]}
-            />
-            {isActive ? (
-              <Text style={progStyles.stepLabel}>{PROGRESS_LABELS[step]}</Text>
-            ) : null}
-          </View>
-        );
-      })}
-    </View>
-  );
-};
-
-const progStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    gap:           3,
-    marginTop:     10,
-    marginBottom:  2,
-  },
-  stepWrap: {
-    flex:      1,
-    alignItems: 'center',
-  },
-  segment: {
-    width:           '100%',
-    height:          3,
-    borderRadius:    2,
-    backgroundColor: Colors.rule,
-  },
-  segmentFilled: {
-    backgroundColor: Colors.ink3,
-  },
-  segmentActive: {
-    backgroundColor: Colors.accent,
-  },
-  stepLabel: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      8,
-    letterSpacing: 0.3,
-    color:         Colors.accent,
-    marginTop:     3,
-    textAlign:     'center',
-  },
-});
 
 // ── Single item row within a card ─────────────────────────────────────────────
 const OrderItemRow: React.FC<{ item: OrderHistoryItemInterface; isLast: boolean }> = ({

@@ -51,7 +51,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useProfileCode } from '../hooks/useProfileCode';
 import { useAppToast } from '../hooks/useAppToast';
 import { useAuthGuard } from '../hooks/useAuthGuard';
-import { STORAGE_KEYS } from '../config/storageKeys';
+import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -155,21 +155,25 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     const p = data.product;
     const itemIdNum = parseInt(p.ItemId, 10);
     const preselect = p.Variants?.find(v => v.StockStatus?.Description !== 'out_of_stock') ?? p.Variants?.[0];
-    AsyncStorage.getItem(STORAGE_KEYS.recentlyViewed).then(raw => {
-      const prev: any[] = raw ? JSON.parse(raw) : [];
-      const snapshot = {
-        ItemID:          itemIdNum,
-        Name:            p.Name,
-        BrandName:       p.BrandName,
-        Images:          Array.isArray(p.Images)
-          ? (p.Images as unknown as string[]).join(';')
-          : p.Images,
-        MinPrice:        preselect?.PriceDetails?.Price ?? 0,
-        MaxComparePrice: preselect?.PriceDetails?.ComparePrice ?? 0,
-        Inventory_Id:    preselect?.InventoryId ?? null,
-      };
-      const next = [snapshot, ...prev.filter((x: any) => x.ItemID !== itemIdNum)].slice(0, 8);
-      AsyncStorage.setItem(STORAGE_KEYS.recentlyViewed, JSON.stringify(next));
+    AsyncStorage.getItem(STORAGE_KEYS.userData).then(userRaw => {
+      const code: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
+      const key = scopedKey('recentlyViewed', code);
+      return AsyncStorage.getItem(key).then(raw => {
+        const prev: any[] = raw ? JSON.parse(raw) : [];
+        const snapshot = {
+          ItemID:          itemIdNum,
+          Name:            p.Name,
+          BrandName:       p.BrandName,
+          Images:          Array.isArray(p.Images)
+            ? (p.Images as unknown as string[]).join(';')
+            : p.Images,
+          MinPrice:        preselect?.PriceDetails?.Price ?? 0,
+          MaxComparePrice: preselect?.PriceDetails?.ComparePrice ?? 0,
+          Inventory_Id:    preselect?.InventoryId ?? null,
+        };
+        const next = [snapshot, ...prev.filter((x: any) => x.ItemID !== itemIdNum)].slice(0, 8);
+        AsyncStorage.setItem(key, JSON.stringify(next));
+      });
     }).catch(() => {});
   }, [data]);
 

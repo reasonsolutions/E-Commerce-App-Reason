@@ -7,6 +7,7 @@ interface EmptyStateProps {
   icon: React.ReactNode;
   title: string;
   body: string;
+  trustLine?: React.ReactNode;
   action?: React.ReactNode;
 }
 
@@ -14,6 +15,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
   title,
   body,
+  trustLine,
   action,
 }) => {
   return (
@@ -21,6 +23,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       <View style={styles.iconWrap}>{icon}</View>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
+      {trustLine ? <View style={styles.trustSlot}>{trustLine}</View> : null}
       {action ? <View style={styles.actionSlot}>{action}</View> : null}
     </View>
   );
@@ -51,6 +54,9 @@ const styles = StyleSheet.create({
     ...Type.caption,
     textAlign: 'center',
     maxWidth:  280,
+  },
+  trustSlot: {
+    marginTop: Space[1],
   },
   actionSlot: {
     marginTop: Space[2],

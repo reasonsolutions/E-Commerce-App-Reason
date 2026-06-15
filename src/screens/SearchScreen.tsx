@@ -8,16 +8,19 @@ import {
   StyleSheet,
   StatusBar,
   BackHandler,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
-import { STORAGE_KEYS } from '../config/storageKeys';
+import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
+import { EmptyState } from '../components/ui';
+import { ErrorState } from '../components/system';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -26,20 +29,30 @@ type NavigationProp = {
 
 type Props = { navigation: NavigationProp };
 
+// Curated popular search chips — shown to first-time users with no recent searches
+const POPULAR_CHIPS = ['Sneakers', 'Dresses', 'Watches', 'Bags', 'Sunglasses', 'Hoodies'];
+
 const SearchScreen: React.FC<Props> = ({ navigation }) => {
   const insets      = useSafeAreaInsets();
   const inputRef    = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [query,         setQuery]         = useState('');
-  const [suggestions,   setSuggestions]   = useState<string[]>([]);
+  const [query,          setQuery]          = useState('');
+  const [suggestions,    setSuggestions]    = useState<string[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [searchError,    setSearchError]    = useState(false);
+  const [retrying,       setRetrying]       = useState(false);
+  const lastQueryRef    = useRef('');
+  const profileCodeRef  = useRef<number | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEYS.recentSearches).then(raw => {
+    AsyncStorage.getItem(STORAGE_KEYS.userData).then(userRaw => {
+      const code: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
+      profileCodeRef.current = code;
+      return AsyncStorage.getItem(scopedKey('recentSearches', code));
+    }).then(raw => {
       if (raw) try { setRecentSearches(JSON.parse(raw)); } catch {}
-    });
-    // Auto-focus after mount
+    }).catch(() => {});
     const t = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(t);
   }, []);
@@ -52,58 +65,75 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
     return () => sub.remove();
   }, [navigation]);
 
+  const fetchSuggestions = useCallback(async (text: string) => {
+    try {
+      const response = await axiosInstance.post(productEndpoints.allProducts, {
+        brands: [], categories: [], subCategories: [],
+        searchQuery: text.trim(),
+        priceRange: { from: null, to: null },
+        discount: null,
+        pagination: { pageNumber: 1, pageSize: 8 },
+      });
+      const names: string[] = Array.from(
+        new Set<string>(
+          (response.data?.result?.Products ?? [])
+            .map((p: any) => p.Name as string)
+            .filter(Boolean),
+        ),
+      );
+      setSuggestions(names);
+      setSearchError(false);
+    } catch {
+      setSuggestions([]);
+      setSearchError(true);
+    }
+  }, []);
+
   const handleChangeText = useCallback((text: string) => {
     setQuery(text);
+    setSearchError(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (text.trim().length < 2) {
       setSuggestions([]);
       return;
     }
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const response = await axiosInstance.post(productEndpoints.allProducts, {
-          brands: [], categories: [], subCategories: [],
-          searchQuery: text.trim(),
-          priceRange: { from: null, to: null },
-          discount: null,
-          pagination: { pageNumber: 1, pageSize: 8 },
-        });
-        const names: string[] = Array.from(
-          new Set<string>(
-            (response.data?.result?.Products ?? [])
-              .map((p: any) => p.Name as string)
-              .filter(Boolean),
-          ),
-        );
-        setSuggestions(names);
-      } catch {
-        setSuggestions([]);
-      }
-    }, 300);
-  }, []);
+    lastQueryRef.current = text;
+    debounceRef.current = setTimeout(() => fetchSuggestions(text), 300);
+  }, [fetchSuggestions]);
+
+  const handleRetry = useCallback(async () => {
+    if (retrying || lastQueryRef.current.trim().length < 2) return;
+    setRetrying(true);
+    await fetchSuggestions(lastQueryRef.current);
+    setRetrying(false);
+  }, [retrying, fetchSuggestions]);
 
   const commit = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (!trimmed) return;
     const updated = [trimmed, ...recentSearches.filter(s => s !== trimmed)].slice(0, 8);
     setRecentSearches(updated);
-    await AsyncStorage.setItem(STORAGE_KEYS.recentSearches, JSON.stringify(updated));
+    await AsyncStorage.setItem(scopedKey('recentSearches', profileCodeRef.current), JSON.stringify(updated));
     navigation.navigate('Result', { searchQuery: trimmed, categoryName: `"${trimmed}"` });
   }, [navigation, recentSearches]);
 
   const deleteRecent = useCallback(async (item: string) => {
     const updated = recentSearches.filter(s => s !== item);
     setRecentSearches(updated);
-    await AsyncStorage.setItem(STORAGE_KEYS.recentSearches, JSON.stringify(updated));
+    await AsyncStorage.setItem(scopedKey('recentSearches', profileCodeRef.current), JSON.stringify(updated));
   }, [recentSearches]);
 
   const clearAll = useCallback(async () => {
     setRecentSearches([]);
-    await AsyncStorage.removeItem(STORAGE_KEYS.recentSearches);
+    await AsyncStorage.removeItem(scopedKey('recentSearches', profileCodeRef.current));
   }, []);
 
-  const showSuggestions = query.trim().length >= 2 && suggestions.length > 0;
-  const showRecent      = query.trim().length === 0 && recentSearches.length > 0;
+  const trimmedQuery    = query.trim();
+  const showSuggestions = trimmedQuery.length >= 2 && suggestions.length > 0 && !searchError;
+  const showRecent      = trimmedQuery.length === 0 && recentSearches.length > 0;
+  const showFTU         = trimmedQuery.length === 0 && recentSearches.length === 0;
+  const showNoResults   = trimmedQuery.length >= 2 && !showSuggestions && !searchError;
+  const showError       = searchError && trimmedQuery.length >= 2;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -135,7 +165,12 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
           />
           {query.length > 0 && (
             <TouchableOpacity
-              onPress={() => { setQuery(''); setSuggestions([]); inputRef.current?.focus(); }}
+              onPress={() => {
+                setQuery('');
+                setSuggestions([]);
+                setSearchError(false);
+                inputRef.current?.focus();
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Icon name="close-circle" size={16} color={Colors.ink4} />
@@ -144,6 +179,18 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       </View>
       <View style={styles.headerDivider} />
+
+      {/* ── Error state ───────────────────────────────────────────────────── */}
+      {showError && (
+        <View style={styles.stateWrap}>
+          <ErrorState
+            title="Search unavailable."
+            message="We couldn't complete your search. Check your connection."
+            onRetry={handleRetry}
+            retryLoading={retrying}
+          />
+        </View>
+      )}
 
       {/* ── Suggestions ──────────────────────────────────────────────────── */}
       {showSuggestions && (
@@ -205,11 +252,54 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
         />
       )}
 
-      {/* ── No results nudge ─────────────────────────────────────────────── */}
-      {query.trim().length >= 2 && !showSuggestions && (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>No results for "{query}"</Text>
+      {/* ── No results ────────────────────────────────────────────────────── */}
+      {showNoResults && (
+        <View style={styles.stateWrap}>
+          <EmptyState
+            icon={<Icon name="search-outline" size={22} color={Colors.ink4} />}
+            title="No results found."
+            body="Try different keywords or browse all products."
+            action={
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={() => navigation.navigate('Result', {
+                  categoryName: 'All Products',
+                  searchQuery: '%',
+                })}
+                activeOpacity={0.88}
+                accessibilityRole="button"
+              >
+                <Text style={styles.emptyBtnText}>Browse All Products</Text>
+              </TouchableOpacity>
+            }
+          />
         </View>
+      )}
+
+      {/* ── First-time user — popular search chips ────────────────────────── */}
+      {showFTU && (
+        <ScrollView
+          style={styles.ftuScroll}
+          contentContainerStyle={styles.ftuContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.ftuLabel}>POPULAR RIGHT NOW</Text>
+          <View style={styles.chipWrap}>
+            {POPULAR_CHIPS.map(chip => (
+              <TouchableOpacity
+                key={chip}
+                style={styles.chip}
+                onPress={() => commit(chip)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Search for ${chip}`}
+              >
+                <Text style={styles.chipText}>{chip}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -310,16 +400,61 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
   },
 
-  // ── Empty ───────────────────────────────────────────────────────────────────
-  empty: {
-    flex:           1,
-    alignItems:     'center',
-    justifyContent: 'center',
-    paddingBottom:  80,
+  // ── State wrap ──────────────────────────────────────────────────────────────
+  stateWrap: {
+    flex: 1,
   },
-  emptyText: {
+
+  // ── Empty state CTA ─────────────────────────────────────────────────────────
+  emptyBtn: {
+    height:          44,
+    backgroundColor: Colors.ink1,
+    borderRadius:    Radius.pill,
+    paddingHorizontal: Space[6],
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginTop:       Space[2],
+  },
+  emptyBtnText: {
+    ...Type.bodyStrong,
+    color:    '#FFFFFF',
+    fontSize: 15,
+  },
+
+  // ── First-time user chips ────────────────────────────────────────────────────
+  ftuScroll: {
+    flex: 1,
+  },
+  ftuContent: {
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[6],
+    paddingBottom:     Space[10],
+  },
+  ftuLabel: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    letterSpacing: 1.4,
+    color:         Colors.ink4,
+    textTransform: 'uppercase',
+    marginBottom:  Space[4],
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap:      'wrap',
+    gap:           Space[2],
+  },
+  chip: {
+    paddingVertical:   Space[2],
+    paddingHorizontal: Space[4],
+    backgroundColor:   Colors.surfaceSoft,
+    borderRadius:      Radius.pill,
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderColor:       Colors.rule,
+  },
+  chipText: {
     ...Type.caption,
-    color: Colors.ink4,
+    color:      Colors.ink2,
+    fontWeight: '500',
   },
 });
 

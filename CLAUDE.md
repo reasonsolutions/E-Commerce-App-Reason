@@ -109,8 +109,12 @@ src/components/
 │                 Text, Pressable, Divider, ScrollView, Image). Zero logic.
 ├── ui/           Semantic reusable UI — visual identity, design tokens, local animation.
 │                 Exported via ui/index.ts.
-├── system/       App-state components — ErrorState, RetryButton.
-│                 InlineError is deprecated; use ErrorBanner instead.
+│                 Key state components: EmptyState (icon+title+body+trustLine?+action?),
+│                 ErrorBanner (inline mutation error), Skeleton/SkeletonRow (shimmer),
+│                 SkeletonGrid (2-col product grid skeleton, cols/rows/showPriceLine/showButton),
+│                 TrustLine (lock icon + ink4 caption, for checkout/account empty states).
+├── system/       App-state components — ErrorState (full-screen fetch error + retry),
+│                 RetryButton. InlineError is deprecated; use ErrorBanner instead.
 └── gluestack/    Infrastructure bridge — Actionsheet.tsx only.
 ```
 
@@ -239,6 +243,18 @@ import { STORAGE_KEYS } from '../config/storageKeys';
 AsyncStorage.getItem(STORAGE_KEYS.userData); // never bare string literals
 ```
 
+**User-scoped storage keys — use `scopedKey` for per-user data:**
+```typescript
+import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
+// Keys for data that must not bleed between accounts on a shared device:
+// recentlyViewed, recentSearches, wishlistSeen
+const key = scopedKey('recentlyViewed', profileCode); // → 'recentlyViewed_100094'
+const guestKey = scopedKey('recentlyViewed', null);   // → 'recentlyViewed_guest'
+AsyncStorage.getItem(key);
+// Always read profileCode from AsyncStorage.getItem(STORAGE_KEYS.userData) at
+// the call site — never rely on useProfileCode() which is null on first render.
+```
+
 **Profile code:**
 ```typescript
 // In screens that need it for API calls, read directly from AsyncStorage inside the fetch function
@@ -285,6 +301,8 @@ const { animatedStyle, handlers } = useTactile();
 
 All 14 screens are open for redesign when explicitly requested. Login, HomeScreen, ProductScreen, and OrderSuccessScreen serve as the visual and interaction reference standard — follow their patterns when redesigning other screens, but they can also be modified if requested.
 
+**Header pattern:** Light surface header (serif 22px title, `ink1`, hairline `Colors.rule` divider, `Colors.surface` background) is used on: WishlistScreen, CartScreen, AddressScreen, AddressManagementScreen, OrderHistoryScreen. Dark editorial header (`DarkHeader` component, `Colors.ink1` background) is used on: OrderDetailScreen. Never use dark header for screens reachable from the bottom nav or checkout flow.
+
 ---
 
 ## State Rules
@@ -313,16 +331,21 @@ All 14 screens are open for redesign when explicitly requested. Login, HomeScree
 | ~~Clock-based token expiry~~ | Removed — expiry is server-driven via 401, not `exp` decode |
 | ~~`SortBy` server-side~~ | Done — `allProducts` payload sends `sortBy`, `ResultScreen` maps sort keys |
 | ~~Tax in order payload~~ | Done — `AddressScreen` maps `PriceDetails.Taxes` into `PlaceOrderTax[]` |
+| ~~Cancel order `SubOrder.Id`~~ | Resolved — `getOrderStatus` returns `SubOrder: { Code, Number }`. Cancel payload uses `SubOrder.Code` directly. End-to-end confirmed working. |
+| ~~Order progress bar~~ | `OrderProgressBar` added — `src/components/ui/OrderProgressBar.tsx`. 6-step segmented bar (Placed → Delivered). Shown inline in `OrderHistoryScreen` (active orders) and in `StatusHero` on `OrderDetailScreen`. Terminal statuses (Cancelled, Returned) return null. |
+| ~~HomeScreen infinite skeleton~~ | Fixed — fetch functions guard `statusCode !== 1`; `fetchInitiated` ref prevents dep-change re-fire loop; each skeleton branch breaks on its specific `isError` flag. |
+| ~~Recently viewed / search bleed between accounts~~ | Fixed — `scopedKey(base, profileCode)` in `storageKeys.ts`. ProductScreen, HomeScreen, SearchScreen, WishlistScreen updated. |
+| ~~Dark header on Address screens~~ | Fixed — `AddressScreen` and `AddressManagementScreen` use light surface header. |
 | `postUpdateCustomer` password | Overwrites stored password — backend fix pending |
 | Tax display in UI | `ProductScreen`, `CartScreen`, `AddressScreen` don't show tax breakdown yet |
 | `getSavedCartItems` tax verification | Unconfirmed whether cart API returns `PriceDetails.Taxes` populated |
-| `useSession` adoption | AddressScreen, OrderHistoryScreen, OrderDetailScreen still read AsyncStorage directly |
+| `useSession` adoption | OrderHistoryScreen, OrderDetailScreen still read AsyncStorage directly |
 | OrganisationID cold-start | `getOrgIdForInventory()` returns empty if user reaches checkout without browsing products |
 | OTP resend | No resend button on OTPVerificationScreen — user has no recovery if OTP expires |
 | Cart badge on logout | Badge count not reset to 0 on logout — shows stale count until next focus |
 | API response types | `axiosInstance` responses untyped (`any`) — incremental hardening deferred |
 | Navigation prop typing | Most screens use `any`-typed nav props — should use `StackNavigationProp` generics |
-| Cancel order testing | `getOrderStatus` now returns `SubOrder: { Code, Number }`. Cancel payload uses `SubOrder.Code` directly. Pending end-to-end test confirmation. |
+| Backend `statusCode: 0` on empty lists | `getCategory` and `getBrands` return `statusCode: 0` when empty instead of `statusCode: 1, result: []`. Frontend guards against this but the backend should be fixed. |
 
 ---
 

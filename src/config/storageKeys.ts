@@ -22,6 +22,22 @@ export const STORAGE_KEYS = {
   recentlyViewed: 'recentlyViewed',
   /** Order ID from placeOrder — used by PaymentScreen to initialise MIPS payment zone. */
   orderId: 'orderId',
+  /** Set to '1' after a user's first wishlist fetch returns empty — distinguishes FTU from returning empty. */
+  wishlistSeen: 'wishlist_seen',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
+
+/**
+ * Returns a user-scoped AsyncStorage key for data that must not bleed between
+ * accounts on a shared device (recently viewed, recent searches).
+ *
+ * Logged-in:  `recentlyViewed_100094`
+ * Guest:      `recentlyViewed_guest`
+ */
+export function scopedKey(
+  base: 'recentlyViewed' | 'recentSearches' | 'wishlistSeen',
+  profileCode: number | null | undefined,
+): string {
+  return `${STORAGE_KEYS[base]}_${profileCode ?? 'guest'}`;
+}
