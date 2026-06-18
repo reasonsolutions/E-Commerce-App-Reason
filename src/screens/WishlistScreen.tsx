@@ -20,7 +20,7 @@ import { postSaveCartItems } from '../api/cart';
 import type { WishlistItemInterface } from '../api/interfaces';
 import { BottomNavBar, Price, SkeletonGrid, TrustLine } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
+import { scopedKey } from '../config/storageKeys';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -231,6 +231,8 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     if (!profileCode) return;
     setItems(prev => prev.filter(i => i.WishlistCode !== wishlistCode));
     await removeFromWishlist(profileCode, wishlistCode);
+    const res = await getWishlist(profileCode);
+    if (res.statusCode === 1) setItems(res.result);
   };
 
   const handleAddToBag = async (item: WishlistItemInterface) => {
@@ -279,7 +281,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         <View style={[styles.listContentEmpty, styles.stateWrap]}>
           <View style={styles.emptyInner}>
             <View style={styles.emptyIconCircle}>
-              <Icon name="heart-outline" size={22} color={Colors.ink4} />
+              <Icon name="heart-outline" size={22} color={Colors.ink3} />
             </View>
             <Text style={styles.emptyTitle}>Save things you love.</Text>
             <Text style={styles.emptyBody}>
@@ -305,7 +307,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
           <View style={styles.emptyIconCircle}>
             <Icon name="heart-outline" size={22} color={Colors.ink4} />
           </View>
-          <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
+          <Text style={styles.emptyTitle}>Your wishlist is empty.</Text>
           <Text style={styles.emptyBody}>
             Tap ♡ on any product to save it here for later.
           </Text>
@@ -428,12 +430,12 @@ const styles = StyleSheet.create({
     marginLeft:     -Space[2],
   },
   headerTitle: {
-    flex:          1,
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.3,
+    flex:        1,
+    fontFamily:  FontFamily.sans,
+    fontSize:    18,
+    fontWeight:  '600',
+    color:       Colors.ink1,
+    letterSpacing: -0.1,
   },
   headerCount: {
     fontFamily:    FontFamily.sans,
@@ -628,12 +630,12 @@ const styles = StyleSheet.create({
     gap:               Space[3],
   },
   emptyIconCircle: {
-    width:          42,
-    height:         42,
-    borderRadius:   21,
-    backgroundColor: Colors.surfaceSoft,
-    alignItems:     'center',
-    justifyContent: 'center',
+    width:           44,
+    height:          44,
+    borderRadius:    22,
+    backgroundColor: Colors.surfaceDeep,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
   emptyTitle: {
     ...Type.title,
@@ -647,11 +649,11 @@ const styles = StyleSheet.create({
     maxWidth:  260,
   },
   emptyCTA: {
-    marginTop:       Space[2],
-    height:          44,
+    marginTop:       Space[4],
+    height:          52,
+    width:           '100%',
     backgroundColor: Colors.ink1,
     borderRadius:    Radius.pill,
-    paddingHorizontal: Space[6],
     alignItems:      'center',
     justifyContent:  'center',
   },

@@ -430,12 +430,12 @@ const styles = StyleSheet.create({
     marginLeft:     -Space[2],
   },
   headerTitle: {
-    flex:          1,
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.3,
+    flex:        1,
+    fontFamily:  FontFamily.sans,
+    fontSize:    18,
+    fontWeight:  '600',
+    color:       Colors.ink1,
+    letterSpacing: -0.1,
   },
   headerRight: { width: 36 },
   headerDivider: {

@@ -1,8 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Colors, Space, Radius, Shadow } from '../../theme';
-import { Type } from '../../theme/typography';
+import { Space } from '../../theme';
 import { FontFamily } from '../../theme/fonts';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
@@ -15,107 +14,82 @@ interface AppToastProps {
   onClose?: () => void;
 }
 
-const CONFIG: Record<ToastVariant, { icon: string; iconColor: string; bg: string; border: string }> = {
+const CONFIG: Record<ToastVariant, { icon: string; iconColor: string; bg: string; textColor: string }> = {
   success: {
     icon:      'checkmark-circle',
-    iconColor: Colors.success,
-    bg:        Colors.successTint,
-    border:    Colors.success,
+    iconColor: '#2F6F3E',
+    bg:        '#EDF7EF',
+    textColor: '#2F6F3E',
   },
   error: {
     icon:      'alert-circle',
-    iconColor: Colors.danger,
-    bg:        Colors.dangerTint,
-    border:    Colors.dangerBorder,
+    iconColor: '#B91C1C',
+    bg:        '#FEF2F2',
+    textColor: '#B91C1C',
   },
   warning: {
     icon:      'warning',
-    iconColor: Colors.warning,
-    bg:        Colors.warningTint,
-    border:    Colors.warning,
+    iconColor: '#92400E',
+    bg:        '#FFFBEB',
+    textColor: '#92400E',
   },
   info: {
     icon:      'information-circle',
-    iconColor: Colors.info,
-    bg:        Colors.infoTint,
-    border:    Colors.info,
+    iconColor: '#1E3A5F',
+    bg:        '#EFF6FF',
+    textColor: '#1E3A5F',
   },
 };
 
-export const AppToast: React.FC<AppToastProps> = ({ variant, title, description, onClose }) => {
+export const AppToast: React.FC<AppToastProps> = ({ variant, title, description }) => {
   const cfg = CONFIG[variant];
 
   return (
-    <View style={[styles.container, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-      {/* Left accent bar */}
-      <View style={[styles.accentBar, { backgroundColor: cfg.border }]} />
-
-      <View style={styles.iconWrap}>
-        <Icon name={cfg.icon} size={18} color={cfg.iconColor} />
-      </View>
-
-      <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={2}>{title}</Text>
+    <View style={[styles.pill, { backgroundColor: cfg.bg }]}>
+      <Icon name={cfg.icon} size={16} color={cfg.iconColor} />
+      <View style={styles.textBlock}>
+        <Text style={[styles.title, { color: cfg.textColor }]} numberOfLines={1}>
+          {title}
+        </Text>
         {description ? (
-          <Text style={styles.description} numberOfLines={3}>{description}</Text>
+          <Text style={[styles.description, { color: cfg.textColor }]} numberOfLines={2}>
+            {description}
+          </Text>
         ) : null}
       </View>
-
-      {onClose ? (
-        <TouchableOpacity
-          onPress={onClose}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel="Dismiss"
-        >
-          <Icon name="close" size={14} color={Colors.ink3} />
-        </TouchableOpacity>
-      ) : null}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  pill: {
     flexDirection:     'row',
     alignItems:        'center',
-    marginHorizontal:  Space.screenH,
-    marginBottom:      Space[3],
-    borderRadius:      Radius.md,
-    borderWidth:       1,
-    overflow:          'hidden',
-    paddingVertical:   Space[3],
-    paddingRight:      Space[3],
-    paddingLeft:       0,
-    gap:               Space[3],
-    minWidth:          200,
-    maxWidth:          340,
-    ...Shadow.sm,
+    alignSelf:         'center',
+    gap:               Space[2],
+    paddingVertical:   12,
+    paddingHorizontal: 20,
+    borderRadius:      100,
+    shadowColor:       '#000000',
+    shadowOffset:      { width: 0, height: 2 },
+    shadowOpacity:     0.04,
+    shadowRadius:      6,
+    elevation:         2,
   },
-  accentBar: {
-    width:  3,
-    alignSelf: 'stretch',
-    borderRadius: 0,
-  },
-  iconWrap: {
-    width:          20,
-    alignItems:     'center',
-    justifyContent: 'center',
-  },
-  body: {
-    flex: 1,
-    gap:  2,
+  textBlock: {
+    gap: 1,
   },
   title: {
     fontFamily:    FontFamily.sans,
-    fontSize:      13,
-    fontWeight:    '600',
-    color:         Colors.ink1,
+    fontSize:      14,
+    fontWeight:    '500',
     letterSpacing: 0.1,
-    lineHeight:    13 * 1.35,
+    lineHeight:    18,
   },
   description: {
-    ...Type.caption,
-    color:      Colors.ink3,
-    lineHeight: 13 * 1.5,
+    fontFamily: FontFamily.sans,
+    fontSize:   12,
+    lineHeight: 16,
+    opacity:    0.8,
   },
 });

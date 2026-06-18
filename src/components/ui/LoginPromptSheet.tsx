@@ -21,31 +21,36 @@ interface LoginPromptSheetProps {
   context?: LoginPromptContext;
 }
 
-const CONTEXT_MAP: Record<LoginPromptContext, { icon: string; title: string; body: string }> = {
+const CONTEXT_MAP: Record<LoginPromptContext, { icon: string; title: string; body: string; benefits: string[] }> = {
   orders: {
-    icon:  'receipt-outline',
-    title: 'View your orders',
-    body:  'Sign in to track deliveries, view order history, and manage returns.',
+    icon:     'receipt-outline',
+    title:    'Orders',
+    body:     'Track deliveries, view history, and manage returns.',
+    benefits: ['Live tracking', 'Easy returns', 'Order history'],
   },
   wishlist: {
-    icon:  'heart-outline',
-    title: 'Save to your wishlist',
-    body:  'Sign in to save items you love and come back to them anytime.',
+    icon:     'heart-outline',
+    title:    'Wishlist',
+    body:     'Save products you love and access them across devices.',
+    benefits: ['Saved across devices', 'Price drop alerts', 'Faster checkout'],
   },
   profile: {
-    icon:  'person-outline',
-    title: 'Your account',
-    body:  'Sign in to manage your profile, addresses, and preferences.',
+    icon:     'person-outline',
+    title:    'Your account',
+    body:     'Manage your profile, addresses, and preferences.',
+    benefits: ['Track orders', 'Save wishlist', 'Manage addresses'],
   },
   checkout: {
-    icon:  'bag-outline',
-    title: 'Almost there',
-    body:  'Sign in to complete your purchase and save your address.',
+    icon:     'bag-outline',
+    title:    'Almost there',
+    body:     'Sign in to complete your purchase and save your address.',
+    benefits: ['Saved addresses', 'Order tracking', 'Easy returns'],
   },
   general: {
-    icon:  'log-in-outline',
-    title: 'Sign in to continue',
-    body:  'Save items, track orders, and check out faster.',
+    icon:     'log-in-outline',
+    title:    'Sign in to continue',
+    body:     'Save items, track orders, and check out faster.',
+    benefits: ['Track orders', 'Save wishlist', 'Faster checkout'],
   },
 };
 
@@ -55,7 +60,7 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
   onRegister,
   context = 'general',
 }) => {
-  const { icon, title, body } = CONTEXT_MAP[context];
+  const { icon, title, body, benefits } = CONTEXT_MAP[context];
   const signInTactile = useTactile();
 
   const renderBackdrop = useCallback(
@@ -74,7 +79,7 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
   return (
     <BottomSheet
       index={0}
-      snapPoints={['44%']}
+      snapPoints={['46%']}
       enablePanDownToClose
       onClose={onClose}
       backdropComponent={renderBackdrop}
@@ -86,7 +91,7 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
         {/* Icon + heading */}
         <View style={styles.headingBlock}>
           <View style={styles.iconWrap}>
-            <Icon name={icon} size={22} color={Colors.ink2} />
+            <Icon name={icon} size={20} color={Colors.accent} />
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.body}>{body}</Text>
@@ -110,7 +115,7 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
             onPress={onRegister}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.registerText}>Create an account</Text>
+            <Text style={styles.registerText}>Create Account →</Text>
           </TouchableOpacity>
 
           <Text style={styles.footerDivider}>·</Text>
@@ -121,6 +126,16 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
           >
             <Text style={styles.dismissText}>Continue browsing</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Benefit chips */}
+        <View style={styles.benefitsRow}>
+          {benefits.map(b => (
+            <View key={b} style={styles.chip}>
+              <Icon name="checkmark" size={10} color={Colors.accent} />
+              <Text style={styles.chipText}>{b}</Text>
+            </View>
+          ))}
         </View>
 
       </BottomSheetView>
@@ -145,34 +160,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space[6],
     paddingTop:        Space[2],
     paddingBottom:     Space[6],
-    gap:               Space[5],
+    gap:               Space[4],
   },
 
   // Icon + heading
   headingBlock: {
-    gap: Space[3],
+    gap: Space[2],
   },
   iconWrap: {
-    width:           44,
-    height:          44,
-    borderRadius:    22,
-    backgroundColor: Colors.surfaceDeep,
+    width:           48,
+    height:          48,
+    borderRadius:    24,
+    backgroundColor: 'rgba(178, 90, 61, 0.08)',
     alignItems:      'center',
     justifyContent:  'center',
     marginBottom:    Space[1],
   },
   title: {
     fontFamily:    FontFamily.serif,
-    fontSize:      26,
+    fontSize:      23,
     fontWeight:    '400',
     color:         Colors.ink1,
-    letterSpacing: -0.5,
-    lineHeight:    26 * 1.1,
+    letterSpacing: -0.4,
+    lineHeight:    23 * 1.1,
   },
   body: {
     ...Type.caption,
     color:      Colors.ink3,
-    lineHeight: 13 * 1.6,
+    lineHeight: 13 * 1.55,
   },
 
   // Primary button
@@ -199,7 +214,8 @@ const styles = StyleSheet.create({
   },
   registerText: {
     ...Type.caption,
-    color: Colors.ink2,
+    color:      Colors.ink1,
+    fontWeight: '500',
   },
   footerDivider: {
     ...Type.caption,
@@ -208,5 +224,30 @@ const styles = StyleSheet.create({
   dismissText: {
     ...Type.caption,
     color: Colors.ink3,
+  },
+
+  // Benefit chips
+  benefitsRow: {
+    flexDirection:  'row',
+    flexWrap:       'wrap',
+    gap:            Space[2],
+    justifyContent: 'center',
+    marginTop:      Space[1],
+  },
+  chip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               5,
+    paddingVertical:   5,
+    paddingHorizontal: Space[3],
+    backgroundColor:   Colors.surfaceSoft,
+    borderRadius:      Radius.pill,
+  },
+  chipText: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      11,
+    fontWeight:    '400',
+    color:         Colors.ink3,
+    letterSpacing: 0.1,
   },
 });

@@ -39,7 +39,7 @@ import {
 } from '../components/ui';
 import type { SortKey } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { Colors, Space, Radius } from '../theme';
+import { Colors, Space } from '../theme';
 import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
@@ -49,10 +49,10 @@ import {
   styles,
   COL_W,
   GRID_IMG_H,
-  HERO_IMG_H,
 } from './ResultScreen.styles';
-import { addToWishlist } from '../api/wishlist';
+import { addToWishlist, getWishlist, removeFromWishlist } from '../api/wishlist';
 import { useProfileCode } from '../hooks/useProfileCode';
+import type { WishlistItemInterface } from '../api/interfaces';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
@@ -91,22 +91,41 @@ function applySort(
   return products;
 }
 
-// ── Wishlist heart — bare icon, no background circle ─────────────────────────
-const WishlistHeart: React.FC<{ inventoryId: number }> = ({ inventoryId }) => {
+// ── Wishlist heart — white circle container ───────────────────────────────────
+const WishlistHeart: React.FC<{
+  inventoryId:        number;
+  initialWishlistCode: number | null;
+}> = ({ inventoryId, initialWishlistCode }) => {
   const haptic      = useHaptic();
   const profileCode = useProfileCode();
-  const [added, setAdded] = useState(false);
+  const [wishlistCode, setWishlistCode] = useState<number | null>(initialWishlistCode);
 
   const onPress = useCallback(async () => {
-    if (!profileCode || added) return;
+    if (!profileCode) return;
     haptic.light();
-    setAdded(true);
-    try {
-      await addToWishlist(profileCode, inventoryId);
-    } catch {
-      setAdded(false);
+    if (wishlistCode !== null) {
+      const prev = wishlistCode;
+      setWishlistCode(null);
+      try {
+        await removeFromWishlist(profileCode, prev);
+      } catch {
+        setWishlistCode(prev);
+      }
+    } else {
+      try {
+        const res = await addToWishlist(profileCode, inventoryId);
+        if (res?.statusCode === 1) {
+          const wRes = await getWishlist(profileCode);
+          if (wRes?.statusCode === 1) {
+            const match = (wRes.result as WishlistItemInterface[]).find(
+              w => w.InventoryID === inventoryId,
+            );
+            if (match) setWishlistCode(match.WishlistCode);
+          }
+        }
+      } catch {}
     }
-  }, [profileCode, inventoryId, haptic, added]);
+  }, [profileCode, inventoryId, haptic, wishlistCode]);
 
   return (
     <TouchableOpacity
@@ -115,32 +134,35 @@ const WishlistHeart: React.FC<{ inventoryId: number }> = ({ inventoryId }) => {
       style={styles.heartBtn}
       activeOpacity={0.7}
     >
-      <Icon
-        name={added ? 'heart' : 'heart-outline'}
-        size={18}
-        color={added ? Colors.accent : Colors.ink4}
-      />
+      <View style={styles.heartCircle}>
+        <Icon
+          name={wishlistCode !== null ? 'heart' : 'heart-outline'}
+          size={14}
+          color={wishlistCode !== null ? Colors.accent : Colors.ink3}
+        />
+      </View>
     </TouchableOpacity>
   );
 };
 
-// ── Hero card — full-width image, identity below on clean surface ─────────────
-const HeroCard: React.FC<{
+
+// ── Featured card — full-width, used when ≤3 results ─────────────────────────
+const FeaturedCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onNavigate: (itemId: number) => void;
-}> = React.memo(({ product, onNavigate }) => {
-  const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
+  delay: number;
+  initialWishlistCode: number | null;
+}> = React.memo(({ product, onNavigate, delay, initialWishlistCode }) => {
   const haptic = useHaptic();
-  const { animatedStyle, handlers } = useTactile();
+  const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, 12) };
+  const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const firstImage = product.Images ? resolveImageUrl(product.Images.split(';').filter(Boolean)[0]) : null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
-      toValue: 1,
-      duration: Motion.duration.carry,
-      easing: Motion.easing.inOut,
-      useNativeDriver: true,
+      toValue: 1, duration: Motion.duration.settle,
+      easing: Motion.easing.out, useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
 
@@ -150,39 +172,40 @@ const HeroCard: React.FC<{
     : 0;
 
   return (
-    <Animated.View style={[styles.heroCard, animatedStyle]}>
-      <TouchableOpacity
-        {...handlers}
-        onPress={() => { haptic.light(); onPress(); }}
-        activeOpacity={1}
-      >
-        <View style={styles.heroImgWrap}>
-          {firstImage ? (
-            <Animated.Image
-              source={{ uri: firstImage }}
-              style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
-              resizeMode="cover"
-              onLoad={onLoad}
-            />
-          ) : null}
-          <WishlistHeart inventoryId={product.Inventory_Id} />
-        </View>
-        <View style={styles.heroInfo}>
-          {product.Brand_Name ? (
-            <Text style={styles.heroCardBrand}>{product.Brand_Name.toUpperCase()}</Text>
-          ) : null}
-          <Text style={styles.heroCardName} numberOfLines={2}>{product.Name}</Text>
-          <View style={styles.heroPriceRow}>
-            <Text style={styles.heroCardPrice}>Rs {product.Price.toFixed(0)}</Text>
-            {hasDiscount && (
-              <>
-                <Text style={styles.heroCardWas}>Rs {product.ComparePrice.toFixed(0)}</Text>
-                <Text style={styles.heroDiscount}>−{discountPct}%</Text>
-              </>
-            )}
+    <Animated.View style={[styles.featuredCard, entranceStyle]}>
+      <Animated.View style={pressStyle}>
+        <TouchableOpacity
+          {...handlers}
+          onPress={() => { haptic.light(); onNavigate(product.Item_Id); }}
+          activeOpacity={1}
+        >
+          <View style={styles.featuredImgWrap}>
+            {firstImage ? (
+              <Animated.Image
+                source={{ uri: firstImage }}
+                style={[styles.gridImg, { opacity: imgOpacity }]}
+                resizeMode="contain"
+                onLoad={onLoad}
+              />
+            ) : null}
+            <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
           </View>
-        </View>
-      </TouchableOpacity>
+          <View style={styles.featuredInfo}>
+            {product.Brand_Name ? (
+              <Text style={styles.gridBrand} numberOfLines={1}>
+                {product.Brand_Name.toUpperCase()}
+              </Text>
+            ) : null}
+            <Text style={styles.featuredName} numberOfLines={2}>{product.Name}</Text>
+            <View style={styles.heroPriceRow}>
+              <Text style={styles.featuredPrice}>Rs {product.Price.toFixed(0)}</Text>
+              {hasDiscount && (
+                <Text style={styles.heroDiscount}>−{discountPct}%</Text>
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
     </Animated.View>
   );
 });
@@ -192,7 +215,9 @@ const GridTile: React.FC<{
   product: ProductByCategoryProductDetails;
   onNavigate: (itemId: number) => void;
   delay: number;
-}> = React.memo(({ product, onNavigate, delay }) => {
+  centered?: boolean;
+  initialWishlistCode: number | null;
+}> = React.memo(({ product, onNavigate, delay, centered = false, initialWishlistCode }) => {
   const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
   const { animatedStyle: entranceStyle } = {
@@ -219,7 +244,7 @@ const GridTile: React.FC<{
     : 0;
 
   return (
-    <Animated.View style={[styles.gridTile, entranceStyle]}>
+    <Animated.View style={[centered ? styles.gridTileCentered : styles.gridTile, entranceStyle]}>
       <Animated.View style={pressStyle}>
         <TouchableOpacity
           {...handlers}
@@ -238,7 +263,7 @@ const GridTile: React.FC<{
                 onLoad={onLoad}
               />
             ) : null}
-            <WishlistHeart inventoryId={product.Inventory_Id} />
+            <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
           </View>
           <View style={styles.gridInfo}>
             {product.Brand_Name ? (
@@ -267,7 +292,8 @@ const SpanCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onNavigate: (itemId: number) => void;
   delay: number;
-}> = React.memo(({ product, onNavigate, delay }) => {
+  initialWishlistCode: number | null;
+}> = React.memo(({ product, onNavigate, delay, initialWishlistCode }) => {
   const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
   const entranceStyle = useEntrance(delay, false, 12);
@@ -312,7 +338,7 @@ const SpanCard: React.FC<{
                 onLoad={onLoad}
               />
             ) : null}
-            <WishlistHeart inventoryId={product.Inventory_Id} />
+            <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
           </View>
           <View style={styles.spanFooter}>
             {product.Brand_Name ? (
@@ -336,60 +362,32 @@ const SpanCard: React.FC<{
   );
 });
 
-// ── Skeleton — matches loaded layout shape ────────────────────────────────────
+// ── Skeleton — 3 rows of 2-column grid tiles ──────────────────────────────────
+const SKELETON_ROWS = [
+  [{ brand: '45%', name: '80%', price: '35%' }, { brand: '55%', name: '70%', price: '40%' }],
+  [{ brand: '38%', name: '85%', price: '30%' }, { brand: '50%', name: '65%', price: '45%' }],
+  [{ brand: '42%', name: '75%', price: '38%' }, { brand: '60%', name: '55%', price: '32%' }],
+] as const;
+
 const ResultSkeleton: React.FC = () => (
   <View style={styles.skeletonWrap}>
-    <Skeleton
-      height={HERO_IMG_H}
-      radius={Radius.md}
-      style={{ marginBottom: Space[6] }}
-    />
-    <View style={styles.gridRow}>
-      <View style={{ width: COL_W }}>
-        <Skeleton
-          height={GRID_IMG_H}
-          width={COL_W}
-          radius={Radius.md}
-          style={{ marginBottom: Space[2] }}
-        />
-        <Skeleton height={9} width="45%" style={{ marginBottom: Space[1] }} />
-        <Skeleton height={13} width="80%" style={{ marginBottom: Space[1] }} />
-        <Skeleton height={12} width="35%" />
+    {SKELETON_ROWS.map((pair, rowIdx) => (
+      <View key={rowIdx} style={[styles.gridRow, rowIdx > 0 && { marginTop: 0 }]}>
+        {pair.map((col, colIdx) => (
+          <View key={colIdx} style={{ width: COL_W }}>
+            <Skeleton
+              height={GRID_IMG_H}
+              width={COL_W}
+              radius={16}
+              style={{ marginBottom: Space[2] }}
+            />
+            <Skeleton height={9}  width={col.brand} style={{ marginBottom: Space[1] }} />
+            <Skeleton height={12} width={col.name}  style={{ marginBottom: Space[1] }} />
+            <Skeleton height={12} width={col.price} />
+          </View>
+        ))}
       </View>
-      <View style={{ width: COL_W }}>
-        <Skeleton
-          height={GRID_IMG_H}
-          width={COL_W}
-          radius={Radius.md}
-          style={{ marginBottom: Space[2] }}
-        />
-        <Skeleton height={9} width="55%" style={{ marginBottom: Space[1] }} />
-        <Skeleton height={13} width="70%" style={{ marginBottom: Space[1] }} />
-        <Skeleton height={12} width="40%" />
-      </View>
-    </View>
-    <View style={[styles.gridRow, { marginTop: Space[5] }]}>
-      <View style={{ width: COL_W }}>
-        <Skeleton
-          height={GRID_IMG_H}
-          width={COL_W}
-          radius={Radius.md}
-          style={{ marginBottom: Space[2] }}
-        />
-        <Skeleton height={9} width="38%" style={{ marginBottom: Space[1] }} />
-        <Skeleton height={13} width="85%" />
-      </View>
-      <View style={{ width: COL_W }}>
-        <Skeleton
-          height={GRID_IMG_H}
-          width={COL_W}
-          radius={Radius.md}
-          style={{ marginBottom: Space[2] }}
-        />
-        <Skeleton height={9} width="50%" style={{ marginBottom: Space[1] }} />
-        <Skeleton height={13} width="65%" />
-      </View>
-    </View>
+    ))}
   </View>
 );
 
@@ -402,6 +400,18 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const route = useRoute();
   const haptic = useHaptic();
+  const profileCode = useProfileCode();
+  const [wishlistMap, setWishlistMap] = useState<Map<number, number>>(new Map());
+
+  useEffect(() => {
+    if (!profileCode) return;
+    getWishlist(profileCode).then(res => {
+      if (res?.statusCode !== 1) return;
+      const map = new Map<number, number>();
+      (res.result as WishlistItemInterface[]).forEach(w => map.set(w.InventoryID, w.WishlistCode));
+      setWishlistMap(map);
+    }).catch(() => {});
+  }, [profileCode]);
   const {
     categoryId,
     brandId,
@@ -435,7 +445,6 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   }, []);
 
   const headerAnim = useEntrance(40, false, 12);
-  const heroAnim = useEntrance(160, false, 12);
 
   // ── Filter / sort state ────────────────────────────────────────────────────
   const [filterCategories, setFilterCategories] = useState<number[]>([]);
@@ -809,10 +818,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     () => applySort(allProducts, sortKey),
     [allProducts, sortKey],
   );
-  const heroProduct = deduplicated[0] ?? null;
-
   const rows = useMemo(() => {
-    const gridProducts = deduplicated.slice(1);
+    const gridProducts = deduplicated;
     const result: Array<
       | {
           type: 'pair';
@@ -894,6 +901,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle} numberOfLines={1}>{categoryName}</Text>
+            {!loading && deduplicated.length > 0 && (
+              <Text style={styles.headerCount}>
+                {deduplicated.length} {deduplicated.length === 1 ? 'product' : 'products'}
+              </Text>
+            )}
           </View>
 
           {filterButton}
@@ -968,19 +980,20 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
               }
             />
           </View>
+        ) : deduplicated.length <= 3 ? (
+          <>
+            {deduplicated.map((product, idx) => (
+              <FeaturedCard
+                key={product.Item_Id}
+                product={product}
+                onNavigate={navigateToProduct}
+                delay={Math.min(80 + idx * 80, 320)}
+                initialWishlistCode={wishlistMap.get(product.Inventory_Id) ?? null}
+              />
+            ))}
+          </>
         ) : (
           <>
-            {heroProduct && (
-              <Animated.View style={heroAnim}>
-                <HeroCard
-                  product={heroProduct}
-                  onNavigate={navigateToProduct}
-                />
-              </Animated.View>
-            )}
-
-            <View style={styles.gridDivider} />
-
             {rows.map((row, rowIndex) => {
               if (row.type === 'span') {
                 const delay = Math.min(180 + rowIndex * 40, 420);
@@ -990,6 +1003,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                     product={row.product}
                     onNavigate={navigateToProduct}
                     delay={delay}
+                    initialWishlistCode={wishlistMap.get(row.product.Inventory_Id) ?? null}
                   />
                 );
               }
@@ -997,21 +1011,26 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
               const leftDelay = Math.min(180 + rowIndex * 35, 400);
               const rightDelay = Math.min(180 + rowIndex * 35 + 55, 440);
 
+              const isOrphan = !row.right;
               return (
-                <View key={`pair-${row.leftIdx}`} style={styles.gridRow}>
+                <View
+                  key={`pair-${row.leftIdx}`}
+                  style={[styles.gridRow, isOrphan && styles.gridRowCentered]}
+                >
                   <GridTile
                     product={row.left}
                     onNavigate={navigateToProduct}
                     delay={leftDelay}
+                    centered={isOrphan}
+                    initialWishlistCode={wishlistMap.get(row.left.Inventory_Id) ?? null}
                   />
-                  {row.right ? (
+                  {row.right && (
                     <GridTile
                       product={row.right}
                       onNavigate={navigateToProduct}
                       delay={rightDelay}
+                      initialWishlistCode={wishlistMap.get(row.right.Inventory_Id) ?? null}
                     />
-                  ) : (
-                    <View style={{ width: COL_W }} />
                   )}
                 </View>
               );
@@ -1027,7 +1046,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           />
         )}
 
-        {!hasMore && allProducts.length > 0 && !loading && (
+        {!hasMore && allProducts.length > 3 && !loading && (
           <View style={styles.endOfResultsRow}>
             <View style={styles.endOfResultsLine} />
             <Text style={styles.endOfResults}>End of results</Text>

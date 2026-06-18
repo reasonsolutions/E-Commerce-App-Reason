@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, Radius } from '../../theme';
@@ -27,11 +27,11 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { route: 'Home',     label: 'Home',    activeIcon: 'home-outline',    inactiveIcon: 'home-outline' },
-  { route: 'Orders',   label: 'Orders',  activeIcon: 'receipt-outline', inactiveIcon: 'receipt-outline' },
-  { route: 'Wishlist', label: 'Wishlist',activeIcon: 'heart-outline',   inactiveIcon: 'heart-outline' },
-  { route: 'Cart',     label: 'Cart',    activeIcon: 'bag-outline',     inactiveIcon: 'bag-outline' },
-  { route: 'Profile',  label: 'Profile', activeIcon: 'person-outline',  inactiveIcon: 'person-outline' },
+  { route: 'Home',     label: 'Home',    activeIcon: 'home',          inactiveIcon: 'home-outline' },
+  { route: 'Orders',   label: 'Orders',  activeIcon: 'receipt',       inactiveIcon: 'receipt-outline' },
+  { route: 'Wishlist', label: 'Wishlist',activeIcon: 'heart',         inactiveIcon: 'heart-outline' },
+  { route: 'Cart',     label: 'Cart',    activeIcon: 'bag',           inactiveIcon: 'bag-outline' },
+  { route: 'Profile',  label: 'Profile', activeIcon: 'person-circle', inactiveIcon: 'person-circle-outline' },
 ];
 
 const NavItem: React.FC<{
@@ -41,7 +41,7 @@ const NavItem: React.FC<{
   cartCount?: number;
 }> = ({ tab, isActive, onPress, cartCount }) => {
   const haptic = useHaptic();
-  const iconColor = isActive ? Colors.accent : Colors.ink3;
+  const iconColor = isActive ? Colors.accent : Colors.ink4;
 
   return (
     <TouchableOpacity
@@ -54,7 +54,7 @@ const NavItem: React.FC<{
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
     >
       <View style={styles.iconWrap}>
-        <Icon name={tab.activeIcon} size={24} color={iconColor} />
+        <Icon name={isActive ? tab.activeIcon : tab.inactiveIcon} size={22} color={iconColor} />
         {tab.route === 'Cart' && cartCount != null && cartCount > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
@@ -98,7 +98,10 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
 
   return (
     <>
-      <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, Space[2]) }]}>
+      <View
+        style={[styles.container, { paddingBottom: Math.max(insets.bottom, Space[2]) }]}
+        pointerEvents={showPrompt ? 'none' : 'auto'}
+      >
         {TABS.map((tab) => (
           <NavItem
             key={tab.route}
@@ -110,19 +113,30 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         ))}
       </View>
 
-      {showPrompt && (
-        <LoginPromptSheet
-          context={promptContext}
-          onClose={() => setShowPrompt(false)}
-          onSignIn={() => { setShowPrompt(false); onNavigateToAuth?.('Login'); }}
-          onRegister={() => { setShowPrompt(false); onNavigateToAuth?.('Register'); }}
-        />
-      )}
+      <Modal
+        visible={showPrompt}
+        transparent
+        animationType="none"
+        onRequestClose={() => setShowPrompt(false)}
+        statusBarTranslucent
+      >
+        <View style={styles.modalWrap} pointerEvents="box-none">
+          <LoginPromptSheet
+            context={promptContext}
+            onClose={() => setShowPrompt(false)}
+            onSignIn={() => { setShowPrompt(false); onNavigateToAuth?.('Login'); }}
+            onRegister={() => { setShowPrompt(false); onNavigateToAuth?.('Register'); }}
+          />
+        </View>
+      </Modal>
     </>
   );
 };
 
 const styles = StyleSheet.create({
+  modalWrap: {
+    flex: 1,
+  },
   container: {
     flexDirection:   'row',
     backgroundColor: Colors.surface,
@@ -135,7 +149,7 @@ const styles = StyleSheet.create({
     alignItems:    'center',
     paddingTop:    Space[3],
     paddingBottom: Space[2],
-    gap:           4,
+    gap:           5,
   },
   iconWrap: {
     position:        'relative',
@@ -164,12 +178,14 @@ const styles = StyleSheet.create({
     lineHeight: 11,
   },
   label: {
-    fontFamily: FontFamily.sans,
-    fontSize:   11,
-    fontWeight: '400',
-    color:      Colors.ink3,
+    fontFamily:    FontFamily.sans,
+    fontSize:      10,
+    fontWeight:    '400',
+    color:         Colors.ink4,
+    letterSpacing: 0.2,
   },
   labelActive: {
-    color: Colors.accent,
+    color:      Colors.accent,
+    fontWeight: '500',
   },
 });

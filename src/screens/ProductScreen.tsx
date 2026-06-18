@@ -42,7 +42,7 @@ import {
   LoginPromptSheet,
 } from '../components/ui';
 
-import { Colors, Space, Shadow } from '../theme';
+import { Colors, Space, Shadow, Radius } from '../theme';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -55,7 +55,7 @@ import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_H = SCREEN_W * 0.85;
+const HERO_H = SCREEN_W * 0.62;
 const NAV_H  = 52;
 
 // Design tokens local to this screen
@@ -66,7 +66,7 @@ const COND_FG = '#2E7D32';
 type ProductFetch = { product: ProductDetailInterface };
 
 type ProductScreenProps = {
-  navigation: { goBack: () => void; navigate: (screen: string) => void };
+  navigation: { goBack: () => void; navigate: (screen: string, params?: Record<string, unknown>) => void };
   route: { params?: { product?: string } };
 };
 
@@ -105,7 +105,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   });
   const pillBg = scrollY.interpolate({
     inputRange:  [0, HERO_H - 80],
-    outputRange: ['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.0)'],
+    outputRange: ['rgba(0,0,0,0.16)', 'rgba(0,0,0,0.0)'],
     extrapolate: 'clamp',
   });
   const navBorderOpacity = scrollY.interpolate({
@@ -177,17 +177,20 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     }).catch(() => {});
   }, [data]);
 
-  // Wishlist match on load
+  // Wishlist match on load — runs once we have both product data and a logged-in profile
   useEffect(() => {
     if (!data?.product || !profileCode) return;
     let cancelled = false;
-    const inventoryId = Number(data.product.Variants?.[0]?.InventoryId ?? 0);
     getWishlist(profileCode).then(res => {
       if (cancelled) return;
-      if (res.statusCode === 1) {
-        const match = (res.result || []).find((w: WishlistItemInterface) => w.InventoryID === inventoryId);
-        if (match) { setWishlisted(true); setWishlistItemCode(match.WishlistCode); }
-      }
+      if (res.statusCode !== 1) return;
+      const inventoryIds = new Set(
+        (data.product.Variants ?? []).map((v: VariantInterface) => Number(v.InventoryId)),
+      );
+      const match = (res.result as WishlistItemInterface[]).find(
+        w => inventoryIds.has(w.InventoryID),
+      );
+      if (match) { setWishlisted(true); setWishlistItemCode(match.WishlistCode); }
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [data, profileCode]);
@@ -200,7 +203,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const imageUrls: string[] = productDetails?.Images
     ? (Array.isArray(productDetails.Images)
         ? (productDetails.Images as unknown as string[])
-        : productDetails.Images.split(';').map(s => s.trim())
+        : productDetails.Images.split(/[,;]/).map(s => s.trim())
       ).filter(Boolean).map(resolveImageUrl)
     : [];
 
@@ -295,7 +298,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           variant:        variantObj?.Variant ?? '',
           image:          Array.isArray(product?.Images)
             ? (product.Images as unknown as string[])[0] ?? ''
-            : product?.Images?.split(';')[0] ?? '',
+            : product?.Images?.split(/[,;]/)[0]?.trim() ?? '',
           organisationId: getOrgIdForInventory(inventoryId) ?? '',
         });
         setCartCount((prev: number) => prev + quantity);
@@ -437,14 +440,14 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                 <Image
                   key={i}
                   source={{ uri: url }}
-                  style={{ width: SCREEN_W, height: HERO_H, resizeMode: 'cover' }}
+                  style={{ width: SCREEN_W, height: HERO_H, resizeMode: 'contain' }}
                 />
               ))}
             </ScrollView>
           ) : imageUrls.length === 1 ? (
             <Image
               source={{ uri: imageUrls[0] }}
-              style={{ width: SCREEN_W, height: HERO_H, resizeMode: 'cover' }}
+              style={{ width: SCREEN_W, height: HERO_H, resizeMode: 'contain' }}
             />
           ) : (
             <View style={[styles.heroPlaceholder, { width: SCREEN_W, height: HERO_H }]} />
@@ -508,15 +511,15 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                 ) : null}
               </View>
 
-              {/* Product name */}
-              <Text style={styles.productName}>{productDetails.Name}</Text>
-
-              {/* Condition badge */}
-              {conditionLabel ? (
-                <View style={styles.conditionBadge}>
-                  <Text style={styles.conditionText}>{conditionLabel}</Text>
-                </View>
-              ) : null}
+              {/* Product name + condition badge inline */}
+              <View style={styles.nameBadgeRow}>
+                <Text style={styles.productName}>{productDetails.Name}</Text>
+                {conditionLabel ? (
+                  <View style={[styles.conditionBadge, styles.conditionBadgeInline]}>
+                    <Text style={styles.conditionText}>{conditionLabel}</Text>
+                  </View>
+                ) : null}
+              </View>
 
               {/* Price row */}
               <View style={styles.priceRow}>
@@ -591,14 +594,36 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       </Animated.ScrollView>
 
       {/* ── Purchase bar ──────────────────────────────────────────────────── */}
-      <View
-        style={[
-          styles.purchaseBar,
-          { paddingBottom: Math.max(insets.bottom, Space[3]) },
-          Shadow.sm,
-        ]}
-      >
-        {!isOOS ? (
+      {isOOS ? (
+        <View
+          style={[
+            styles.purchaseBarOOS,
+            { paddingBottom: Math.max(insets.bottom, Space[4]) },
+            Shadow.sm,
+          ]}
+        >
+          <View style={styles.oosDisabledPill}>
+            <Text style={styles.oosDisabledText}>Out of Stock</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.oosSecondaryBtn}
+            onPress={() => navigation.navigate('Result', {
+              categoryId:   productDetails?.CategoryId,
+              categoryName: productDetails?.CategoryName ?? 'Similar Products',
+            })}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.oosSecondaryText}>Browse Similar Products</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.purchaseBar,
+            { paddingBottom: Math.max(insets.bottom, Space[3]) },
+            Shadow.sm,
+          ]}
+        >
           <View style={styles.stepperRow}>
             <TouchableOpacity
               onPress={() => setQuantity(q => Math.max(1, q - 1))}
@@ -616,18 +641,17 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               <Icon name="add" size={12} color={INK} />
             </TouchableOpacity>
           </View>
-        ) : null}
-
-        <View style={{ flex: 1 }}>
-          <PrimaryButton
-            label={isOOS ? 'Out of Stock' : 'Add to Bag'}
-            loading={addingToCart}
-            onPress={handleAddToCart}
-            isDisabled={isOOS}
-            height={44}
-          />
+          <View style={{ flex: 1 }}>
+            <PrimaryButton
+              label="Add to Bag"
+              loading={addingToCart}
+              onPress={handleAddToCart}
+              isDisabled={false}
+              height={44}
+            />
+          </View>
         </View>
-      </View>
+      )}
 
       {showLoginPrompt ? (
         <LoginPromptSheet
@@ -680,10 +704,10 @@ const styles = StyleSheet.create({
   heroContainer: {
     position: 'relative',
     height: HERO_H,
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: '#FFFFFF',
   },
   heroPlaceholder: {
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: '#FFFFFF',
   },
   discountBadge: {
     position: 'absolute',
@@ -711,16 +735,16 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   dot: {
-    height: 5,
+    height: 6,
     borderRadius: 3,
   },
   dotActive: {
-    width: 16,
+    width: 20,
     backgroundColor: 'rgba(255,255,255,0.95)',
   },
   dotInactive: {
-    width: 5,
-    backgroundColor: 'rgba(255,255,255,0.38)',
+    width: 6,
+    backgroundColor: 'rgba(255,255,255,0.45)',
   },
 
   // ── Identity plate ─────────────────────────────────────────────────────────
@@ -760,7 +784,13 @@ const styles = StyleSheet.create({
     fontWeight:    '600',
     color:         Colors.ink1,
     lineHeight:    20 * 1.25,
-    marginBottom:  4,
+    flexShrink:    1,
+  },
+  nameBadgeRow: {
+    flexDirection: 'row',
+    alignItems:    'flex-start',
+    flexWrap:      'wrap',
+    gap:           8,
   },
   conditionBadge: {
     alignSelf: 'flex-start',
@@ -769,6 +799,10 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 4,
     marginBottom: 11,
+  },
+  conditionBadgeInline: {
+    marginTop: 3,
+    marginBottom: 0,
   },
   conditionText: {
     fontFamily: FontFamily.sans,
@@ -838,6 +872,47 @@ const styles = StyleSheet.create({
     color: INK,
     minWidth: 18,
     textAlign: 'center',
+  },
+  purchaseBarOOS: {
+    backgroundColor:   Colors.surface,
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
+    paddingHorizontal: Space[4],
+    paddingTop:        Space[4],
+    gap:               Space[3],
+  },
+  oosDisabledPill: {
+    width:           '100%',
+    height:          48,
+    borderRadius:    Radius.pill,
+    backgroundColor: Colors.surfaceDeep,
+    borderWidth:     1,
+    borderColor:     Colors.rule,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  oosDisabledText: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      15,
+    fontWeight:    '500',
+    color:         Colors.ink4,
+    letterSpacing: 0.1,
+  },
+  oosSecondaryBtn: {
+    width:           '100%',
+    height:          44,
+    borderRadius:    Radius.pill,
+    borderWidth:     1.5,
+    borderColor:     Colors.ink1,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  oosSecondaryText: {
+    fontFamily:  FontFamily.sans,
+    fontSize:    14,
+    fontWeight:  '500',
+    color:       Colors.ink1,
+    letterSpacing: 0.1,
   },
   backBtn: {
     width: 36,

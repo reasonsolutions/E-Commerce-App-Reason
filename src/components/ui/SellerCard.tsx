@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space } from '../../theme';
 import { FontFamily } from '../../theme/fonts';
+import { Type } from '../../theme/typography';
 
 interface SellerCardProps {
   sellerName?: string | null;
@@ -16,16 +18,25 @@ export const SellerCard: React.FC<SellerCardProps> = ({
 }) => {
   if (!sellerName) return null;
 
-  const meta = [manufacturer, countryOfOrigin].filter(Boolean).join(' · ');
-
   return (
     <View style={styles.container}>
       <View style={styles.divider} />
-      <Text style={styles.text}>
-        <Text style={styles.label}>Sold by : </Text>
-        <Text style={styles.seller}>{sellerName.toUpperCase()}</Text>
-      </Text>
-      {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+      <Text style={styles.sectionLabel}>SELLER</Text>
+      <View style={styles.card}>
+        <View style={styles.iconWrap}>
+          <Icon name="storefront-outline" size={18} color={Colors.ink3} />
+        </View>
+        <View style={styles.body}>
+          <Text style={styles.sellerName}>{sellerName}</Text>
+          {manufacturer ? (
+            <Text style={styles.meta}>
+              {manufacturer}{countryOfOrigin ? ` · ${countryOfOrigin}` : ''}
+            </Text>
+          ) : countryOfOrigin ? (
+            <Text style={styles.meta}>{countryOfOrigin}</Text>
+          ) : null}
+        </View>
+      </View>
     </View>
   );
 };
@@ -41,26 +52,48 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.rule,
     marginBottom:    Space[4],
   },
-  text: {
-    flexDirection: 'row',
+  sectionLabel: {
+    ...Type.label,
+    color:         Colors.ink4,
+    letterSpacing: 1.1,
+    marginBottom:  Space[3],
   },
-  label: {
+  card: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               Space[3],
+    backgroundColor:   Colors.surfaceSoft,
+    borderRadius:      10,
+    paddingHorizontal: Space[4],
+    paddingVertical:   Space[3] + 2,
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderColor:       Colors.rule,
+  },
+  iconWrap: {
+    width:           36,
+    height:          36,
+    borderRadius:    18,
+    backgroundColor: Colors.surface,
+    alignItems:      'center',
+    justifyContent:  'center',
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     Colors.rule,
+  },
+  body: {
+    flex: 1,
+    gap:  2,
+  },
+  sellerName: {
     fontFamily:  FontFamily.sans,
-    fontSize:    12,
-    fontWeight:  '400',
-    color:       Colors.ink3,
-  },
-  seller: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      11,
-    fontWeight:    '400',
-    color:         Colors.ink2,
-    letterSpacing: 0.8,
+    fontSize:    14,
+    fontWeight:  '500',
+    color:       Colors.ink1,
+    letterSpacing: 0,
   },
   meta: {
     fontFamily:  FontFamily.sans,
     fontSize:    11,
     color:       Colors.ink4,
-    marginTop:   Space[1],
+    lineHeight:  11 * 1.4,
   },
 });

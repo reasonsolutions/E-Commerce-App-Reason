@@ -9,8 +9,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Colors, Space } from '../../theme/tokens';
+import { Colors, Space, Radius } from '../../theme/tokens';
 import { Type } from '../../theme/typography';
+import { FontFamily } from '../../theme/fonts';
 
 interface FloatingLabelInputProps extends Omit<TextInputProps, 'style'> {
   label: string;
@@ -20,9 +21,6 @@ interface FloatingLabelInputProps extends Omit<TextInputProps, 'style'> {
   showToggle?: boolean;
 }
 
-// Static-label input — label is always visible above the field at caption scale.
-// No position animation. The underline weight and color respond to focus.
-// Pattern reference: COS account form, Apple ID, Arc auth.
 export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
   label,
   value,
@@ -37,48 +35,27 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
   const [visible, setVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  const handleFocus = useCallback((e: any) => {
-    setFocused(true);
-    onFocus?.(e);
-  }, [onFocus]);
+  const handleFocus = useCallback((e: any) => { setFocused(true);  onFocus?.(e); }, [onFocus]);
+  const handleBlur  = useCallback((e: any) => { setFocused(false); onBlur?.(e);  }, [onBlur]);
 
-  const handleBlur = useCallback((e: any) => {
-    setFocused(false);
-    onBlur?.(e);
-  }, [onBlur]);
-
-  const underlineColor = error ? Colors.danger : focused ? activeColor : Colors.ink4;
-  const underlineHeight = focused ? 2 : 1;
+  const accentColor = error ? Colors.danger : focused ? activeColor : 'transparent';
+  const labelColor  = error ? Colors.danger : focused ? Colors.ink2 : Colors.ink3;
 
   return (
     <TouchableWithoutFeedback onPress={() => inputRef.current?.focus()}>
       <View style={styles.wrapper}>
-        {/* Static label — always at top, never moves */}
-        <Text
-          style={[
-            styles.label,
-            {
-              color: error
-                ? Colors.danger
-                : focused
-                ? Colors.ink2
-                : Colors.ink3,
-            },
-          ]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.label, { color: labelColor }]} numberOfLines={1}>
           {label}
         </Text>
 
-        {/* Input text + optional show/hide toggle */}
-        <View style={styles.inputRow}>
+        <View style={[styles.field, focused && styles.fieldFocused]}>
           <TextInput
             ref={inputRef}
             value={value}
             onFocus={handleFocus}
             onBlur={handleBlur}
             style={styles.input}
-            placeholderTextColor="transparent"
+            placeholderTextColor="rgba(0,0,0,0.22)"
             secureTextEntry={showToggle ? !visible : rest.secureTextEntry}
             {...rest}
           />
@@ -90,23 +67,15 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
             >
               <Icon
                 name={visible ? 'eye-off-outline' : 'eye-outline'}
-                size={18}
-                color={Colors.ink3}
+                size={17}
+                color={Colors.ink4}
               />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Underline — weight and color respond to focus state */}
-        <View
-          style={[
-            styles.underline,
-            {
-              height:          underlineHeight,
-              backgroundColor: underlineColor,
-            },
-          ]}
-        />
+        {/* Accent line — invisible when unfocused/no error, 1.5px on focus, danger on error */}
+        <View style={[styles.accentLine, { backgroundColor: accentColor }]} />
 
         {error ? (
           <Text style={styles.errorText} numberOfLines={2}>
@@ -119,39 +88,48 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // label lineHeight (~13px) + 8px gap + input (38px) + underline (2px) = ~61px
-  // Error caption sits outside via absolute positioning below the underline.
   wrapper: {
-    height:         62,
-    justifyContent: 'flex-start',
+    gap: 0,
   },
   label: {
-    ...Type.label,
-    color:        Colors.ink3,  // overridden inline per focus/error state
-    marginBottom: Space[2],     // 8px — enough air between label and value
+    fontFamily:    FontFamily.mono,
+    fontSize:      9,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color:         Colors.ink3,
+    marginBottom:  Space[2],
   },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
+  field: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    backgroundColor:   '#FFFFFF',
+    borderRadius:      Radius.xs,
+    borderWidth:       1,
+    borderColor:       'rgba(0,0,0,0.10)',
+    paddingHorizontal: Space[4],
+    paddingVertical:   9,
+    gap:               Space[3],
+  },
+  fieldFocused: {
+    backgroundColor: '#FFFFFF',
   },
   input: {
     ...Type.body,
     flex:               1,
     color:              Colors.ink1,
-    height:             38,
     paddingVertical:    0,
     paddingHorizontal:  0,
     includeFontPadding: false,
     textAlignVertical:  'center',
   },
-  underline: {
-    // backgroundColor and height both set by inline animated style
+  accentLine: {
+    height:       1.5,
+    marginTop:    2,
+    borderRadius: 1,
   },
   errorText: {
     ...Type.caption,
-    color:    Colors.danger,
-    position: 'absolute',
-    bottom:   -20,
-    left:     0,
+    color:     Colors.danger,
+    marginTop: Space[1],
   },
 });

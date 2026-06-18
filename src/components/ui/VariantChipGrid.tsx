@@ -23,6 +23,20 @@ interface VariantChipGridProps {
   onSelect: (id: string) => void;
   sizeChartUrl?: string | null;
   lowStockLabel?: string | null;
+  label?: string | null;
+}
+
+function inferLabel(options: VariantChipOption[], override?: string | null): string {
+  if (override) return override;
+  const COLOR_HINTS = /\b(red|blue|green|black|white|grey|gray|pink|yellow|orange|purple|brown|navy|beige|cream|ivory|teal|coral|gold|silver|rose|mint|olive)\b/i;
+  const isColor = options.some(o => COLOR_HINTS.test(o.label));
+  if (isColor) return 'Select Colour';
+  const AGE_HINTS = /\b(\d+\s*[-–]\s*\d+\s*(yr|year|month|mo|m)\b|\d+\s*(yr|year|month|mo|m)\b)/i;
+  const isAge = options.some(o => AGE_HINTS.test(o.label));
+  if (isAge) return 'Select Age';
+  const isSize = options.some(o => /^(XS|S|M|L|XL|XXL|2XL|3XL|\d{1,3}(cm|mm|in|")?|ONE SIZE)$/i.test(o.label.trim()));
+  if (isSize) return 'Select Size';
+  return 'Select Option';
 }
 
 export const VariantChipGrid: React.FC<VariantChipGridProps> = ({
@@ -31,15 +45,18 @@ export const VariantChipGrid: React.FC<VariantChipGridProps> = ({
   onSelect,
   sizeChartUrl,
   lowStockLabel,
+  label,
 }) => {
   if (!options.length) return null;
+
+  const sectionTitle = inferLabel(options, label);
 
   return (
     <View style={styles.container}>
       <View style={styles.divider} />
 
       <View style={styles.header}>
-        <Text style={styles.sectionTitle}>Select Size</Text>
+        <Text style={styles.sectionTitle}>{sectionTitle}</Text>
         {sizeChartUrl ? (
           <TouchableOpacity onPress={() => Linking.openURL(sizeChartUrl)}>
             <Text style={styles.sizeGuide}>Size guide ›</Text>

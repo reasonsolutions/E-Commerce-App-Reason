@@ -39,7 +39,6 @@ function sortKeyToDates(key: OrderSortKey): { sortBy: 'asc' | 'desc'; dateFrom: 
     const d = new Date(now); d.setFullYear(now.getFullYear() - 1);
     return { sortBy: 'desc', dateFrom: toISODate(d), dateTo: today };
   }
-  // 'desc' = Recent (default)
   return { sortBy: 'desc', dateFrom: null, dateTo: null };
 }
 
@@ -65,12 +64,13 @@ const SORT_OPTIONS: { key: OrderSortKey; label: string }[] = [
 ];
 
 const STATUS_OPTIONS: { key: OrderStatusKey; label: string }[] = [
-  { key: 'all',       label: 'All Status' },
+  { key: 'all',       label: 'All Orders' },
   { key: 'delivered', label: 'Delivered' },
   { key: 'cancelled', label: 'Cancelled' },
   { key: 'returned',  label: 'Returned' },
 ];
 
+// ── Radio row ─────────────────────────────────────────────────────────────────
 const RadioRow: React.FC<{
   label: string;
   selected: boolean;
@@ -79,10 +79,16 @@ const RadioRow: React.FC<{
 }> = ({ label, selected, onPress, isLast }) => (
   <TouchableOpacity
     onPress={onPress}
-    activeOpacity={0.7}
-    style={[radioStyles.row, !isLast && radioStyles.border]}
+    activeOpacity={0.65}
+    style={[
+      radioStyles.row,
+      !isLast && !selected && radioStyles.border,
+      selected && radioStyles.rowSelected,
+    ]}
   >
-    <Text style={radioStyles.label}>{label}</Text>
+    <Text style={[radioStyles.label, selected && radioStyles.labelSelected]}>
+      {label}
+    </Text>
     <View style={[radioStyles.outer, selected && radioStyles.outerSelected]}>
       {selected && <View style={radioStyles.inner} />}
     </View>
@@ -91,10 +97,16 @@ const RadioRow: React.FC<{
 
 const radioStyles = StyleSheet.create({
   row: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    justifyContent:  'space-between',
-    paddingVertical: Space[4],
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    paddingVertical:   Space[4],
+    paddingHorizontal: Space[3],
+    borderRadius:      8,
+    marginHorizontal:  -Space[3],
+  },
+  rowSelected: {
+    backgroundColor: 'rgba(178, 90, 61, 0.05)',
   },
   border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -104,28 +116,33 @@ const radioStyles = StyleSheet.create({
     fontFamily: FontFamily.sans,
     fontSize:   15,
     fontWeight: '400',
+    color:      Colors.ink2,
+  },
+  labelSelected: {
+    fontWeight: '600',
     color:      Colors.ink1,
   },
   outer: {
-    width:        20,
-    height:       20,
-    borderRadius: 10,
-    borderWidth:  1.5,
-    borderColor:  Colors.ink4,
-    alignItems:   'center',
-    justifyContent: 'center',
+    width:           20,
+    height:          20,
+    borderRadius:    10,
+    borderWidth:     1.5,
+    borderColor:     Colors.ink4,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
   outerSelected: {
-    borderColor: Colors.ink1,
+    borderColor: Colors.accent,
   },
   inner: {
     width:           10,
     height:          10,
     borderRadius:    5,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.accent,
   },
 });
 
+// ── Sheet ─────────────────────────────────────────────────────────────────────
 interface OrderFilterSheetProps {
   visible:    boolean;
   onClose:    () => void;
@@ -144,8 +161,8 @@ export const OrderFilterSheet: React.FC<OrderFilterSheetProps> = ({
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
 
-  const [sortKey, setSortKey]   = useState<OrderSortKey>(filtersToSortKey(current));
-  const [status,  setStatus]    = useState<OrderStatusKey>(current.status ?? 'all');
+  const [sortKey, setSortKey] = useState<OrderSortKey>(filtersToSortKey(current));
+  const [status,  setStatus]  = useState<OrderStatusKey>(current.status ?? 'all');
 
   useEffect(() => {
     if (visible) {
@@ -180,17 +197,19 @@ export const OrderFilterSheet: React.FC<OrderFilterSheetProps> = ({
       >
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + Space[6] }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + Space[4] }]}>
           <View style={styles.handle} />
 
+          {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Sort By:</Text>
-            <TouchableOpacity onPress={handleClear} activeOpacity={0.7}>
-              <Text style={styles.clearBtn}>Reset</Text>
+            <Text style={styles.headerTitle}>Sort & Filter</Text>
+            <TouchableOpacity onPress={handleClear} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.clearBtn}>Clear</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Sort options */}
+          {/* Sort section */}
+          <Text style={styles.sectionLabel}>SORT BY</Text>
           {SORT_OPTIONS.map((opt, i) => (
             <RadioRow
               key={opt.key}
@@ -203,9 +222,8 @@ export const OrderFilterSheet: React.FC<OrderFilterSheetProps> = ({
 
           <View style={styles.divider} />
 
-          <Text style={styles.sectionLabel}>Status:</Text>
-
-          {/* Status options */}
+          {/* Status section */}
+          <Text style={styles.sectionLabel}>STATUS</Text>
           {STATUS_OPTIONS.map((opt, i) => (
             <RadioRow
               key={opt.key}
@@ -216,11 +234,13 @@ export const OrderFilterSheet: React.FC<OrderFilterSheetProps> = ({
             />
           ))}
 
+          {/* Apply CTA */}
           <View style={styles.applyWrap}>
             <TouchableOpacity
               onPress={handleApply}
               activeOpacity={0.85}
               style={styles.applyBtn}
+              accessibilityRole="button"
             >
               <Text style={styles.applyBtnText}>Apply</Text>
             </TouchableOpacity>
@@ -238,69 +258,78 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.30)',
   },
+
+  // Sheet sits at ~75% screen height via content sizing (no fixed maxHeight needed
+  // — 4 sort + 4 status rows + header + CTA naturally lands around 70-75%)
   sheet: {
     backgroundColor:      Colors.surface,
-    borderTopLeftRadius:  20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius:  24,
+    borderTopRightRadius: 24,
     paddingHorizontal:    Space.screenH,
     paddingTop:           Space[2],
   },
   handle: {
     backgroundColor: Colors.rule,
-    width:           40,
+    width:           36,
     height:          4,
     borderRadius:    2,
     alignSelf:       'center',
-    marginBottom:    Space[5],
+    marginBottom:    Space[4],
   },
+
+  // Header
   header: {
     flexDirection:  'row',
     alignItems:     'center',
     justifyContent: 'space-between',
-    marginBottom:   Space[2],
+    marginBottom:   Space[5],
   },
-  title: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      17,
-    fontWeight:    '600',
+  headerTitle: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      18,
+    fontWeight:    '400',
     color:         Colors.ink1,
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
   },
   clearBtn: {
     ...Type.caption,
-    color: Colors.ink3,
+    color: Colors.accent,
   },
+
+  // Section label — mono uppercase matching profile screen
   sectionLabel: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      17,
-    fontWeight:    '600',
-    color:         Colors.ink1,
-    letterSpacing: -0.1,
-    marginBottom:  Space[2],
+    fontFamily:    FontFamily.mono,
+    fontSize:      9,
+    letterSpacing: 1.4,
+    color:         Colors.ink4,
+    textTransform: 'uppercase',
+    marginBottom:  Space[1],
   },
+
   divider: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
     marginVertical:  Space[4],
   },
+
+  // Apply CTA
   applyWrap: {
-    marginTop:      Space[6],
+    marginTop:      Space[5],
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.rule,
     paddingTop:     Space[4],
   },
   applyBtn: {
+    height:          52,
     backgroundColor: Colors.ink1,
     borderRadius:    Radius.pill,
-    paddingVertical: Space[4],
     alignItems:      'center',
+    justifyContent:  'center',
   },
   applyBtnText: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      16,
-    fontWeight:    '500',
+    ...Type.bodyStrong,
     color:         '#FFFFFF',
     letterSpacing: 0.2,
   },

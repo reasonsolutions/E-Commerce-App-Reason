@@ -605,7 +605,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
               <>
                 <Text style={styles.emptyTitle}>No orders yet.</Text>
                 <Text style={styles.emptyBody}>
-                  When you place an order, your updates will appear here.
+                  Start shopping to see your orders here.
                 </Text>
               </>
             )}
@@ -806,11 +806,11 @@ const styles = StyleSheet.create({
     gap:       2,
   },
   headerTitle: {
-    fontFamily:   FontFamily.serif,
-    fontSize:     22,
-    fontWeight:   '400',
-    color:        Colors.ink1,
-    letterSpacing: -0.3,
+    fontFamily:  FontFamily.sans,
+    fontSize:    18,
+    fontWeight:  '600',
+    color:       Colors.ink1,
+    letterSpacing: -0.1,
   },
   headerCount: {
     ...Type.label,
@@ -900,6 +900,7 @@ const styles = StyleSheet.create({
     alignItems:        'center',
     justifyContent:    'center',
     paddingHorizontal: Space[6],
+    paddingBottom:     Space[10],
     gap:               Space[4],
   },
   emptyText: {
@@ -924,15 +925,15 @@ const styles = StyleSheet.create({
     gap:               Space[3],
   },
   emptyCTA: {
-    borderWidth:     1,
-    borderColor:     Colors.ink1,
+    height:          52,
+    backgroundColor: Colors.ink1,
     borderRadius:    Radius.pill,
-    paddingVertical: Space[4],
     alignItems:      'center',
+    justifyContent:  'center',
   },
   emptyCTAText: {
     ...Type.bodyStrong,
-    color: Colors.ink1,
+    color: '#FFFFFF',
   },
   emptySecondary: {
     alignItems:      'center',

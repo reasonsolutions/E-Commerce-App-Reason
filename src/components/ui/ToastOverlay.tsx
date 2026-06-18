@@ -33,7 +33,7 @@ export const ToastOverlay: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <View style={[styles.overlay, { top: insets.top + 8 }]} pointerEvents="box-none">
+    <View style={[styles.overlay, { top: insets.top + 4 }]} pointerEvents="box-none">
       {toasts.map(t => (
         <Animated.View
           key={t.id}
@@ -57,10 +57,11 @@ export const ToastOverlay: React.FC = () => {
 
 const styles = StyleSheet.create({
   overlay: {
-    position: 'absolute',
-    left:     0,
-    right:    0,
-    zIndex:   9999,
-    gap:      8,
+    position:   'absolute',
+    left:       0,
+    right:      0,
+    zIndex:     9999,
+    gap:        8,
+    alignItems: 'center',
   },
 });

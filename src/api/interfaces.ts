@@ -647,6 +647,33 @@ export interface WishlistItemInterface {
   };
 }
 
+// Raw shape returned by getWishlist API
+export interface WishlistApiProduct {
+  WishlistCode:        string;
+  CustomerProfileCode: string;
+  AddedOn:             string;
+  ItemID:              number;
+  Name:                string;
+  Images:              string[];
+  OrganisationId:      string;
+  OrganisationName:    string;
+  BrandName:           string;
+  Variants: {
+    InventoryID:   string;
+    Variant:       string;
+    Stock:         number;
+    SKU:           string;
+    StockStatus:   { Value: number; Description: string };
+    PriceDetails:  { Price: number; ComparePrice: number; Taxes: any[] };
+    PhysicalAttributes: any;
+  }[];
+}
+
+export interface WishlistApiResponse {
+  TotalRecords: number;
+  Products:     WishlistApiProduct[];
+}
+
 export interface PostAddToWishlistInterface {
   CustomerProfileCode: number;
   InventoryId:         number;

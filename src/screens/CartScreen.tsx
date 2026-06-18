@@ -638,11 +638,11 @@ const styles = StyleSheet.create({
     gap:               2,
   },
   headerTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.3,
+    fontFamily:  FontFamily.sans,
+    fontSize:    18,
+    fontWeight:  '600',
+    color:       Colors.ink1,
+    letterSpacing: -0.1,
   },
   headerCount: {
     ...Type.label,
@@ -718,24 +718,24 @@ const styles = StyleSheet.create({
     gap:               Space[3],
   },
   emptyCTA: {
-    borderWidth:     1,
-    borderColor:     Colors.ink1,
+    height:          52,
+    backgroundColor: Colors.ink1,
     borderRadius:    Radius.pill,
-    paddingVertical: Space[4],
     alignItems:      'center',
+    justifyContent:  'center',
   },
   emptyCTAText: {
     ...Type.bodyStrong,
-    color: Colors.ink1,
+    color:         '#FFFFFF',
+    letterSpacing: 0.3,
   },
   emptySecondary: {
-    alignItems: 'center',
+    alignItems:      'center',
     paddingVertical: Space[2],
   },
   emptySecondaryText: {
     ...Type.caption,
-    color:              Colors.ink3,
-    textDecorationLine: 'underline',
+    color: Colors.ink3,
   },
 
   // ── Body layout — items scroll, summary sticky ────────────────────────────

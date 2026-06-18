@@ -8,7 +8,6 @@ import {
   ScrollView,
   Platform,
   StatusBar,
-  useWindowDimensions,
   TouchableOpacity,
 } from 'react-native';
 import { loginCustomer } from '../api/auth';
@@ -23,10 +22,10 @@ import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { BRAND } from '../config/brand';
 import { setTokenCache } from '../api/axiosInstance';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import LinearGradient from 'react-native-linear-gradient';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -35,6 +34,7 @@ import { FloatingLabelInput } from '../components/ui/FloatingLabelInput';
 import { ForgotPasswordSheet } from '../components/ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAppToast } from '../hooks/useAppToast';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type RootStackParamList = {
   Home: undefined;
@@ -42,148 +42,64 @@ type RootStackParamList = {
   Login: { skipEntrance?: boolean } | undefined;
 };
 
-// ── Hero atmospheric composition ─────────────────────────────────────────────
-// Five gradient passes + one elliptical focal bloom.
-// No geometry, no lines, no images — depth purely through tone.
-//
-//   Bloom    — large soft ellipse, right-center, ~3% white. Reads as a
-//              diffused spotlight catch on a surface just out of frame.
-//              This is the single focal anchor that keeps the hero from
-//              reading as a flat black rectangle.
-//   Warm     — ivory bias top-right → dissolves left. Off-camera light source.
-//   Shadow   — cool depth counter bottom-left. Creates stereo field.
-//   Top seal — status-bar region stays deep ink regardless of bloom intensity.
-//   Bottom veil — hero floor fades into the form-panel tone shift.
-//   Left frame — contrast push that grounds the wordmark on the left edge.
-const HeroArt: React.FC<{ heroHeight: number }> = ({ heroHeight }) => (
-  <View
-    style={[StyleSheet.absoluteFillObject, { overflow: 'hidden' }]}
-    pointerEvents="none"
-  >
-    {/* Elliptical focal bloom — the single visual anchor in the hero.
-        Positioned right-of-center, vertically centered in the upper two-thirds.
-        Reads as a soft highlight catch on an unseen surface — not a shape,
-        not geometry, just a presence of light. */}
-    <View
-      style={{
-        position: 'absolute',
-        width: heroHeight * 1.1,
-        height: heroHeight * 1.1,
-        borderRadius: heroHeight * 0.55,
-        backgroundColor: 'rgba(255,255,255,0.028)',
-        top: -(heroHeight * 0.22),
-        right: -(heroHeight * 0.28),
-      }}
-    />
-
-    {/* Warm ivory bias — diffused off-camera light source, top-right */}
-    <LinearGradient
-      colors={[
-        'rgba(210,185,155,0.20)',
-        'rgba(160,140,115,0.08)',
-        'rgba(30,28,26,0.0)',
-      ]}
-      start={{ x: 0.85, y: 0.0 }}
-      end={{ x: 0.1, y: 0.85 }}
-      style={StyleSheet.absoluteFillObject}
-    />
-
-    {/* Cool shadow — opposing depth, bottom-left */}
-    <LinearGradient
-      colors={['rgba(8,8,12,0.0)', 'rgba(8,8,12,0.28)', 'rgba(8,8,12,0.50)']}
-      start={{ x: 0.6, y: 0.2 }}
-      end={{ x: 0.0, y: 1.0 }}
-      style={StyleSheet.absoluteFillObject}
-    />
-
-    {/* Top seal — status bar stays deep ink */}
-    <LinearGradient
-      colors={['rgba(0,0,0,0.50)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.0)']}
-      start={{ x: 0.5, y: 0.0 }}
-      end={{ x: 0.5, y: 0.3 }}
-      style={StyleSheet.absoluteFillObject}
-    />
-
-    {/* Bottom veil — hero floor into form-panel transition */}
-    <LinearGradient
-      colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.22)', 'rgba(14,12,10,0.48)']}
-      start={{ x: 0.5, y: 0.5 }}
-      end={{ x: 0.5, y: 1.0 }}
-      style={StyleSheet.absoluteFillObject}
-    />
-
-    {/* Left-edge frame — wordmark contrast anchor */}
-    <LinearGradient
-      colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.06)', 'rgba(0,0,0,0.0)']}
-      start={{ x: 0.0, y: 0.5 }}
-      end={{ x: 0.42, y: 0.5 }}
-      style={[
-        StyleSheet.absoluteFillObject,
-        { height: heroHeight * 0.65, top: heroHeight * 0.18 },
-      ]}
-    />
-  </View>
-);
-
-// ── Entrance timing (staggered Settle curve, per spec A8) ───────────────────
-const ENTRANCE_DELAYS = {
-  wordmark: 0,
-  tagline: 140,
-  fields: 280,
-  cta: 400,
-} as const;
-
 const Login: React.FC = () => {
-  const { height: screenHeight } = useWindowDimensions();
   const navigation =
     useNavigation<StackNavigationProp<RootStackParamList, 'Home'>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Login'>>();
+  const insets = useSafeAreaInsets();
   const skipEntrance = route.params?.skipEntrance ?? false;
   const haptic = useHaptic();
-  const toast  = useAppToast();
+  const toast = useAppToast();
   const { setCartCount } = useCart();
 
-  // ── Form state ──────────────────────────────────────────────────────────────
-  const [username,        setUsername]        = useState('');
-  const [password,        setPassword]        = useState('');
-  const [loading,         setLoading]         = useState(false);
-  const [fieldError,      setFieldError]      = useState<string | null>(null);
-  const [forgotVisible,   setForgotVisible]   = useState(false);
+  // ── Form state ────────────────────────────────────────────────────────────────
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [forgotVisible, setForgotVisible] = useState(false);
 
-  // ── Entrance animation values — hero only, fields/CTA always visible ─────────
-  const wordmarkAnim = useRef(new Animated.Value(0)).current;
-  const taglineAnim = useRef(new Animated.Value(0)).current;
+  // ── Entrance animation ────────────────────────────────────────────────────────
+  const headerAnim = useRef(new Animated.Value(skipEntrance ? 1 : 0)).current;
+  const chipsAnim = useRef(new Animated.Value(skipEntrance ? 1 : 0)).current;
+  const formAnim = useRef(new Animated.Value(skipEntrance ? 1 : 0)).current;
 
-  // ── Loading dots ─────────────────────────────────────────────────────────────
-  const dot1 = useRef(new Animated.Value(0.3)).current;
-  const dot2 = useRef(new Animated.Value(0.3)).current;
-  const dot3 = useRef(new Animated.Value(0.3)).current;
-
-  // ── Button shake (failure) ───────────────────────────────────────────────────
-  const shakeAnim = useRef(new Animated.Value(0)).current;
-
-  // ── Mount: fire staggered entrance only when not arriving from registration ──
   useEffect(() => {
     if (skipEntrance) return;
-
-    const makeEntrance = (val: Animated.Value, delay: number) =>
+    const make = (val: Animated.Value, delay: number) =>
       Animated.spring(val, {
         toValue: 1,
         delay,
         ...Motion.spring.settle,
+        useNativeDriver: true,
       });
-
     Animated.parallel([
-      makeEntrance(wordmarkAnim, ENTRANCE_DELAYS.wordmark),
-      makeEntrance(taglineAnim, ENTRANCE_DELAYS.tagline),
+      make(headerAnim, 0),
+      make(chipsAnim, 120),
+      make(formAnim, 240),
     ]).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Loading dots loop ───────────────────────────────────────────────────────
+  const slideIn = (anim: Animated.Value): object => ({
+    opacity: anim,
+    transform: [
+      {
+        translateY: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [12, 0],
+        }),
+      },
+    ],
+  });
+
+  // ── Loading dots ──────────────────────────────────────────────────────────────
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
   useEffect(() => {
     if (!loading) return;
-
     const pulse = (val: Animated.Value, delay: number) =>
       Animated.loop(
         Animated.sequence([
@@ -202,14 +118,12 @@ const Login: React.FC = () => {
           }),
         ]),
       );
-
     const a1 = pulse(dot1, 0);
     const a2 = pulse(dot2, 150);
     const a3 = pulse(dot3, 300);
     a1.start();
     a2.start();
     a3.start();
-
     return () => {
       a1.stop();
       a2.stop();
@@ -217,7 +131,8 @@ const Login: React.FC = () => {
     };
   }, [loading, dot1, dot2, dot3]);
 
-  // ── Shake: 220ms horizontal oscillation ────────────────────────────────────
+  // ── Shake ─────────────────────────────────────────────────────────────────────
+  const shakeAnim = useRef(new Animated.Value(0)).current;
   const shake = useCallback(() => {
     haptic.warning();
     Animated.sequence([
@@ -254,16 +169,17 @@ const Login: React.FC = () => {
     ]).start();
   }, [haptic, shakeAnim]);
 
-  // ── Auth ─────────────────────────────────────────────────────────────────────
+  // ── Auth ──────────────────────────────────────────────────────────────────────
   const handleLogin = useCallback(async () => {
     if (loading) return;
     setFieldError(null);
-
-    const data = { LoginID: username.trim(), Password: password };
     setLoading(true);
 
     try {
-      const result = await loginCustomer(data);
+      const result = await loginCustomer({
+        LoginID: username.trim(),
+        Password: password,
+      });
       if (result.statusCode !== 1) {
         setLoading(false);
         setFieldError(result.userMessage || 'Invalid credentials.');
@@ -286,7 +202,6 @@ const Login: React.FC = () => {
         AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(userData)),
       ]);
       setTokenCache(AccessToken);
-      // Merge guest cart then seed badge
       if (userData.CustomerProfileCode) {
         const guestItems = await getGuestCart();
         if (guestItems.length > 0) {
@@ -325,151 +240,128 @@ const Login: React.FC = () => {
     }
   }, [loading, username, password, navigation, shake, setCartCount]);
 
-  // ── Derived layout ──────────────────────────────────────────────────────────
-  const heroHeight = Math.round(screenHeight * 0.39);
-
-  // Entrance → translateY + opacity — hero only. No-op when skipEntrance is true
-  // so the native layer never sees opacity:0 on the first frame.
-  const entranceStyle = (anim: Animated.Value, initialY = 14) =>
-    skipEntrance
-      ? {}
-      : {
-          opacity: anim,
-          transform: [
-            {
-              translateY: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [initialY, 0],
-              }),
-            },
-          ],
-        };
-
   return (
     <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
       <ForgotPasswordSheet
         isOpen={forgotVisible}
         onClose={() => setForgotVisible(false)}
         onSuccess={() => {
           setForgotVisible(false);
-          toast.success({ title: 'Password sent', description: 'Check your email for your new password.' });
+          toast.success({
+            title: 'Password sent',
+            description: 'Check your email for your new password.',
+          });
         }}
       />
-      <StatusBar
-        barStyle="light-content"
-        translucent
-        backgroundColor="transparent"
-      />
-      {/* ── Dark atelier hero — absolutely positioned, excluded from keyboard resize ── */}
-      <View style={[styles.hero, { height: heroHeight }]} pointerEvents="none">
-        <HeroArt heroHeight={heroHeight} />
 
-        <Animated.View
-          style={[styles.heroContent, entranceStyle(wordmarkAnim, 20)]}
-        >
-          <Text style={styles.wordmark}>shop.</Text>
-        </Animated.View>
-
-        <Animated.View style={[styles.taglineWrap, entranceStyle(taglineAnim)]}>
-          <Text style={styles.tagline}>
-            Made for the things{'\n'}you'll keep.
-          </Text>
-        </Animated.View>
-      </View>
-      {/* ── Light form panel — sits below hero ── */}
       <KeyboardAvoidingView
-        style={[styles.formPanel, { marginTop: heroHeight }]}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.formInner}
+          contentContainerStyle={[
+            styles.inner,
+            { paddingTop: insets.top + Space[8] },
+          ]}
           bounces={false}
         >
-          {/* Fields */}
-          <View style={styles.fieldsBlock}>
-            <FloatingLabelInput
-              label="Username"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
-              activeColor={Colors.ink1}
-            />
-            <FloatingLabelInput
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              showToggle
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-              activeColor={Colors.ink1}
-              error={fieldError}
-            />
-          </View>
+          {/* ── Wordmark header ─────────────────────────────────────────────── */}
+          <Animated.View style={[styles.header, slideIn(headerAnim)]}>
+            <Text style={styles.wordmark}>{BRAND.name}</Text>
+            <Text style={styles.subtitle}>Continue shopping.</Text>
+          </Animated.View>
 
-          {/* Forgot password */}
-          <TouchableOpacity
-            onPress={() => setForgotVisible(true)}
-            activeOpacity={0.7}
-            style={styles.forgotLink}
-          >
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
+          {/* ── Form ─────────────────────────────────────────────────────────── */}
+          <Animated.View style={slideIn(formAnim)}>
+            <View style={styles.fieldsBlock}>
+              <FloatingLabelInput
+                label="Email"
+                value={username}
+                onChangeText={setUsername}
+                placeholder="email or mobile number"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                activeColor={Colors.accent}
+              />
+              <View style={styles.passwordBlock}>
+                <FloatingLabelInput
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="password"
+                  showToggle
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                  activeColor={Colors.accent}
+                  error={fieldError}
+                />
+                <TouchableOpacity
+                  onPress={() => setForgotVisible(true)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.forgotLink}
+                >
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
-          {/* CTA */}
-          <Animated.View
-            style={[
-              styles.ctaBlock,
-              { transform: [{ translateX: shakeAnim }] },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.92}
-              style={[styles.ctaButton, loading && styles.ctaButtonLoading]}
-              accessibilityRole="button"
-              accessibilityLabel="Log in"
-              accessibilityState={{ busy: loading }}
+            {/* ── CTA ───────────────────────────────────────────────────────── */}
+            <Animated.View
+              style={[
+                styles.ctaBlock,
+                { transform: [{ translateX: shakeAnim }] },
+              ]}
             >
-              {loading ? (
-                <View style={styles.dotsRow}>
-                  {[dot1, dot2, dot3].map((dot, i) => (
-                    <Animated.View
-                      key={i}
-                      style={[styles.dot, { opacity: dot }]}
-                    />
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.ctaLabel}>Log in</Text>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.92}
+                style={[styles.ctaButton, loading && styles.ctaButtonLoading]}
+                accessibilityRole="button"
+                accessibilityLabel="Log in"
+                accessibilityState={{ busy: loading }}
+              >
+                {loading ? (
+                  <View style={styles.dotsRow}>
+                    {[dot1, dot2, dot3].map((dot, i) => (
+                      <Animated.View
+                        key={i}
+                        style={[styles.dot, { opacity: dot }]}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.ctaLabel}>Log in</Text>
+                )}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Register')}
-              activeOpacity={0.7}
-              style={styles.registerLink}
-            >
-              <Text style={styles.registerText}>
-                Don't have an account?{' '}
-                <Text style={styles.registerTextBold}>Sign up</Text>
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Register')}
+                activeOpacity={0.7}
+                style={styles.registerLink}
+              >
+                <Text style={styles.registerText}>
+                  Don't have an account?{' '}
+                  <Text style={styles.registerTextBold}>Sign up</Text>
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() =>
-                navigation.reset({ index: 0, routes: [{ name: 'Home' }] })
-              }
-              activeOpacity={0.7}
-              style={styles.guestLink}
-            >
-              <Text style={styles.guestText}>Continue as guest</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.reset({ index: 0, routes: [{ name: 'Home' }] })
+                }
+                activeOpacity={0.7}
+                style={styles.guestLink}
+              >
+                <Text style={styles.guestText}>Continue as guest</Text>
+              </TouchableOpacity>
+            </Animated.View>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -480,69 +372,64 @@ const Login: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: '#F8F5F2',
+  },
+  flex: {
+    flex: 1,
+  },
+  inner: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom: Space[10],
   },
 
-  // ── Hero ────────────────────────────────────────────────────────────────────
-  hero: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.ink1,
-    justifyContent: 'flex-end',
-    paddingHorizontal: Space.screenH,
-    paddingBottom: Space[5],
-  },
-  heroContent: {
-    marginBottom: Space[4],
+  // ── Header ────────────────────────────────────────────────────────────────────
+  header: {
+    marginBottom: Space[8],
   },
   wordmark: {
     fontFamily: FontFamily.serifItalic,
-    fontSize: 52,
+    fontSize: 29,
     fontWeight: '400',
-    color: '#FFFFFF',
-    letterSpacing: -1.2,
-    lineHeight: 52 * 1.0,
+    color: Colors.ink1,
+    letterSpacing: -0.6,
+    lineHeight: 29,
+    marginBottom: 36,
   },
-  taglineWrap: {},
-  tagline: {
-    fontFamily: FontFamily.serifItalic,
-    fontSize: 20,
-    fontWeight: '400',
-    color: 'rgba(255,255,255,0.58)',
-    letterSpacing: -0.3,
-    lineHeight: 20 * 1.45,
+  subtitle: {
+    fontFamily: FontFamily.sans,
+    fontSize: 24,
+    fontWeight: '300',
+    color: Colors.ink1,
+    letterSpacing: -0.4,
   },
-
-  // ── Form panel ───────────────────────────────────────────────────────────────
-  formPanel: {
-    flex: 1,
-    backgroundColor: Colors.surfaceDeep,
-  },
-  formInner: {
-    paddingHorizontal: Space.screenH,
-    paddingTop: Space[8],
-    paddingBottom: Space[6],
-  },
+  // ── Form ──────────────────────────────────────────────────────────────────────
   fieldsBlock: {
-    gap: Space[8], // 32px — clears the absolute error caption below first field
+    gap: Space[5],
+  },
+  passwordBlock: {
+    gap: Space[2],
+  },
+  forgotLink: {
+    alignSelf: 'flex-start',
+  },
+  forgotText: {
+    ...Type.caption,
+    color: Colors.ink4,
   },
 
-  // ── CTA ─────────────────────────────────────────────────────────────────────
+  // ── CTA ───────────────────────────────────────────────────────────────────────
   ctaBlock: {
-    marginTop: Space[8],
+    marginTop: Space[6],
   },
   ctaButton: {
     width: '100%',
-    height: 56,
-    backgroundColor: Colors.ink1,
+    height: 48,
+    backgroundColor: '#111111',
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaButtonLoading: {
-    // Slightly reduced opacity while busy — button stays full-width per spec
     opacity: 0.7,
   },
   ctaLabel: {
@@ -571,17 +458,8 @@ const styles = StyleSheet.create({
   },
   registerTextBold: {
     ...Type.caption,
-    color: Colors.ink1,
-    fontWeight: '600',
-  },
-  forgotLink: {
-    marginTop:  Space[4],
-    alignItems: 'flex-end',
-  },
-  forgotText: {
-    ...Type.caption,
-    color:              Colors.ink3,
-    textDecorationLine: 'underline',
+    color: Colors.ink2,
+    fontWeight: '500',
   },
   guestLink: {
     marginTop: Space[3],
@@ -589,7 +467,7 @@ const styles = StyleSheet.create({
   },
   guestText: {
     ...Type.caption,
-    color: Colors.ink4,
+    color: Colors.ink3,
   },
 });
 

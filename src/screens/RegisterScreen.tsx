@@ -21,6 +21,7 @@ import { Motion } from '../theme/motion';
 import { FloatingLabelInput } from '../components/ui/FloatingLabelInput';
 import { useHaptic } from '../hooks/useHaptic';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { BRAND } from '../config/brand';
 
 type RootStackParamList = {
   Login: undefined;
@@ -38,24 +39,30 @@ const RegisterScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
 
-  const [name, setName]         = useState('');
-  const [email, setEmail]       = useState('');
-  const [mobile, setMobile]     = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [name,       setName]       = useState('');
+  const [email,      setEmail]      = useState('');
+  const [mobile,     setMobile]     = useState('');
+  const [password,   setPassword]   = useState('');
+  const [loading,    setLoading]    = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
 
-  const shakeAnim = useRef(new Animated.Value(0)).current;
-  const contentAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim   = useRef(new Animated.Value(0)).current;
+  const headerAnim  = useRef(new Animated.Value(0)).current;
+  const formAnim    = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.spring(contentAnim, {
-      toValue: 1,
-      delay: 60,
-      ...Motion.spring.settle,
-      useNativeDriver: true,
-    }).start();
-  }, [contentAnim]);
+    const make = (val: Animated.Value, delay: number) =>
+      Animated.spring(val, { toValue: 1, delay, ...Motion.spring.settle, useNativeDriver: true });
+    Animated.parallel([
+      make(headerAnim, 0),
+      make(formAnim, 120),
+    ]).start();
+  }, [headerAnim, formAnim]);
+
+  const slideIn = (anim: Animated.Value): object => ({
+    opacity: anim,
+    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+  });
 
   const shake = useCallback(() => {
     haptic.warning();
@@ -81,11 +88,11 @@ const RegisterScreen: React.FC = () => {
     setLoading(true);
     try {
       const res = await postCreateCustomer({
-        CustomerName:  name.trim(),
-        EmailID:       email.trim(),
-        MobileNumber:  Number(mobile.trim()),
-        CountryCode:   230,
-        Password:      password,
+        CustomerName: name.trim(),
+        EmailID:      email.trim(),
+        MobileNumber: Number(mobile.trim()),
+        CountryCode:  230,
+        Password:     password,
       });
 
       if (res.statusCode !== 1) {
@@ -97,11 +104,11 @@ const RegisterScreen: React.FC = () => {
 
       setLoading(false);
       navigation.navigate('OTPVerification', {
-        CustomerName:  name.trim(),
-        EmailID:       email.trim(),
-        MobileNumber:  mobile.trim(),
-        CountryCode:   230,
-        Password:      password,
+        CustomerName: name.trim(),
+        EmailID:      email.trim(),
+        MobileNumber: mobile.trim(),
+        CountryCode:  230,
+        Password:     password,
       });
     } catch (error: any) {
       setLoading(false);
@@ -110,71 +117,73 @@ const RegisterScreen: React.FC = () => {
     }
   }, [loading, name, email, mobile, password, navigation, shake]);
 
-  const entranceStyle = {
-    transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
-  };
-
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
-
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Space[2] }]}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Icon name="chevron-back" size={24} color={Colors.ink1} />
-        </TouchableOpacity>
-      </View>
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
 
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.inner, { paddingTop: insets.top + Space[5] }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <Animated.View style={entranceStyle}>
-            <Text style={styles.title}>Create account</Text>
-            <Text style={styles.subtitle}>Join us and start shopping.</Text>
+          {/* ── Back + wordmark ─────────────────────────────────────────────── */}
+          <Animated.View style={[styles.header, slideIn(headerAnim)]}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.backBtn}
+            >
+              <Icon name="chevron-back" size={22} color={Colors.ink2} />
+            </TouchableOpacity>
+            <Text style={styles.wordmark}>{BRAND.name}</Text>
+            <Text style={styles.title}>Create your account.</Text>
+          </Animated.View>
 
+          {/* ── Form ─────────────────────────────────────────────────────────── */}
+          <Animated.View style={[styles.formBlock, slideIn(formAnim)]}>
             <View style={styles.fields}>
               <FloatingLabelInput
-                label="Full Name"
+                label="Full name"
                 value={name}
                 onChangeText={setName}
+                placeholder="your name"
                 autoCapitalize="words"
                 returnKeyType="next"
-                activeColor={Colors.ink1}
+                activeColor={Colors.accent}
               />
               <FloatingLabelInput
                 label="Email"
                 value={email}
                 onChangeText={setEmail}
+                placeholder="email address"
                 autoCapitalize="none"
                 keyboardType="email-address"
                 returnKeyType="next"
-                activeColor={Colors.ink1}
+                activeColor={Colors.accent}
               />
               <FloatingLabelInput
-                label="Mobile Number"
+                label="Mobile number"
                 value={mobile}
                 onChangeText={setMobile}
+                placeholder="mobile number"
                 keyboardType="phone-pad"
                 returnKeyType="next"
-                activeColor={Colors.ink1}
+                activeColor={Colors.accent}
               />
               <FloatingLabelInput
                 label="Password"
                 value={password}
                 onChangeText={setPassword}
+                placeholder="create a password"
                 showToggle
                 returnKeyType="done"
                 onSubmitEditing={handleRegister}
-                activeColor={Colors.ink1}
+                activeColor={Colors.accent}
                 error={fieldError}
               />
             </View>
@@ -212,38 +221,55 @@ const RegisterScreen: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex:            1,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#F8F5F2',
   },
+  flex: {
+    flex: 1,
+  },
+  inner: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[10],
+  },
+
+  // ── Header ────────────────────────────────────────────────────────────────────
   header: {
-    paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[2],
+    marginBottom: Space[8],
   },
-  scrollContent: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[4],
-    paddingBottom:     Space[8],
+  backBtn: {
+    marginBottom: Space[6],
+    alignSelf:    'flex-start',
   },
-  title: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      32,
+  wordmark: {
+    fontFamily:    FontFamily.serifItalic,
+    fontSize:      29,
     fontWeight:    '400',
     color:         Colors.ink1,
-    letterSpacing: -0.8,
-    marginBottom:  Space[1],
+    letterSpacing: -0.6,
+    lineHeight:    29,
+    marginBottom:  36,
   },
-  subtitle: {
-    ...Type.body,
-    color:        Colors.ink3,
-    marginBottom: Space[8],
+  title: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      24,
+    fontWeight:    '300',
+    color:         Colors.ink1,
+    letterSpacing: -0.4,
+  },
+
+  // ── Form ──────────────────────────────────────────────────────────────────────
+  formBlock: {
+    gap: 0,
   },
   fields: {
-    gap:          Space[8],
-    marginBottom: Space[8],
+    gap:          Space[5],
+    marginBottom: Space[6],
   },
+
+  // ── CTA ───────────────────────────────────────────────────────────────────────
   ctaButton: {
     width:           '100%',
-    height:          56,
-    backgroundColor: Colors.ink1,
+    height:          48,
+    backgroundColor: '#111111',
     borderRadius:    Radius.pill,
     alignItems:      'center',
     justifyContent:  'center',
@@ -266,8 +292,8 @@ const styles = StyleSheet.create({
   },
   loginTextBold: {
     ...Type.caption,
-    color:      Colors.ink1,
-    fontWeight: '600',
+    color:      Colors.ink2,
+    fontWeight: '500',
   },
 });
 

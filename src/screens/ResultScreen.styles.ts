@@ -6,11 +6,13 @@ import { FontFamily } from '../theme/fonts';
 const { width: SCREEN_W } = Dimensions.get('window');
 const COL_GAP = Space[3];
 
-export const COL_W    = (SCREEN_W - Space.screenH * 2 - COL_GAP) / 2;
-export const SPAN_W   = SCREEN_W - Space.screenH * 2;
+export const COL_W      = (SCREEN_W - Space.screenH * 2 - COL_GAP) / 2;
+export const SPAN_W     = SCREEN_W - Space.screenH * 2;
 export const GRID_IMG_H = COL_W * 1.25;
 export const SPAN_IMG_H = SPAN_W * 0.58;
 export const HERO_IMG_H = SCREEN_W * 0.56;
+export const FEAT_W     = SCREEN_W - Space.screenH * 2;
+export const FEAT_IMG_H = FEAT_W * 0.92;
 
 export const styles = StyleSheet.create({
   root: {
@@ -32,14 +34,19 @@ export const styles = StyleSheet.create({
   },
   headerCenter: {
     flex: 1,
+    gap:  2,
   },
   headerTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      24,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.4,
-    lineHeight:    24 * 1.2,
+    fontFamily:  FontFamily.sans,
+    fontSize:    18,
+    fontWeight:  '600',
+    color:       Colors.ink1,
+    letterSpacing: -0.1,
+  },
+  headerCount: {
+    ...Type.label,
+    color:         Colors.ink4,
+    letterSpacing: 0.5,
   },
   headerDivider: {
     height:          StyleSheet.hairlineWidth,
@@ -50,19 +57,19 @@ export const styles = StyleSheet.create({
   filterPill: {
     flexDirection:     'row',
     alignItems:        'center',
-    gap:               Space[1] + 2,
-    paddingVertical:   Space[1] + 1,
-    paddingHorizontal: Space[2] + 2,
+    gap:               Space[1],
+    paddingVertical:   Space[1],
+    paddingHorizontal: Space[2],
     borderRadius:      Radius.pill,
-    borderWidth:       1,
+    borderWidth:       StyleSheet.hairlineWidth,
     borderColor:       Colors.rule,
   },
   filterPillText: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      11,
-    color:         Colors.ink3,
-    letterSpacing: 0.5,
-    lineHeight:    11 * 1.2,
+    fontFamily:  FontFamily.sans,
+    fontSize:    12,
+    fontWeight:  '400',
+    color:       Colors.ink3,
+    lineHeight:  12 * 1.2,
   },
   filterPillTextActive: {
     color: Colors.accent,
@@ -154,17 +161,25 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom:   Space[6],
   },
+  gridRowCentered: {
+    justifyContent: 'center',
+  },
 
   // ── Grid tile ─────────────────────────────────────────────────────────────────
   gridTile: {
     width: COL_W,
   },
+  gridTileCentered: {
+    width:     COL_W,
+    alignSelf: 'center',
+  },
   gridImgWrap: {
     width:           COL_W,
     height:          GRID_IMG_H,
-    borderRadius:    Radius.sm,
+    borderRadius:    16,
     overflow:        'hidden',
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: '#FFFFFF',
+    padding:         Space[2],
   },
   gridImg: {
     width:  '100%',
@@ -181,49 +196,49 @@ export const styles = StyleSheet.create({
   },
   gridBrand: {
     ...Type.label,
-    color: Colors.ink4,
+    color:         Colors.ink4,
+    letterSpacing: 0.6,
   },
   gridName: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      14,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.1,
-    lineHeight:    14 * 1.45,
+    fontFamily: FontFamily.sans,
+    fontSize:   13,
+    fontWeight: '400',
+    color:      Colors.ink2,
+    lineHeight: 13 * 1.45,
   },
   gridPrice: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      14,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.1,
-    lineHeight:    14 * 1.2,
+    fontFamily: FontFamily.sans,
+    fontSize:   14,
+    fontWeight: '600',
+    color:      Colors.ink1,
+    lineHeight: 14 * 1.2,
   },
 
   // ── Span card ─────────────────────────────────────────────────────────────────
   spanCard: {
     width:           SPAN_W,
     overflow:        'hidden',
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: '#FFFFFF',
+    borderRadius:    16,
     marginBottom:    Space[6],
   },
   spanImgWrap: {
     width:           '100%',
     height:          SPAN_W * 0.65,
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: '#FFFFFF',
     overflow:        'hidden',
+    borderRadius:    16,
   },
   spanFooter: {
     paddingTop: Space[3],
     gap:        3,
   },
   spanName: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      16,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.2,
-    lineHeight:    16 * 1.45,
+    fontFamily: FontFamily.sans,
+    fontSize:   15,
+    fontWeight: '400',
+    color:      Colors.ink2,
+    lineHeight: 15 * 1.45,
   },
 
   // ── Skeleton ──────────────────────────────────────────────────────────────────
@@ -282,6 +297,19 @@ export const styles = StyleSheet.create({
     top:      Space[2],
     right:    Space[2],
   },
+  heartCircle: {
+    width:           30,
+    height:          30,
+    borderRadius:    15,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems:      'center',
+    justifyContent:  'center',
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 1 },
+    shadowOpacity:   0.08,
+    shadowRadius:    2,
+    elevation:       1,
+  },
 
   // ── Empty state CTAs ──────────────────────────────────────────────────────────
   emptyPrimaryBtn: {
@@ -322,5 +350,38 @@ export const styles = StyleSheet.create({
     shadowOpacity:   0.10,
     shadowRadius:    8,
     elevation:       4,
+  },
+
+  // ── Featured layout — full-width single column for ≤3 results ────────────────
+  featuredCard: {
+    width:        FEAT_W,
+    marginBottom: Space[5],
+    alignSelf:    'center',
+  },
+  featuredImgWrap: {
+    width:           FEAT_W,
+    height:          FEAT_IMG_H,
+    borderRadius:    16,
+    overflow:        'hidden',
+    backgroundColor: '#FFFFFF',
+    padding:         Space[3],
+  },
+  featuredInfo: {
+    paddingTop: Space[3],
+    gap:        4,
+  },
+  featuredName: {
+    fontFamily: FontFamily.sans,
+    fontSize:   16,
+    fontWeight: '400',
+    color:      Colors.ink2,
+    lineHeight: 16 * 1.4,
+  },
+  featuredPrice: {
+    fontFamily: FontFamily.sans,
+    fontSize:   15,
+    fontWeight: '600',
+    color:      Colors.ink1,
+    lineHeight: 15 * 1.2,
   },
 });

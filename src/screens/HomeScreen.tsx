@@ -777,14 +777,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         )}
 
-        {/* Trust strip */}
-        <TrustStrip />
-
         {/* Browse all departments footer */}
         <DeptFooter
           categoryCount={categories?.length ?? 0}
           onPress={() => navigation.navigate('Result', { categoryName: 'All Products' })}
         />
+
+        {/* Trust strip */}
+        <TrustStrip />
       </ScrollView>
 
       {/* ── Scroll to top button ─────────────────────────────────────────────── */}

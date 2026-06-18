@@ -20,14 +20,14 @@ import {
   ConfirmSheet,
   EditProfileSheet,
   ChangePasswordSheet,
-  ScreenHeader,
   PrimaryButton,
-  TextLinkButton,
 } from '../components/ui';
 import { ErrorState } from '../components/system/ErrorState';
 import { getDeliveryAddresses } from '../api/address';
-import { DeliveryAddress } from './AddressScreen';
+import { getWishlist } from '../api/wishlist';
+import { postOrderHistory } from '../api/order';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { BRAND } from '../config/brand';
 import type { LoggedInCustomerInterface } from '../api/interfaces';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -35,6 +35,8 @@ import { FontFamily } from '../theme/fonts';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAppToast } from '../hooks/useAppToast';
+
+const APP_VERSION = '1.0.0';
 
 type ProfileScreenProps = {
   navigation: {
@@ -44,55 +46,183 @@ type ProfileScreenProps = {
   };
 };
 
+// ── Avatar ────────────────────────────────────────────────────────────────────
+const Avatar: React.FC<{ name: string }> = ({ name }) => {
+  const parts    = name.trim().split(/\s+/);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+  return (
+    <View style={avatarStyles.circle}>
+      <Text style={avatarStyles.text}>{initials}</Text>
+    </View>
+  );
+};
+
+const avatarStyles = StyleSheet.create({
+  circle: {
+    width:           76,
+    height:          76,
+    borderRadius:    38,
+    backgroundColor: '#EDE9E4',
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  text: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      26,
+    fontWeight:    '400',
+    color:         Colors.ink2,
+    letterSpacing: 0.5,
+  },
+});
+
+// ── Stat pill row ─────────────────────────────────────────────────────────────
+const StatRow: React.FC<{
+  orderCount:    number | null;
+  wishlistCount: number | null;
+  addressCount:  number | null;
+  loading:       boolean;
+  onOrders:      () => void;
+  onWishlist:    () => void;
+  onAddresses:   () => void;
+}> = ({ orderCount, wishlistCount, addressCount, loading, onOrders, onWishlist, onAddresses }) => {
+  const haptic = useHaptic();
+  const items = [
+    { count: orderCount,    label: 'Orders',    icon: 'cube-outline',     onPress: onOrders },
+    { count: wishlistCount, label: 'Wishlist',  icon: 'heart-outline',    onPress: onWishlist },
+    { count: addressCount,  label: 'Addresses', icon: 'location-outline', onPress: onAddresses },
+  ];
+  return (
+    <View style={statStyles.row}>
+      {items.map((item, idx) => (
+        <TouchableOpacity
+          key={idx}
+          style={statStyles.cell}
+          onPress={() => { haptic.light(); item.onPress(); }}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+        >
+          <Icon name={item.icon} size={16} color={Colors.ink4} style={statStyles.cellIcon} />
+          {loading ? (
+            <Skeleton height={18} width={32} radius={Radius.xs} />
+          ) : (
+            <Text style={statStyles.cellValue}>{item.count !== null ? item.count : '0'}</Text>
+          )}
+          <Text style={statStyles.cellLabel} numberOfLines={1}>{item.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+};
+
+const statStyles = StyleSheet.create({
+  row: {
+    flexDirection:   'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius:    16,
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     'rgba(0,0,0,0.07)',
+    overflow:        'hidden',
+    shadowColor:     '#000000',
+    shadowOffset:    { width: 0, height: 1 },
+    shadowOpacity:   0.02,
+    shadowRadius:    3,
+    elevation:       1,
+  },
+  cell: {
+    flex:            1,
+    alignItems:      'center',
+    paddingVertical: Space[4],
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: '#EEEAE5',
+    gap:             3,
+  },
+  cellIcon: {
+    marginBottom: 2,
+  },
+  cellValue: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      20,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.3,
+    lineHeight:    22,
+  },
+  cellLabel: {
+    ...Type.caption,
+    fontSize: 11,
+    color:    Colors.ink4,
+  },
+});
+
 // ── Menu row ──────────────────────────────────────────────────────────────────
 const MenuRow: React.FC<{
+  icon: string;
   label: string;
-  sub: string;
   onPress: () => void;
   showDivider?: boolean;
-}> = ({ label, sub, onPress, showDivider = true }) => {
+  danger?: boolean;
+}> = ({ icon, label, onPress, showDivider = true, danger = false }) => {
   const haptic = useHaptic();
   return (
     <TouchableOpacity
       onPress={() => { haptic.light(); onPress(); }}
-      activeOpacity={0.7}
-      style={[menuRowStyles.row, showDivider && menuRowStyles.border]}
+      activeOpacity={0.65}
+      style={[rowStyles.row, showDivider && rowStyles.border]}
     >
-      <View style={menuRowStyles.textWrap}>
-        <Text style={menuRowStyles.label}>{label}</Text>
-        <Text style={menuRowStyles.sub}>{sub}</Text>
+      <View style={[rowStyles.iconWrap, danger && rowStyles.iconWrapDanger]}>
+        <Icon name={icon} size={17} color={danger ? Colors.danger : Colors.ink3} />
       </View>
-      <Icon name="chevron-forward" size={16} color={Colors.ink5} />
+      <Text style={[rowStyles.label, danger && rowStyles.labelDanger]}>{label}</Text>
+      {!danger && <Icon name="chevron-forward" size={14} color={Colors.ink5} />}
     </TouchableOpacity>
   );
 };
 
-const menuRowStyles = StyleSheet.create({
+const rowStyles = StyleSheet.create({
   row: {
     flexDirection:   'row',
     alignItems:      'center',
     paddingVertical: Space[4],
-    minHeight:       56,
+    gap:             Space[3],
+    minHeight:       52,
   },
   border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.rule,
+    borderBottomColor: '#EEEAE5',
   },
-  textWrap: {
-    flex: 1,
-    gap:  3,
+  iconWrap: {
+    width:           34,
+    height:          34,
+    borderRadius:    10,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  iconWrapDanger: {
+    backgroundColor: 'rgba(185,28,28,0.06)',
   },
   label: {
+    flex:       1,
     fontSize:   15,
     fontWeight: '500',
     color:      Colors.ink1,
     lineHeight: 20,
   },
-  sub: {
-    ...Type.caption,
-    color: Colors.ink4,
+  labelDanger: {
+    color: Colors.danger,
   },
 });
+
+const GUEST_BENEFITS = [
+  'Order tracking',
+  'Easy returns',
+  'Saved addresses',
+  'Wishlist',
+  'Faster checkout',
+  'Exclusive offers',
+];
 
 // ── Logged-out view ───────────────────────────────────────────────────────────
 const LoggedOutView: React.FC<{
@@ -101,17 +231,32 @@ const LoggedOutView: React.FC<{
 }> = ({ onSignIn, onRegister }) => (
   <View style={loggedOutStyles.root}>
     <View style={loggedOutStyles.iconCircle}>
-      <Icon name="person-outline" size={22} color={Colors.ink3} />
+      <Icon name="person-outline" size={26} color={Colors.accent} />
     </View>
     <Text style={loggedOutStyles.title}>Your account</Text>
     <Text style={loggedOutStyles.body}>
-      Sign in to manage your orders, addresses, and wishlist.
+      Sign in to track orders, save favourites, manage addresses and enjoy a faster checkout.
     </Text>
     <View style={loggedOutStyles.ctaWrap}>
       <PrimaryButton label="Sign In" onPress={onSignIn} />
     </View>
-    <View style={loggedOutStyles.secondaryWrap}>
-      <TextLinkButton label="Create an account" onPress={onRegister} />
+    <TouchableOpacity
+      onPress={onRegister}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      style={loggedOutStyles.secondaryWrap}
+    >
+      <Text style={loggedOutStyles.registerText}>Create Account →</Text>
+    </TouchableOpacity>
+
+    <View style={loggedOutStyles.divider} />
+
+    <View style={loggedOutStyles.benefitsRow}>
+      {GUEST_BENEFITS.map(b => (
+        <View key={b} style={loggedOutStyles.chip}>
+          <Icon name="checkmark" size={10} color={Colors.accent} />
+          <Text style={loggedOutStyles.chipText}>{b}</Text>
+        </View>
+      ))}
     </View>
   </View>
 );
@@ -124,25 +269,30 @@ const loggedOutStyles = StyleSheet.create({
     paddingHorizontal: Space.screenH,
   },
   iconCircle: {
-    width:           48,
-    height:          48,
-    borderRadius:    24,
-    backgroundColor: Colors.surfaceDeep,
+    width:           88,
+    height:          88,
+    borderRadius:    44,
+    backgroundColor: 'rgba(178, 90, 61, 0.08)',
     alignItems:      'center',
     justifyContent:  'center',
-    marginBottom:    Space[4],
+    marginBottom:    Space[5],
   },
   title: {
-    ...Type.title,
-    color:        Colors.ink1,
-    marginBottom: Space[2],
-    textAlign:    'center',
+    fontFamily:    FontFamily.serif,
+    fontSize:      26,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.5,
+    lineHeight:    26 * 1.1,
+    marginBottom:  Space[2],
+    textAlign:     'center',
   },
   body: {
-    ...Type.body,
-    color:     Colors.ink3,
-    textAlign: 'center',
-    maxWidth:  280,
+    ...Type.caption,
+    color:      Colors.ink3,
+    textAlign:  'center',
+    maxWidth:   280,
+    lineHeight: 13 * 1.6,
   },
   ctaWrap: {
     width:     '100%',
@@ -150,6 +300,40 @@ const loggedOutStyles = StyleSheet.create({
   },
   secondaryWrap: {
     marginTop: Space[4],
+  },
+  registerText: {
+    ...Type.caption,
+    color:      Colors.ink1,
+    fontWeight: '500',
+  },
+  divider: {
+    width:           '100%',
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: '#EEEAE5',
+    marginTop:       Space[6],
+    marginBottom:    Space[5],
+  },
+  benefitsRow: {
+    flexDirection:  'row',
+    flexWrap:       'wrap',
+    gap:            Space[2],
+    justifyContent: 'center',
+  },
+  chip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               5,
+    paddingVertical:   5,
+    paddingHorizontal: Space[3],
+    backgroundColor:   Colors.surfaceSoft,
+    borderRadius:      Radius.pill,
+  },
+  chipText: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      11,
+    fontWeight:    '400',
+    color:         Colors.ink3,
+    letterSpacing: 0.1,
   },
 });
 
@@ -160,15 +344,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const toast  = useAppToast();
   const { setCartCount } = useCart();
 
-  const identityAnim = useEntrance(0);
-  const shoppingAnim = useEntrance(80);
-  const accountAnim  = useEntrance(160);
-  const signOutAnim  = useEntrance(240);
+  const heroAnim  = useEntrance(0);
+  const statsAnim = useEntrance(80);
+  const menuAnim  = useEntrance(160);
 
   const [session,         setSession]         = useState<LoggedInCustomerInterface | null>(null);
   const [sessionLoading,  setSessionLoading]  = useState(true);
   const [sessionError,    setSessionError]    = useState(false);
-  const [addressCount,    setAddressCount]    = useState<number>(0);
+  const [addressCount,    setAddressCount]    = useState<number | null>(null);
+  const [orderCount,      setOrderCount]      = useState<number | null>(null);
+  const [wishlistCount,   setWishlistCount]   = useState<number | null>(null);
   const [editVisible,     setEditVisible]     = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [logoutVisible,   setLogoutVisible]   = useState(false);
@@ -187,18 +372,28 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         setSessionLoading(false);
 
         if (!parsed?.CustomerProfileCode) return;
+        const code = parsed.CustomerProfileCode;
 
-        getDeliveryAddresses(parsed.CustomerProfileCode)
+        getDeliveryAddresses(code)
           .then(res => {
             if (cancelled) return;
-            if (res.statusCode === 1) {
-              const list: DeliveryAddress[] = res.result || [];
-              setAddressCount(list.length);
-            }
+            if (res.statusCode === 1) setAddressCount((res.result || []).length);
           })
-          .catch(e => {
-            console.error('[ProfileScreen] address fetch failed', e);
-          });
+          .catch(() => {});
+
+        postOrderHistory(code, 1, {})
+          .then(res => {
+            if (cancelled) return;
+            setOrderCount(res.items.length);
+          })
+          .catch(() => {});
+
+        getWishlist(code)
+          .then((res: any) => {
+            if (cancelled) return;
+            if (res?.statusCode === 1) setWishlistCount((res.result || []).length);
+          })
+          .catch(() => {});
       })
       .catch(() => {
         if (!cancelled) {
@@ -225,16 +420,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
   };
 
-  const addressSubtitle = addressCount > 0
-    ? `${addressCount} saved address${addressCount !== 1 ? 'es' : ''}`
-    : 'Manage delivery addresses';
-
   // ── Error ───────────────────────────────────────────────────────────────────
   if (sessionError) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
-        <ScreenHeader title="Profile" onBack={() => navigation.goBack()} />
+        <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
+        <View style={[styles.simpleHeader, { paddingTop: insets.top + Space[2] }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Icon name="chevron-back" size={24} color={Colors.ink1} />
+          </TouchableOpacity>
+        </View>
         <ErrorState
           title="Couldn't load your profile"
           message="Check your connection and try again."
@@ -253,8 +448,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   if (!sessionLoading && !session) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
-        <ScreenHeader title="Profile" onBack={() => navigation.goBack()} />
+        <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
+        <View style={[styles.simpleHeader, { paddingTop: insets.top + Space[2] }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Icon name="chevron-back" size={24} color={Colors.ink1} />
+          </TouchableOpacity>
+        </View>
         <LoggedOutView
           onSignIn={() => navigation.navigate('Login')}
           onRegister={() => navigation.navigate('Register')}
@@ -268,14 +467,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     );
   }
 
-  // ── Logged in / loading ─────────────────────────────────────────────────────
   const displayName   = session?.CustomerName || '—';
   const displayEmail  = session?.EmailID      || null;
   const displayMobile = session?.MobileNumber !== undefined ? String(session.MobileNumber) : null;
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
 
       {session && (
         <EditProfileSheet
@@ -285,7 +483,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           onSaved={handleSaved}
         />
       )}
-
       {session && (
         <ChangePasswordSheet
           customerProfileCode={session.CustomerProfileCode}
@@ -297,107 +494,132 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           }}
         />
       )}
-
       {logoutVisible && (
         <ConfirmSheet
           onClose={() => setLogoutVisible(false)}
           onConfirm={confirmLogout}
-          title="Log out?"
+          title="Sign out?"
           body="You'll need to sign in again to access your orders and wishlist."
-          confirmLabel="Log out"
+          confirmLabel="Sign out"
           destructive
         />
       )}
 
-      <ScreenHeader
-        title="Profile"
-        onBack={() => navigation.goBack()}
-        right={
-          <TouchableOpacity
-            onPress={() => { haptic.light(); setEditVisible(true); }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            disabled={!session}
-          >
-            <Icon
-              name="create-outline"
-              size={22}
-              color={session ? Colors.ink2 : Colors.ink5}
-            />
-          </TouchableOpacity>
-        }
-      />
-
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + Space[8] + 60 },
-        ]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
       >
-        {/* ── Identity ─────────────────────────────────────────────────────── */}
-        <Animated.View style={[styles.identity, identityAnim]}>
-          {sessionLoading ? (
-            <>
-              <Skeleton height={28} width={180} radius={Radius.xs} />
-              <Skeleton height={11} width={110} radius={Radius.xs} style={{ marginTop: Space[3] }} />
-              <Skeleton height={11} width={160} radius={Radius.xs} style={{ marginTop: Space[1] }} />
-            </>
-          ) : (
-            <>
-              <Text style={styles.identityName}>{displayName}</Text>
-              {displayMobile
-                ? <Text style={styles.identityMeta}>{displayMobile}</Text>
-                : null}
-              {displayEmail
-                ? <Text style={styles.identityMeta}>{displayEmail}</Text>
-                : null}
-            </>
-          )}
+        {/* ── Hero ─────────────────────────────────────────────────────────── */}
+        <Animated.View style={heroAnim}>
+          <View style={[styles.heroNav, { paddingTop: insets.top + Space[2] }]}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name="chevron-back" size={24} color={Colors.ink1} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.heroBody}>
+            {/* Avatar + edit row */}
+            <View style={styles.heroAvatarRow}>
+              {sessionLoading ? (
+                <View style={[avatarStyles.circle, { backgroundColor: Colors.surfaceDeep }]} />
+              ) : (
+                <Avatar name={displayName} />
+              )}
+              <TouchableOpacity
+                onPress={() => { haptic.light(); setEditVisible(true); }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={!session}
+                style={styles.manageBtn}
+              >
+                <Text style={styles.manageBtnText}>Manage Account</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Identity */}
+            <View style={styles.heroIdentity}>
+              {sessionLoading ? (
+                <>
+                  <Skeleton height={26} width={160} radius={Radius.xs} />
+                  <Skeleton height={10} width={90}  radius={Radius.xs} style={{ marginTop: Space[2] }} />
+                  <Skeleton height={10} width={130} radius={Radius.xs} style={{ marginTop: Space[1] }} />
+                </>
+              ) : (
+                <>
+                  <Text style={styles.heroName}>{displayName}</Text>
+                  <View style={styles.memberBadge}>
+                    <Text style={styles.memberBadgeText}>◆ {BRAND.memberLabel}</Text>
+                  </View>
+                  {displayMobile
+                    ? <Text style={styles.heroContact}>{displayMobile}</Text>
+                    : null}
+                  {displayEmail
+                    ? <Text style={styles.heroContact}>{displayEmail}</Text>
+                    : null}
+                </>
+              )}
+            </View>
+          </View>
+
+          {/* Divider between hero and cards */}
+          <View style={styles.heroDivider} />
         </Animated.View>
 
-        <View style={styles.divider} />
-
-        {/* ── Shopping ─────────────────────────────────────────────────────── */}
-        <Animated.View style={shoppingAnim}>
-          <Text style={styles.sectionLabel}>Shopping</Text>
-          <MenuRow
-            label="My Wishlist"
-            sub="View saved products"
-            onPress={() => navigation.navigate('Wishlist')}
-          />
-          <MenuRow
-            label="Orders"
-            sub="Track and reorder"
-            onPress={() => navigation.navigate('Orders')}
-          />
-          <MenuRow
-            label="Addresses"
-            sub={sessionLoading ? 'Manage delivery addresses' : addressSubtitle}
-            onPress={() => navigation.navigate('AddressManagement')}
-            showDivider={false}
+        {/* ── Stats row ────────────────────────────────────────────────────── */}
+        <Animated.View style={[styles.section, statsAnim]}>
+          <StatRow
+            orderCount={orderCount}
+            wishlistCount={wishlistCount}
+            addressCount={addressCount}
+            loading={sessionLoading}
+            onOrders={() => navigation.navigate('Orders')}
+            onWishlist={() => navigation.navigate('Wishlist')}
+            onAddresses={() => navigation.navigate('AddressManagement')}
           />
         </Animated.View>
 
-        {/* ── Account ──────────────────────────────────────────────────────── */}
-        <Animated.View style={accountAnim}>
-          <Text style={[styles.sectionLabel, { marginTop: Space[5] }]}>Account</Text>
-          <MenuRow
-            label="Change Password"
-            sub="Update your password"
-            onPress={() => { haptic.light(); setPasswordVisible(true); }}
-            showDivider={false}
-          />
-        </Animated.View>
+        {/* ── Menus ────────────────────────────────────────────────────────── */}
+        <Animated.View style={[styles.section, menuAnim]}>
 
-        {/* ── Sign out ─────────────────────────────────────────────────────── */}
-        <Animated.View style={[styles.signOutBlock, signOutAnim]}>
-          <TouchableOpacity
-            onPress={() => { haptic.light(); setLogoutVisible(true); }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.signOutText}>Sign out</Text>
-          </TouchableOpacity>
+          <View style={styles.menuCard}>
+            <Text style={styles.menuLabel}>ACCOUNT</Text>
+            <MenuRow
+              icon="lock-closed-outline"
+              label="Change Password"
+              onPress={() => { haptic.light(); setPasswordVisible(true); }}
+              showDivider={false}
+            />
+          </View>
+
+          <View style={[styles.menuCard, { marginTop: Space[3] }]}>
+            <Text style={styles.menuLabel}>SUPPORT</Text>
+            <MenuRow
+              icon="help-circle-outline"
+              label="Help Center"
+              onPress={() => {}}
+            />
+            <MenuRow
+              icon="mail-outline"
+              label="Contact Us"
+              onPress={() => {}}
+              showDivider={false}
+            />
+          </View>
+
+          <View style={[styles.menuCard, { marginTop: Space[3], paddingTop: 0, paddingBottom: 0 }]}>
+            <MenuRow
+              icon="log-out-outline"
+              label="Sign out"
+              onPress={() => { haptic.light(); setLogoutVisible(true); }}
+              showDivider={false}
+              danger
+            />
+          </View>
+
+          <Text style={styles.version}>Version {APP_VERSION}</Text>
         </Animated.View>
       </ScrollView>
 
@@ -413,60 +635,123 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   root: {
     flex:            1,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#F8F5F2',
+  },
+  simpleHeader: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[3],
+    backgroundColor:   '#F8F5F2',
   },
   scroll: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[6],
-  },
 
-  // ── Identity ──────────────────────────────────────────────────────────────
-  identity: {
-    paddingBottom: Space[6],
+  // ── Hero ──────────────────────────────────────────────────────────────────
+  heroNav: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[2],
+    backgroundColor:   '#F8F5F2',
   },
-  identityName: {
+  heroBody: {
+    backgroundColor:   '#F8F5F2',
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[8],
+  },
+  heroAvatarRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginBottom:   Space[4],
+  },
+  manageBtn: {
+    paddingVertical:   6,
+    paddingHorizontal: Space[3],
+    borderRadius:      Radius.pill,
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderColor:       Colors.rule,
+    backgroundColor:   Colors.surfaceSoft,
+  },
+  manageBtnText: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    letterSpacing: 0.5,
+    color:         Colors.ink3,
+    textTransform: 'uppercase',
+  },
+  heroIdentity: {
+    gap: 4,
+  },
+  heroName: {
     fontFamily:    FontFamily.serif,
-    fontSize:      28,
+    fontSize:      26,
     fontWeight:    '400',
     letterSpacing: -0.5,
     color:         Colors.ink1,
-    lineHeight:    32,
-    marginBottom:  Space[1],
+    lineHeight:    30,
   },
-  identityMeta: {
+  memberBadge: {
+    alignSelf:         'flex-start',
+    paddingVertical:   2,
+    paddingHorizontal: 6,
+    borderRadius:      3,
+    backgroundColor:   'rgba(178, 90, 61, 0.07)',
+    marginTop:         4,
+    marginBottom:      4,
+  },
+  memberBadgeText: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      8,
+    letterSpacing: 1.0,
+    color:         Colors.accent,
+    textTransform: 'uppercase',
+  },
+  heroContact: {
     ...Type.caption,
     color:      Colors.ink4,
-    lineHeight: 20,
+    lineHeight: 18,
   },
-
-  divider: {
+  heroDivider: {
     height:          StyleSheet.hairlineWidth,
-    backgroundColor: Colors.rule,
-    marginBottom:    Space[2],
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    marginBottom:    Space[5],
   },
 
-  // ── Section label ─────────────────────────────────────────────────────────
-  sectionLabel: {
-    ...Type.label,
+  // ── Sections ──────────────────────────────────────────────────────────────
+  section: {
+    paddingHorizontal: Space.screenH,
+    marginBottom:      Space[3],
+  },
+
+  // ── Menu card ─────────────────────────────────────────────────────────────
+  menuCard: {
+    backgroundColor:   '#FFFFFF',
+    borderRadius:      16,
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderColor:       '#EEEAE5',
+    paddingHorizontal: Space[4],
+    paddingTop:        Space[3],
+    paddingBottom:     Space[1],
+    shadowColor:       '#000000',
+    shadowOffset:      { width: 0, height: 1 },
+    shadowOpacity:     0.02,
+    shadowRadius:      3,
+    elevation:         1,
+  },
+  menuLabel: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      9,
+    letterSpacing: 1.4,
     color:         Colors.ink4,
-    paddingTop:    Space[4],
-    paddingBottom: Space[1],
+    textTransform: 'uppercase',
+    marginBottom:  Space[1],
   },
 
-  // ── Sign out ──────────────────────────────────────────────────────────────
-  signOutBlock: {
-    marginTop:     Space[8],
-    alignItems:    'center',
-    paddingBottom: Space[4],
-  },
-  signOutText: {
+  // ── Version ───────────────────────────────────────────────────────────────
+  version: {
     ...Type.caption,
-    color:               Colors.danger,
-    textDecorationLine:  'underline',
-    textDecorationColor: Colors.danger,
+    color:     Colors.ink5,
+    textAlign: 'center',
+    marginTop: Space[5],
   },
 });
 
