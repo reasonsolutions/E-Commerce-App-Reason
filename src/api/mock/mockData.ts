@@ -568,6 +568,7 @@ export const mockOrderDetail: { OrderDetails: OrderDetailItemExtendedInterface[]
       CreatedDate: '2025-11-05T10:00:00.000',
       Brand_Id: 1,
       Brand_Name: 'Nike',
+      Events: [],
     },
   ],
   DeliveryDetail: [mockDeliveryAddresses[0]],

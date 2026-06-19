@@ -22,15 +22,27 @@ type StatusPalette = { fg: string; bg: string; dot: string };
 // Premium register: ember for in-progress, ink for completed, muted danger for cancelled.
 // Retired: saturated semantic tints (warningTint/infoTint) — too noisy.
 const palette: Record<OrderStatus, StatusPalette> = {
-  New:          { fg: Colors.ink3,     bg: Colors.surfaceDeep,  dot: Colors.ink4 },
-  Confirmed:    { fg: Colors.accent,   bg: Colors.accentTint,   dot: Colors.accent },
-  Processing:   { fg: Colors.accent,   bg: Colors.accentTint,   dot: Colors.accent },
-  Fulfilled:    { fg: Colors.accent,   bg: Colors.accentTint,   dot: Colors.accent },
-  Shipped:      { fg: Colors.accent,   bg: Colors.accentTint,   dot: Colors.accent },
-  'In transit': { fg: Colors.accent,   bg: Colors.accentTint,   dot: Colors.accent },
-  Delivered:    { fg: Colors.ink2,     bg: Colors.surfaceDeep,  dot: Colors.ink3 },
-  Cancelled:    { fg: Colors.danger,   bg: Colors.dangerTint,   dot: Colors.danger },
-  Returned:     { fg: Colors.danger,   bg: Colors.dangerTint,   dot: Colors.danger },
+  New:          { fg: '#92650A', bg: '#FEF3C7', dot: '#D97706' },  // amber
+  Confirmed:    { fg: '#1D4ED8', bg: '#DBEAFE', dot: '#3B82F6' },  // blue
+  Processing:   { fg: '#1D4ED8', bg: '#DBEAFE', dot: '#3B82F6' },  // blue
+  Fulfilled:    { fg: '#6D28D9', bg: '#EDE9FE', dot: '#8B5CF6' },  // violet
+  Shipped:      { fg: '#6D28D9', bg: '#EDE9FE', dot: '#8B5CF6' },  // violet
+  'In transit': { fg: '#6D28D9', bg: '#EDE9FE', dot: '#8B5CF6' },  // violet
+  Delivered:    { fg: Colors.success, bg: Colors.successTint, dot: Colors.success },
+  Cancelled:    { fg: Colors.danger,  bg: Colors.dangerTint,  dot: Colors.danger },
+  Returned:     { fg: Colors.danger,  bg: Colors.dangerTint,  dot: Colors.danger },
+};
+
+const displayLabel: Record<OrderStatus, string> = {
+  New:          'Order Placed',
+  Confirmed:    'Confirmed',
+  Processing:   'Processing',
+  Fulfilled:    'Packed',
+  Shipped:      'Shipped',
+  'In transit': 'In Transit',
+  Delivered:    'Delivered',
+  Cancelled:    'Cancelled',
+  Returned:     'Return Initiated',
 };
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
@@ -39,7 +51,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   return (
     <View style={[styles.pill, { backgroundColor: c.bg }]}>
       <View style={[styles.dot, { backgroundColor: c.dot }]} />
-      <Text style={[styles.label, { color: c.fg }]}>{status}</Text>
+      <Text style={[styles.label, { color: c.fg }]}>{displayLabel[status] ?? status}</Text>
     </View>
   );
 };

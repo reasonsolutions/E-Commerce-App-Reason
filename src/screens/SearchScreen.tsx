@@ -21,6 +21,7 @@ import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { EmptyState } from '../components/ui';
 import { ErrorState } from '../components/system';
+import { homeCache } from '../utils/homeCache';
 
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -28,9 +29,6 @@ type NavigationProp = {
 };
 
 type Props = { navigation: NavigationProp };
-
-// Curated popular search chips — shown to first-time users with no recent searches
-const POPULAR_CHIPS = ['Sneakers', 'Dresses', 'Watches', 'Bags', 'Sunglasses', 'Hoodies'];
 
 const SearchScreen: React.FC<Props> = ({ navigation }) => {
   const insets      = useSafeAreaInsets();
@@ -276,26 +274,26 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       )}
 
-      {/* ── First-time user — popular search chips ────────────────────────── */}
-      {showFTU && (
+      {/* ── First-time user — category chips from live catalog ──────────── */}
+      {showFTU && (homeCache.categories?.length ?? 0) > 0 && (
         <ScrollView
           style={styles.ftuScroll}
           contentContainerStyle={styles.ftuContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.ftuLabel}>POPULAR RIGHT NOW</Text>
+          <Text style={styles.ftuLabel}>BROWSE BY CATEGORY</Text>
           <View style={styles.chipWrap}>
-            {POPULAR_CHIPS.map(chip => (
+            {homeCache.categories!.map(cat => (
               <TouchableOpacity
-                key={chip}
+                key={cat.CategoryId}
                 style={styles.chip}
-                onPress={() => commit(chip)}
+                onPress={() => commit(cat.CategoryName)}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`Search for ${chip}`}
+                accessibilityLabel={`Search for ${cat.CategoryName}`}
               >
-                <Text style={styles.chipText}>{chip}</Text>
+                <Text style={styles.chipText}>{cat.CategoryName}</Text>
               </TouchableOpacity>
             ))}
           </View>

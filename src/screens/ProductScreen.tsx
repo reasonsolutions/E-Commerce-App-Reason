@@ -43,6 +43,7 @@ import {
 } from '../components/ui';
 
 import { Colors, Space, Shadow, Radius } from '../theme';
+import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -91,6 +92,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const [wishlisted, setWishlisted] = useState<boolean>(false);
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
+  const [relatedProducts, setRelatedProducts] = useState<ProductDetailInterface[]>([]);
 
   // ── Animated values ──────────────────────────────────────────────────────────
   const scrollY     = useRef(new Animated.Value(0)).current;
@@ -194,6 +196,22 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [data, profileCode]);
+
+  // Related products fetch
+  useEffect(() => {
+    if (!data?.product) return;
+    const raw = data.product.RelatedProducts;
+    if (!raw) return;
+    const ids = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (!ids.length) return;
+    let cancelled = false;
+    Promise.all(ids.map(id => getProductByItemId(id).then(r => r.result as ProductDetailInterface).catch(() => null)))
+      .then(results => {
+        if (cancelled) return;
+        setRelatedProducts(results.filter(Boolean) as ProductDetailInterface[]);
+      });
+    return () => { cancelled = true; };
+  }, [data]);
 
   // ── Derived values ───────────────────────────────────────────────────────────
   const productDetails = data?.product ?? null;
@@ -581,7 +599,38 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           care={productDetails?.AdditionalInfo?.CareInstructions}
           weight={selectedVariant?.PhysicalAttributes?.Weight ?? null}
           weightUnit={selectedVariant?.PhysicalAttributes?.WeightUnit?.Description ?? null}
+          season={(productDetails?.AdditionalInfo?.Season as any)?.Description ?? null}
+          demographic={(productDetails?.AdditionalInfo?.ProductDemoGraphic as any)?.Description ?? null}
         />
+
+        {/* Related products */}
+        {relatedProducts.length > 0 ? (
+          <View style={styles.relatedSection}>
+            <Text style={styles.relatedHeading}>YOU MAY ALSO LIKE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.relatedScroll}>
+              {relatedProducts.map(p => {
+                const firstVariant = p.Variants?.[0];
+                const price = firstVariant?.PriceDetails?.Price ?? 0;
+                const imgUri = resolveImageUrl(p.Images);
+                return (
+                  <TouchableOpacity
+                    key={p.ItemId}
+                    style={styles.relatedCard}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('Product', { product: String(p.ItemId) })}
+                  >
+                    <View style={styles.relatedImgWrap}>
+                      {imgUri ? <Image source={{ uri: imgUri }} style={styles.relatedImg} resizeMode="cover" /> : null}
+                    </View>
+                    <Text style={styles.relatedBrand} numberOfLines={1}>{(p.BrandName ?? '').toUpperCase()}</Text>
+                    <Text style={styles.relatedName} numberOfLines={2}>{p.Name}</Text>
+                    {price > 0 ? <Text style={styles.relatedPrice}>Rs {price.toLocaleString('en-IN')}</Text> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
 
         {/* Seller card */}
         <SellerCard
@@ -922,5 +971,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space[4],
+  },
+
+  // ── Related products strip ──────────────────────────────────────────────────
+  relatedSection: {
+    paddingTop: Space[6],
+    paddingBottom: Space[4],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.rule,
+  },
+  relatedHeading: {
+    ...Type.label,
+    color: Colors.ink3,
+    paddingHorizontal: Space.screenH,
+    marginBottom: Space[4],
+  },
+  relatedScroll: {
+    paddingHorizontal: Space.screenH,
+    gap: Space[3],
+  },
+  relatedCard: {
+    width: 140,
+  },
+  relatedImgWrap: {
+    width: 140,
+    height: 175,
+    backgroundColor: Colors.surfaceDeep,
+    marginBottom: Space[2],
+    overflow: 'hidden',
+  },
+  relatedImg: {
+    width: '100%',
+    height: '100%',
+  },
+  relatedBrand: {
+    ...Type.label,
+    color: Colors.ink3,
+    marginBottom: 2,
+  },
+  relatedName: {
+    ...Type.caption,
+    color: Colors.ink1,
+    marginBottom: 2,
+  },
+  relatedPrice: {
+    fontFamily: FontFamily.serif,
+    fontSize: 14,
+    color: Colors.ink1,
   },
 });

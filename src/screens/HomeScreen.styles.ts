@@ -118,17 +118,17 @@ const styles = StyleSheet.create({
     zIndex:   20,
   },
   scrollTopInner: {
-    width:           44,
-    height:          44,
-    borderRadius:    22,
+    width:           36,
+    height:          36,
+    borderRadius:    18,
     backgroundColor: Colors.surface,
     alignItems:      'center',
     justifyContent:  'center',
     shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 2 },
-    shadowOpacity:   0.10,
-    shadowRadius:    8,
-    elevation:       4,
+    shadowOffset:    { width: 0, height: 1 },
+    shadowOpacity:   0.08,
+    shadowRadius:    4,
+    elevation:       2,
   },
 
   // ── BannerSlot ───────────────────────────────────────────────────────────────
@@ -275,11 +275,11 @@ const styles = StyleSheet.create({
     flexDirection:     'row',
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[2],
-    gap:               Space[4] + 2,
+    gap:               Space[4],
   },
   brandChip: {
     alignItems: 'center',
-    width:      70,
+    width:      110,
     gap:        Space[2] + 1,
   },
   brandLabel: {

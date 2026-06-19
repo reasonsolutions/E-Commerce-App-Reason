@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Platform,
   Modal,
-  Clipboard,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
@@ -23,17 +23,20 @@ import {
   SkeletonRow,
   DarkHeader,
   PrimaryButton,
+  StatusBadge,
   OrderProgressBar,
+  FadeImage,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { Colors, Space, Radius } from '../theme';
+import { Colors, Space, Radius, Shadow } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { formatDate } from '../utils/formatDate';
-import { ORDER_STATUS_LABELS } from '../utils/orderStatus';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { orderStatusLabel } from '../utils/orderStatus';
 import type {
   OrderDetailItemExtendedInterface,
   OrderDetailResponseInterface,
@@ -43,41 +46,29 @@ import type {
 import { CustomerCancellationReason, CancellationReasonLabel } from '../config/enum_files/CustomerCancellationReason';
 import { RefundMode, RefundModeLabel } from '../config/enum_files/RefundMode';
 import { CustomerPlatform } from '../config/enum_files/CustomerPlatform';
-import { toastEmitter } from '../utils/toastEmitter';
 
-// 4:5 portrait — canonical card ratio
-const IMG_W = 88;
-const IMG_H = 110;
-
+const THUMB_W = 72;
+const THUMB_H = 72;
 const ACTION_BAR_HEIGHT = 64;
-
-const CANCELLABLE_STATUSES: OrderStatusCode[] = [1, 2, 3]; // New, Confirmed, Processing
-
-// Active statuses that map to a progress step (terminal states return null from OrderProgressBar)
-const ACTIVE_PROGRESS_STATUSES: OrderStatusCode[] = [1, 2, 3, 4, 5, 6];
+const CANCELLABLE_STATUSES: OrderStatusCode[] = [1, 2, 3];
 
 type OrderDetailScreenRouteParams = {
-  orderItem: OrderDetailItemExtendedInterface;
+  orderItem:   OrderDetailItemExtendedInterface;
+  orderNumber: string;
 };
 
 type OrderDetailScreenProps = {
   navigation: StackNavigationProp<any>;
 };
 
-// ── Flat detail row — label left, value right ────────────────────────────────
-const DetailRow: React.FC<{
-  label: string;
-  value: React.ReactNode;
-  isLast?: boolean;
-}> = ({ label, value, isLast }) => (
+// ── Flat detail row ────────────────────────────────────────────────────────────
+const DetailRow: React.FC<{ label: string; value: React.ReactNode; isLast?: boolean }> = ({ label, value, isLast }) => (
   <View style={[detailStyles.row, !isLast && detailStyles.rowDivider]}>
     <Text style={detailStyles.rowLabel}>{label}</Text>
     <View style={detailStyles.rowRight}>
-      {typeof value === 'string' || typeof value === 'number' ? (
-        <Text style={detailStyles.rowValue} numberOfLines={2}>{value}</Text>
-      ) : (
-        value
-      )}
+      {typeof value === 'string' || typeof value === 'number'
+        ? <Text style={detailStyles.rowValue} numberOfLines={2}>{value}</Text>
+        : value}
     </View>
   </View>
 );
@@ -112,81 +103,228 @@ const detailStyles = StyleSheet.create({
   },
 });
 
-// ── Status Hero — progress + human-readable label ────────────────────────────
-const StatusHero: React.FC<{ status: OrderStatusCode }> = ({ status }) => {
-  const label = ORDER_STATUS_LABELS[status] ?? 'In Progress';
-
-  const isDelivered  = status === 6; // OrderStatusCode.Delivered
-  const isTerminal   = status === 7 || status === 8; // Cancelled, Returned
-  const showProgress = ACTIVE_PROGRESS_STATUSES.includes(status);
-
-  const bgColor = isDelivered
-    ? Colors.successTint
-    : isTerminal
-    ? Colors.dangerTint
-    : Colors.accentTint;
-
-  const labelColor = isDelivered
-    ? Colors.success
-    : isTerminal
-    ? Colors.danger
-    : Colors.accent;
-
+// ── Per-item event timeline ────────────────────────────────────────────────────
+const ItemTimeline: React.FC<{ events: OrderEventInterface[] }> = ({ events }) => {
+  if (!events.length) return null;
   return (
-    <View style={[heroStyles.wrap, { backgroundColor: bgColor }]}>
-      {showProgress ? <OrderProgressBar status={status} /> : null}
-      <Text style={[heroStyles.label, { color: labelColor }]}>{label}</Text>
+    <View style={timelineStyles.wrap}>
+      {events.map((event, index) => {
+        const isLast = index === events.length - 1;
+        return (
+          <View key={index} style={timelineStyles.row}>
+            <View style={timelineStyles.spine}>
+              <View style={[timelineStyles.dot, event.IsCompleted && timelineStyles.dotCompleted]} />
+              {!isLast ? <View style={[timelineStyles.line, event.IsCompleted && timelineStyles.lineCompleted]} /> : null}
+            </View>
+            <View style={timelineStyles.content}>
+              <Text style={[timelineStyles.desc, event.IsCompleted && timelineStyles.descCompleted]}>
+                {event.Description}
+              </Text>
+              {event.Date ? (
+                <Text style={timelineStyles.meta}>
+                  {formatDate(event.Date)}{event.Location ? `  ·  ${event.Location}` : ''}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 };
 
-const heroStyles = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[4],
-    paddingBottom:     Space[3],
+const timelineStyles = StyleSheet.create({
+  wrap: { marginTop: Space[3] },
+  row: {
+    flexDirection: 'row',
+    gap:           Space[3],
+    paddingBottom: Space[3],
   },
-  label: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      20,
-    fontWeight:    '400',
-    letterSpacing: -0.3,
-    lineHeight:    20 * 1.25,
-    marginTop:     Space[2],
+  spine: {
+    alignItems: 'center',
+    width:      14,
+    flexShrink: 0,
+    marginTop:  3,
+  },
+  dot: {
+    width:           10,
+    height:          10,
+    borderRadius:    5,
+    borderWidth:     1.5,
+    borderColor:     Colors.rule,
+    backgroundColor: Colors.surface,
+  },
+  dotCompleted: {
+    borderColor:     Colors.ink1,
+    backgroundColor: Colors.ink1,
+  },
+  line: {
+    width:           1.5,
+    flex:            1,
+    marginTop:       3,
+    backgroundColor: Colors.rule,
+  },
+  lineCompleted: { backgroundColor: Colors.ink1 },
+  content:       { flex: 1, paddingBottom: Space[1] },
+  desc: {
+    ...Type.body,
+    color: Colors.ink4,
+  },
+  descCompleted: { color: Colors.ink1 },
+  meta: {
+    ...Type.caption,
+    color:     Colors.ink4,
+    marginTop: Space[1],
   },
 });
 
-// ── Fixed bottom action bar ───────────────────────────────────────────────────
-const OrderActionBar: React.FC<{
-  isCancellable: boolean;
-  onCancel: () => void;
-  bottomInset: number;
-}> = ({ isCancellable, onCancel, bottomInset }) => (
-  <View style={[barStyles.bar, { paddingBottom: bottomInset + Space[3] }]}>
-    <TouchableOpacity
-      style={[barStyles.btn, barStyles.ghost, isCancellable && barStyles.btnHalf]}
-      activeOpacity={0.7}
-      onPress={() => console.warn('Need Help: navigation not yet wired')}
-    >
-      <Text style={barStyles.ghostText}>Need Help</Text>
-    </TouchableOpacity>
+// ── Single item card inside the order ─────────────────────────────────────────
+const ItemCard: React.FC<{
+  item: OrderDetailItemExtendedInterface;
+  onCancel: (item: OrderDetailItemExtendedInterface) => void;
+  isLast: boolean;
+}> = ({ item, onCancel, isLast }) => {
+  const imgUri = resolveImageUrl(item.Images);
+  const status = orderStatusLabel(item.OrderStatus as OrderStatusCode);
+  const isCancellable = CANCELLABLE_STATUSES.includes(item.OrderStatus as OrderStatusCode);
+  const isActive = [1, 2, 3, 4, 5].includes(item.OrderStatus);
 
-    {isCancellable ? (
-      <TouchableOpacity
-        style={[barStyles.btn, barStyles.danger]}
-        activeOpacity={0.8}
-        onPress={onCancel}
-      >
-        <Text style={barStyles.dangerText}>Cancel Order</Text>
-      </TouchableOpacity>
-    ) : null}
+  return (
+    <View style={[itemCardStyles.card, !isLast && itemCardStyles.cardBorder]}>
+      {/* Image + meta row */}
+      <View style={itemCardStyles.row}>
+        <FadeImage
+          uri={imgUri}
+          width={THUMB_W}
+          height={THUMB_H}
+          borderRadius={Radius.sm}
+          resizeMode="contain"
+        />
+        <View style={itemCardStyles.meta}>
+          {item.Brand_Name ? (
+            <Text style={itemCardStyles.brand}>{item.Brand_Name.toUpperCase()}</Text>
+          ) : null}
+          <Text style={itemCardStyles.name} numberOfLines={2}>{item.Name}</Text>
+          {item.Variant ? (
+            <Text style={itemCardStyles.variant}>{item.Variant}</Text>
+          ) : null}
+          <View style={itemCardStyles.priceRow}>
+            <Text style={itemCardStyles.price}>
+              Rs {(item.Amount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            </Text>
+            {item.Quantity > 1 ? (
+              <Text style={itemCardStyles.qty}>× {item.Quantity}</Text>
+            ) : null}
+          </View>
+        </View>
+      </View>
+
+      {/* Status + progress */}
+      <View style={itemCardStyles.statusRow}>
+        <StatusBadge status={status} />
+        {isCancellable ? (
+          <TouchableOpacity
+            onPress={() => onCancel(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={itemCardStyles.cancelLink}>Cancel</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {isActive ? (
+        <View style={itemCardStyles.progressWrap}>
+          <OrderProgressBar status={item.OrderStatus as OrderStatusCode} />
+        </View>
+      ) : null}
+
+      {/* Per-item timeline */}
+      <ItemTimeline events={item.Events ?? []} />
+    </View>
+  );
+};
+
+const itemCardStyles = StyleSheet.create({
+  card: {
+    paddingVertical: Space[4],
+  },
+  cardBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  row: {
+    flexDirection: 'row',
+    gap:           Space[3],
+    marginBottom:  Space[3],
+  },
+  meta: {
+    flex: 1,
+    gap:  3,
+  },
+  brand: {
+    ...Type.label,
+    color: Colors.ink4,
+  },
+  name: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      15,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.1,
+    lineHeight:    15 * 1.35,
+  },
+  variant: {
+    ...Type.caption,
+    color: Colors.ink4,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems:    'baseline',
+    gap:           Space[2],
+    marginTop:     2,
+  },
+  price: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      16,
+    color:         Colors.ink1,
+    letterSpacing: -0.2,
+  },
+  qty: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      11,
+    color:         Colors.ink4,
+    letterSpacing: 0.3,
+  },
+  statusRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+  },
+  cancelLink: {
+    fontFamily:         FontFamily.sans,
+    fontSize:           12,
+    color:              Colors.danger,
+    textDecorationLine: 'underline',
+  },
+  progressWrap: {
+    marginTop: Space[2],
+  },
+});
+
+// ── Fixed bottom action bar ────────────────────────────────────────────────────
+const OrderActionBar: React.FC<{
+  onHelp: () => void;
+  bottomInset: number;
+}> = ({ onHelp, bottomInset }) => (
+  <View style={[barStyles.bar, { paddingBottom: bottomInset + Space[3] }]}>
+    <TouchableOpacity style={barStyles.btn} activeOpacity={0.7} onPress={onHelp}>
+      <Text style={barStyles.btnText}>Need Help</Text>
+    </TouchableOpacity>
   </View>
 );
 
 const barStyles = StyleSheet.create({
   bar: {
-    flexDirection:     'row',
-    gap:               Space[3],
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[3],
     borderTopWidth:    StyleSheet.hairlineWidth,
@@ -194,53 +332,39 @@ const barStyles = StyleSheet.create({
     backgroundColor:   Colors.surface,
   },
   btn: {
-    flex:            1,
     height:          44,
     borderRadius:    Radius.pill,
+    borderWidth:     1,
+    borderColor:     Colors.rule,
     alignItems:      'center',
     justifyContent:  'center',
-  },
-  btnHalf: {
-    flex: 1,
-  },
-  ghost: {
-    borderWidth:  1,
-    borderColor:  Colors.rule,
     backgroundColor: Colors.surface,
   },
-  danger: {
-    backgroundColor: Colors.dangerTint,
-    borderWidth:     1,
-    borderColor:     Colors.dangerBorder,
-  },
-  ghostText: {
+  btnText: {
     ...Type.bodyStrong,
     color: Colors.ink2,
   },
-  dangerText: {
-    ...Type.bodyStrong,
-    color: Colors.danger,
-  },
 });
 
-// ── Screen ────────────────────────────────────────────────────────────────────
+// ── Screen ─────────────────────────────────────────────────────────────────────
 const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const route  = useRoute<RouteProp<{ params: OrderDetailScreenRouteParams }, 'params'>>();
-  const orderItem   = route.params?.orderItem;
-  const orderNumber = orderItem?.OrderNumber;
+  const fallbackItem  = route.params?.orderItem;
+  const orderNumber   = route.params?.orderNumber ?? fallbackItem?.OrderNumber;
 
   const { data: orderDetails, loading, isError, error, run } =
     useAsyncState<OrderDetailResponseInterface>(null);
 
-  // ── Cancel order state ─────────────────────────────────────────────────────
   const cancelSheetRef = useRef<BottomSheet>(null);
+  const [cancelTarget, setCancelTarget]             = useState<OrderDetailItemExtendedInterface | null>(null);
   const [selectedReason, setSelectedReason]         = useState<CustomerCancellationReason | null>(null);
   const [selectedRefundMode, setSelectedRefundMode] = useState<RefundMode | null>(null);
   const [cancelLoading, setCancelLoading]           = useState(false);
   const [cancelError, setCancelError]               = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess]           = useState(false);
+  const [refreshing, setRefreshing]                 = useState(false);
 
   const fetchOrderDetails = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -260,7 +384,14 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     return () => { cancelled.current = true; };
   }, [fetchOrderDetails, orderNumber]);
 
-  const openCancelSheet = () => {
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchOrderDetails();
+    setRefreshing(false);
+  }, [fetchOrderDetails]);
+
+  const openCancelSheet = (item: OrderDetailItemExtendedInterface) => {
+    setCancelTarget(item);
     setCancelError(null);
     setSelectedReason(null);
     setSelectedRefundMode(null);
@@ -269,39 +400,32 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   };
 
   const handleConfirmCancel = async () => {
-    if (!selectedReason || !selectedRefundMode) {
+    if (!selectedReason || !selectedRefundMode || !cancelTarget || !orderNumber) {
       setCancelError('Please select a reason and a refund mode.');
       return;
     }
-    const liveItem = orderDetails?.OrderDetails[0];
-    if (!liveItem || !orderNumber) return;
-
     try {
       setCancelLoading(true);
       setCancelError(null);
-
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
       if (!raw) throw new Error('Session expired. Please log in again.');
       const user = JSON.parse(raw);
-
       const response = await cancelOrder({
         CustomerProfileCode:        user.CustomerProfileCode,
         CustomerPlatform:           Platform.OS === 'ios' ? CustomerPlatform.IOS : CustomerPlatform.Android,
         OrderNumber:                orderNumber,
         SubOrder: [{
-          Id:          liveItem.SubOrder.Code,
-          InventoryId: liveItem.Inventory_Id,
+          Id:          cancelTarget.SubOrder.Code,
+          InventoryId: cancelTarget.Inventory_Id,
         }],
         CustomerCancellationReason: selectedReason,
         RefundMode:                 selectedRefundMode,
         Remarks:                    CancellationReasonLabel[selectedReason],
       });
-
       if (response?.statusCode !== 1) {
-        setCancelError(response?.userMessage ?? 'Could not cancel this order. Please try again.');
+        setCancelError(response?.userMessage ?? 'Could not cancel. Please try again.');
         return;
       }
-
       haptic.success();
       cancelSheetRef.current?.close();
       setCancelSuccess(true);
@@ -312,122 +436,82 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     }
   };
 
-  const handleCopyOrderNumber = () => {
-    if (!orderNumber) return;
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — RN built-in Clipboard is deprecated but no community package is installed
-    Clipboard.setString(String(orderNumber));
-    toastEmitter.emit('success', 'Order number copied');
-  };
+  const headerAnim  = useEntrance(0);
+  const itemsAnim   = useEntrance(80);
+  const addressAnim = useEntrance(160);
+  const paymentAnim = useEntrance(220);
 
-  const headerAnim   = useEntrance(0);
-  const heroAnim     = useEntrance(60);
-  const productAnim  = useEntrance(120);
-  const trackingAnim = useEntrance(180);
-  const deliveryAnim = useEntrance(240);
-  const paymentAnim  = useEntrance(300);
+  const displayDate = fallbackItem?.OrderedDate ?? orderDetails?.OrderDetails[0]?.OrderedDate ?? '';
 
   const Header = (
     <Animated.View style={headerAnim}>
       <DarkHeader
-        eyebrow={orderItem?.OrderedDate ? `YOUR ORDER  ·  ${formatDate(orderItem.OrderedDate)}` : 'YOUR ORDER'}
+        eyebrow={displayDate ? `YOUR ORDER  ·  ${formatDate(displayDate)}` : 'YOUR ORDER'}
         title={orderNumber ? `#${orderNumber}` : 'Details'}
         titleFont="mono"
         onBack={() => navigation.goBack()}
         paddingTop={insets.top + Space[2]}
-        rightSlot={
-          orderNumber ? (
-            <TouchableOpacity
-              onPress={handleCopyOrderNumber}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Text style={copyStyles.icon}>⎘</Text>
-            </TouchableOpacity>
-          ) : undefined
-        }
       />
     </Animated.View>
   );
 
-  // ── No order number ────────────────────────────────────────────────────────
   if (!orderNumber) {
     return (
       <View style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
         {Header}
         <View style={styles.stateWrap}>
-          <ErrorState
-            title="Order reference missing"
-            message="Please go back and try again."
-            onRetry={() => navigation.goBack()}
-            retryLoading={false}
-          />
+          <ErrorState title="Order reference missing" message="Please go back and try again." onRetry={() => navigation.goBack()} retryLoading={false} />
         </View>
       </View>
     );
   }
 
-  // ── Fetch error ────────────────────────────────────────────────────────────
   if (isError) {
     return (
       <View style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
         {Header}
         <View style={styles.stateWrap}>
-          <ErrorState
-            title="Couldn't load this order."
-            message={error ?? 'Tap retry to try again.'}
-            onRetry={() => fetchOrderDetails()}
-            retryLoading={loading}
-          />
+          <ErrorState title="Couldn't load this order." message={error ?? 'Tap retry to try again.'} onRetry={() => fetchOrderDetails()} retryLoading={loading} />
         </View>
       </View>
     );
   }
 
-  const order    = orderItem ?? orderDetails?.OrderDetails[0];
-  const delivery = orderDetails?.DeliveryDetail[0];
-  const events   = orderDetails?.Events ?? [];
-  const firstImg = order?.Images?.split(';').filter(Boolean)[0] ?? '';
-  const isCancellable = order ? CANCELLABLE_STATUSES.includes(order.OrderStatus as OrderStatusCode) : false;
-
-  // ── Loading skeleton ───────────────────────────────────────────────────────
-  if (!order) {
+  // Loading state — show skeleton
+  if (!orderDetails) {
     return (
       <View style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
         {Header}
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + Space[10] },
-          ]}
-        >
-          <View style={styles.skeletonHero}>
-            <Skeleton height={3} width="100%" style={{ marginBottom: Space[3] }} />
-            <Skeleton height={20} width="55%" />
-          </View>
-          <View style={styles.skeletonProductRow}>
-            <Skeleton width={IMG_W} height={IMG_H} radius={Radius.sm} />
-            <View style={styles.skeletonMeta}>
-              <Skeleton height={9}  width="45%" style={{ marginBottom: Space[2] }} />
-              <Skeleton height={14} width="85%" style={{ marginBottom: Space[1] }} />
-              <Skeleton height={13} width="60%" />
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.section}>
+            <View style={styles.skeletonItemRow}>
+              <Skeleton width={THUMB_W} height={THUMB_H} radius={Radius.sm} />
+              <View style={{ flex: 1, gap: Space[2] }}>
+                <Skeleton height={9}  width="35%" />
+                <Skeleton height={14} width="85%" />
+                <Skeleton height={12} width="50%" />
+              </View>
+            </View>
+            <View style={styles.skeletonItemRow}>
+              <Skeleton width={THUMB_W} height={THUMB_H} radius={Radius.sm} />
+              <View style={{ flex: 1, gap: Space[2] }}>
+                <Skeleton height={9}  width="40%" />
+                <Skeleton height={14} width="70%" />
+                <Skeleton height={12} width="45%" />
+              </View>
             </View>
           </View>
-          <View style={styles.skeletonSection}>
-            <Skeleton height={9} width="30%" style={{ marginBottom: Space[4] }} />
+          <View style={[styles.section, { marginTop: Space[6] }]}>
+            <Skeleton height={9} width="25%" style={{ marginBottom: Space[4] }} />
             <SkeletonRow gap={Space[2]} style={{ marginBottom: Space[3] }}>
-              <Skeleton height={12} width="28%" />
+              <Skeleton height={12} width="30%" />
               <Skeleton height={12} width="35%" />
             </SkeletonRow>
-            <SkeletonRow gap={Space[2]} style={{ marginBottom: Space[3] }}>
-              <Skeleton height={12} width="22%" />
-              <Skeleton height={12} width="20%" />
-            </SkeletonRow>
             <SkeletonRow gap={Space[2]}>
-              <Skeleton height={12} width="18%" />
+              <Skeleton height={12} width="20%" />
               <Skeleton height={12} width="25%" />
             </SkeletonRow>
           </View>
@@ -436,7 +520,17 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     );
   }
 
-  // ── Loaded content ─────────────────────────────────────────────────────────
+  const items    = orderDetails.OrderDetails;
+  const delivery = orderDetails.DeliveryDetail[0];
+  const orderedDate = items[0]?.OrderedDate ?? displayDate;
+
+  // TotalAmountBeforeDiscount/Discount are per-item; AmountPaid/DeliveryCharges/isFreeShipping
+  // are order-level (same value repeated on every item).
+  const orderPayment = items[0]?.PaymentInfo;
+  // Amount is already the line total (unit price × qty) — do not multiply by Quantity again.
+  const subtotal  = items.reduce((sum, it) => sum + (it.Amount ?? 0), 0);
+  const discount  = items.reduce((sum, it) => sum + (it.PaymentInfo?.Discount ?? 0), 0);
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
@@ -444,88 +538,40 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + Space[8] },
-        ]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + Space[8] }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        {/* ── Status Hero ── */}
-        <Animated.View style={heroAnim}>
-          <StatusHero status={order.OrderStatus as OrderStatusCode} />
-        </Animated.View>
+        {/* ── Order meta strip ── */}
+        <View style={styles.metaStrip}>
+          <Text style={styles.metaText}>
+            {items.length} {items.length === 1 ? 'item' : 'items'}
+            {'  ·  '}
+            {formatDate(orderedDate)}
+          </Text>
+        </View>
 
-        {/* ── Product summary ── */}
-        <Animated.View style={[styles.productRow, productAnim]}>
-          {firstImg ? (
-            <View style={styles.imgWrap}>
-              <Animated.Image
-                source={{ uri: firstImg }}
-                style={styles.img}
-                resizeMode="cover"
-              />
-            </View>
-          ) : null}
-          <View style={styles.productMeta}>
-            {order.Brand_Name ? (
-              <Text style={styles.brand}>{order.Brand_Name.toUpperCase()}</Text>
-            ) : null}
-            <Text style={styles.productName} numberOfLines={3}>{order.Name}</Text>
-            {order.Variant ? (
-              <Text style={styles.variant}>{order.Variant}</Text>
-            ) : null}
-            <View style={styles.amountRow}>
-              <Text style={styles.amount}>Rs {(order.Amount ?? 0).toFixed(0)}</Text>
-              {order.Quantity > 1 ? (
-                <Text style={styles.qty}>× {order.Quantity}</Text>
-              ) : null}
-            </View>
-          </View>
+        {/* ── Items ── */}
+        <Animated.View style={[styles.section, itemsAnim]}>
+          <Text style={styles.sectionEyebrow}>ITEMS</Text>
+          {items.map((item, i) => (
+            <ItemCard
+              key={`${item.Inventory_Id}-${i}`}
+              item={item}
+              onCancel={openCancelSheet}
+              isLast={i === items.length - 1}
+            />
+          ))}
         </Animated.View>
-
-        {/* ── Tracking timeline ── */}
-        {events.length > 0 ? (
-          <Animated.View style={[styles.section, trackingAnim]}>
-            <Text style={styles.sectionEyebrow}>TRACKING</Text>
-            {events.map((event: OrderEventInterface, index: number) => {
-              const isLast = index === events.length - 1;
-              return (
-                <View key={index} style={styles.eventRow}>
-                  <View style={styles.eventSpine}>
-                    <View style={[styles.eventDot, event.IsCompleted && styles.eventDotCompleted]} />
-                    {!isLast ? (
-                      <View style={[styles.eventLine, event.IsCompleted && styles.eventLineCompleted]} />
-                    ) : null}
-                  </View>
-                  <View style={styles.eventContent}>
-                    <Text style={[styles.eventDescription, event.IsCompleted && styles.eventDescriptionCompleted]}>
-                      {event.Description}
-                    </Text>
-                    {event.Date ? (
-                      <Text style={styles.eventMeta}>
-                        {formatDate(event.Date)}{event.Location ? `  ·  ${event.Location}` : ''}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })}
-          </Animated.View>
-        ) : null}
 
         {/* ── Delivery address ── */}
         {delivery ? (
-          <Animated.View style={[styles.section, deliveryAnim]}>
-            <Text style={styles.sectionEyebrow}>DELIVERY</Text>
+          <Animated.View style={[styles.section, addressAnim]}>
+            <Text style={styles.sectionEyebrow}>DELIVERING TO</Text>
             <View style={styles.addressCard}>
               <Text style={styles.addressName}>{delivery.CustomerName}</Text>
-              {[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode]
-                .filter(Boolean)
-                .join(', ')
-                .length > 0 ? (
+              {[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).length > 0 ? (
                 <Text style={styles.addressLine}>
-                  {[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode]
-                    .filter(Boolean)
-                    .join(', ')}
+                  {[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).join(', ')}
                 </Text>
               ) : null}
               {delivery.MobileNumber ? (
@@ -535,51 +581,36 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           </Animated.View>
         ) : null}
 
-        {/* ── Payment section ── */}
-        {order.PaymentInfo ? (
+        {/* ── Payment summary ── */}
+        {orderPayment ? (
           <Animated.View style={[styles.section, paymentAnim]}>
-            <Text style={styles.sectionEyebrow}>PAYMENT</Text>
-            <DetailRow label="AMOUNT PAID"  value={`Rs ${order.PaymentInfo.AmountPaid.toFixed(2)}`} />
-            {order.PaymentInfo.Discount > 0 ? (
-              <DetailRow label="DISCOUNT" value={`− Rs ${order.PaymentInfo.Discount.toFixed(2)}`} />
+            <Text style={styles.sectionEyebrow}>PAYMENT SUMMARY</Text>
+            <DetailRow label="SUBTOTAL" value={`Rs ${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+            {discount > 0 ? (
+              <DetailRow label="DISCOUNT" value={`− Rs ${discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
             ) : null}
-            {order.PaymentInfo.DeliveryCharges > 0 ? (
-              <DetailRow label="DELIVERY" value={`Rs ${order.PaymentInfo.DeliveryCharges.toFixed(2)}`} />
-            ) : null}
-            {order.PaymentInfo.isFreeShipping ? (
+            {orderPayment.DeliveryCharges > 0 ? (
+              <DetailRow label="DELIVERY" value={`Rs ${orderPayment.DeliveryCharges.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+            ) : orderPayment.isFreeShipping ? (
               <DetailRow label="DELIVERY" value="Free" />
             ) : null}
-            {order.PaymentInfo.CouponAvailed ? (
-              <DetailRow label="COUPON" value={order.PaymentInfo.CouponAvailed} />
+            {orderPayment.CouponAvailed ? (
+              <DetailRow label="COUPON" value={orderPayment.CouponAvailed} />
             ) : null}
-            <DetailRow
-              label="TOTAL"
-              value={`Rs ${order.PaymentInfo.TotalAmountAfterDiscount.toFixed(2)}`}
-              isLast
-            />
+            <DetailRow label="TOTAL PAID" value={`Rs ${orderPayment.AmountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} isLast />
           </Animated.View>
         ) : null}
       </ScrollView>
 
-      {/* ── Fixed bottom action bar ── */}
-      <OrderActionBar
-        isCancellable={isCancellable}
-        onCancel={openCancelSheet}
-        bottomInset={insets.bottom}
-      />
+      <OrderActionBar onHelp={() => console.warn('Help not yet wired')} bottomInset={insets.bottom} />
 
       {/* ── Cancel success modal ── */}
-      <Modal
-        visible={cancelSuccess}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-      >
+      <Modal visible={cancelSuccess} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Order Cancelled</Text>
             <Text style={styles.modalBody}>
-              Your order #{orderNumber} has been cancelled successfully.
+              Your item has been cancelled successfully.
             </Text>
             <TouchableOpacity
               style={styles.modalCta}
@@ -605,8 +636,10 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + Space[6] }]}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.sheetTitle}>Cancel Order</Text>
-          <Text style={styles.sheetSubtitle}>#{orderNumber}</Text>
+          <Text style={styles.sheetTitle}>Cancel Item</Text>
+          {cancelTarget ? (
+            <Text style={styles.sheetSubtitle}>{cancelTarget.Name}</Text>
+          ) : null}
 
           <Text style={styles.sheetSectionLabel}>REASON FOR CANCELLATION</Text>
           {(Object.values(CustomerCancellationReason).filter(v => typeof v === 'number') as CustomerCancellationReason[]).map(reason => (
@@ -638,9 +671,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             </TouchableOpacity>
           ))}
 
-          {cancelError ? (
-            <Text style={styles.sheetError}>{cancelError}</Text>
-          ) : null}
+          {cancelError ? <Text style={styles.sheetError}>{cancelError}</Text> : null}
 
           <PrimaryButton
             label="Confirm Cancellation"
@@ -654,109 +685,68 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   );
 };
 
-const copyStyles = StyleSheet.create({
-  icon: {
-    fontSize:  16,
-    color:     'rgba(255,255,255,0.55)',
-    lineHeight: 20,
-  },
-});
 
 const styles = StyleSheet.create({
   root: {
     flex:            1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceSoft,
   },
-
-  stateWrap: {
-    flex: 1,
-  },
-
+  stateWrap: { flex: 1 },
   scrollContent: {
-    paddingTop: 0,
+    paddingTop:    0,
+    paddingBottom: Space[8],
   },
 
-  // ── Product row ──────────────────────────────────────────────────────────────
-  productRow: {
-    flexDirection:     'row',
-    gap:               Space[4],
+  // ── Order meta strip ───────────────────────────────────────────────────────────
+  metaStrip: {
     paddingHorizontal: Space.screenH,
-    paddingVertical:   Space[5],
+    paddingVertical:   Space[3],
+    backgroundColor:   Colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.rule,
   },
-  imgWrap: {
-    width:           IMG_W,
-    height:          IMG_H,
-    borderRadius:    Radius.sm,
-    backgroundColor: Colors.surfaceDeep,
-    overflow:        'hidden',
-    flexShrink:      0,
-  },
-  img: {
-    width:  '100%',
-    height: '100%',
-  },
-  productMeta: {
-    flex:           1,
-    gap:            4,
-    justifyContent: 'flex-start',
-  },
-  brand: {
-    ...Type.label,
-    color: Colors.ink4,
-  },
-  productName: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      16,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.1,
-    lineHeight:    16 * 1.35,
-  },
-  variant: {
-    ...Type.caption,
-    color: Colors.ink4,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    alignItems:    'baseline',
-    gap:           Space[2],
-    marginTop:     2,
-  },
-  amount: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      18,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.3,
-  },
-  qty: {
+  metaText: {
     fontFamily:    FontFamily.mono,
-    fontSize:      11,
+    fontSize:      10,
     color:         Colors.ink4,
     letterSpacing: 0.3,
   },
 
-  // ── Section ──────────────────────────────────────────────────────────────────
+  // ── Section ────────────────────────────────────────────────────────────────────
   section: {
-    marginTop:         Space[6],
-    paddingHorizontal: Space.screenH,
+    marginTop:         Space[4],
+    marginHorizontal:  Space.screenH,
+    backgroundColor:   '#FFFFFF',
+    borderRadius:      16,
+    paddingHorizontal: Space[4],
+    paddingVertical:   Space[2],
+    ...Shadow.sm,
   },
   sectionEyebrow: {
     ...Type.label,
-    color:        Colors.ink4,
-    marginBottom: Space[2],
+    color:         Colors.ink4,
+    paddingTop:    Space[2],
+    paddingBottom: Space[1],
   },
 
-  // ── Delivery address card ─────────────────────────────────────────────────────
+  // ── Skeleton ───────────────────────────────────────────────────────────────────
+  skeletonItemRow: {
+    flexDirection:  'row',
+    gap:            Space[3],
+    paddingVertical: Space[4],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+
+  // ── Delivery address ───────────────────────────────────────────────────────────
   addressCard: {
-    gap: Space[1],
+    gap:           Space[1],
+    paddingTop:    Space[2],
+    paddingBottom: Space[4],
   },
   addressName: {
     fontFamily:    FontFamily.serif,
     fontSize:      15,
-    fontWeight:    '400',
     color:         Colors.ink1,
     letterSpacing: -0.1,
     lineHeight:    15 * 1.35,
@@ -775,63 +765,9 @@ const styles = StyleSheet.create({
     marginTop:     2,
   },
 
-  // ── Order timeline ────────────────────────────────────────────────────────────
-  eventRow: {
-    flexDirection: 'row',
-    gap:           Space[3],
-    paddingBottom: Space[4],
-  },
-  eventSpine: {
-    alignItems: 'center',
-    width:      16,
-    flexShrink: 0,
-    marginTop:  3,
-  },
-  eventDot: {
-    width:           10,
-    height:          10,
-    borderRadius:    5,
-    borderWidth:     1.5,
-    borderColor:     Colors.rule,
-    backgroundColor: Colors.surface,
-  },
-  eventDotCompleted: {
-    borderColor:     Colors.ink1,
-    backgroundColor: Colors.ink1,
-  },
-  eventLine: {
-    width:           1.5,
-    flex:            1,
-    marginTop:       3,
-    backgroundColor: Colors.rule,
-  },
-  eventLineCompleted: {
-    backgroundColor: Colors.ink1,
-  },
-  eventContent: {
-    flex:          1,
-    paddingBottom: Space[1],
-  },
-  eventDescription: {
-    ...Type.body,
-    color: Colors.ink4,
-  },
-  eventDescriptionCompleted: {
-    color: Colors.ink1,
-  },
-  eventMeta: {
-    ...Type.caption,
-    color:     Colors.ink4,
-    marginTop: Space[1],
-  },
-
-  // ── Cancel sheet ──────────────────────────────────────────────────────────────
-  sheetBg: {
-    backgroundColor: Colors.surface,
-  },
-  sheetHandle: {
-    backgroundColor: Colors.rule,
-  },
+  // ── Cancel sheet ───────────────────────────────────────────────────────────────
+  sheetBg:     { backgroundColor: Colors.surface },
+  sheetHandle: { backgroundColor: Colors.rule },
   sheetContent: {
     paddingHorizontal: Space.screenH,
     paddingTop:        Space[4],
@@ -843,8 +779,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   sheetSubtitle: {
-    ...Type.label,
-    color:        Colors.ink4,
+    ...Type.caption,
+    color:        Colors.ink3,
     marginTop:    Space[1],
     marginBottom: Space[5],
   },
@@ -879,20 +815,16 @@ const styles = StyleSheet.create({
     color: Colors.ink3,
     flex:  1,
   },
-  optionLabelSelected: {
-    color: Colors.ink1,
-  },
+  optionLabelSelected: { color: Colors.ink1 },
   sheetError: {
     ...Type.caption,
     color:     Colors.danger,
     marginTop: Space[4],
     textAlign: 'center',
   },
-  sheetCta: {
-    marginTop: Space[6],
-  },
+  sheetCta: { marginTop: Space[6] },
 
-  // ── Cancel success modal ──────────────────────────────────────────────────────
+  // ── Cancel success modal ────────────────────────────────────────────────────────
   modalOverlay: {
     flex:              1,
     backgroundColor:   'rgba(0,0,0,0.5)',
@@ -910,7 +842,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontFamily:    FontFamily.serif,
     fontSize:      22,
-    fontWeight:    '400',
     color:         Colors.ink1,
     letterSpacing: -0.3,
   },
@@ -929,28 +860,6 @@ const styles = StyleSheet.create({
   modalCtaText: {
     ...Type.bodyStrong,
     color: Colors.surface,
-  },
-
-  // ── Loading skeleton ──────────────────────────────────────────────────────────
-  skeletonHero: {
-    paddingHorizontal: Space.screenH,
-    paddingVertical:   Space[4],
-    backgroundColor:   Colors.accentTint,
-    gap:               Space[2],
-  },
-  skeletonProductRow: {
-    flexDirection:     'row',
-    gap:               Space[4],
-    paddingHorizontal: Space.screenH,
-    paddingVertical:   Space[5],
-  },
-  skeletonMeta: {
-    flex:       1,
-    paddingTop: Space[1],
-  },
-  skeletonSection: {
-    marginTop:         Space[6],
-    paddingHorizontal: Space.screenH,
   },
 });
 

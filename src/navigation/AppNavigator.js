@@ -47,9 +47,9 @@ const AppNavigator = () => {
         screenOptions={{
           headerShown: false,
           cardStyle: { backgroundColor: Colors.surface },
-          detachPreviousScreen: false,
+          detachPreviousScreen: true,
           cardOverlayEnabled: true,
-          freezeOnBlur: false,
+          freezeOnBlur: true,
         }}>
         <Stack.Screen
           name="Login"
@@ -61,9 +61,9 @@ const AppNavigator = () => {
         />
         <Stack.Screen name="Register" component={RegisterScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
         <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
-        <Stack.Screen name="Home" component={HomeScreen} options={{ detachPreviousScreen: false }} />
+        <Stack.Screen name="Home" component={HomeScreen} options={{ detachPreviousScreen: false, freezeOnBlur: false }} />
         <Stack.Screen name="Product" component={ProductScreen} />
-        <Stack.Screen name="Cart" component={CartScreen} />
+        <Stack.Screen name="Cart" component={CartScreen} options={{ cardStyle: { backgroundColor: '#FFFFFF' } }} />
         <Stack.Screen name="Result" component={ResultScreen} />
         <Stack.Screen name="Address" component={AddressScreen} />
         <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} />

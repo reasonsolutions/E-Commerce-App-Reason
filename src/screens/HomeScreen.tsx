@@ -11,6 +11,7 @@ import {
   BackHandler,
   Dimensions,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import styles from './HomeScreen.styles';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +22,7 @@ import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interf
 import { getProductsByCategory, getCategories, getBrands } from '../api/product';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
+import { homeCache } from '../utils/homeCache';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
@@ -34,14 +36,6 @@ import { ErrorState } from '../components/system';
 import { Colors, Space } from '../theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-
-// ── Discount helper — guard against inverted server DiscountPct ───────────────
-function calcDiscount(price: number, comparePrice: number): number {
-  if (comparePrice > price && price > 0) {
-    return Math.round(((comparePrice - price) / comparePrice) * 100);
-  }
-  return 0;
-}
 
 // ── Recently viewed snapshot — only the fields ProductCard actually reads ────
 interface RecentlyViewedItem {
@@ -263,10 +257,11 @@ function useCustomBackHandler(navigation: NavigationProp) {
 }
 
 
-// Module-level cache — survives remounts within an app session
+// Module-level product cache — survives remounts within an app session
+// categories + brands also written to homeCache so SearchScreen can read them
 let _cachedProducts:   ProductInterface[]   | null = null;
-let _cachedCategories: CategoryInterface[]  | null = null;
-let _cachedBrands:     GetBrandItem[]       | null = null;
+let _cachedCategories: CategoryInterface[]  | null = homeCache.categories;
+let _cachedBrands:     GetBrandItem[]       | null = homeCache.brands;
 
 type HomeScreenProps = { navigation: NavigationProp };
 
@@ -281,11 +276,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // ── Scroll to top ─────────────────────────────────────────────────────────────
   const scrollRef        = useRef<ScrollView>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const scrollTopOpacity = useRef(new Animated.Value(0)).current;
 
   const handleScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y;
-    const shouldShow = y > 300;
+    const shouldShow = y > 600;
     setShowScrollTop(prev => {
       if (prev !== shouldShow) {
         Animated.timing(scrollTopOpacity, {
@@ -346,6 +342,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         const res = await getCategories();
         const result: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result)) ? res.result : [];
         _cachedCategories = result;
+        homeCache.categories = result;
         return result;
       }, cancelled);
 
@@ -373,6 +370,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         const list: GetBrandItem[] = (Array.isArray(res?.result)) ? res.result : [];
         const result = list.slice(0, 8);
         _cachedBrands = result;
+        homeCache.brands = result;
         return result;
       }, cancelled);
 
@@ -385,12 +383,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     _cachedCategories = null;
     _cachedProducts   = null;
     _cachedBrands     = null;
+    homeCache.categories = null;
+    homeCache.brands     = null;
     fetchInitiated.current = false;
     const cancelled = { current: false };
     runCategories(async () => {
       const res = await getCategories();
       const result: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result)) ? res.result : [];
       _cachedCategories = result;
+      homeCache.categories = result;
       return result;
     }, cancelled);
     runProducts(async () => {
@@ -413,9 +414,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       const list: GetBrandItem[] = Array.isArray(res?.result) ? res.result : [];
       const result = list.slice(0, 8);
       _cachedBrands = result;
+      homeCache.brands = result;
       return result;
     }, cancelled);
   }, [runCategories, runProducts, runBrands]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.resolve(handleRetryFeed());
+    setRefreshing(false);
+  }, [handleRetryFeed]);
 
   // Feed is in error when all three fetches failed and there is no cached data at all
   // Any single fetch error is enough to show the error state when there's no cached data
@@ -454,61 +462,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     [deduped],
   );
 
+  // Hero banners are all category-focused — up to 2 categories with images
   const spotlights: Spotlight[] | null = useMemo(() => {
-    if (!deduped || !categories) return null;
-    const result: Spotlight[] = [];
-    const discounted = deduped.find(p => p.MaxComparePrice > p.MinPrice);
-    if (discounted) {
-      const pct = calcDiscount(discounted.MinPrice, discounted.MaxComparePrice);
-      result.push({
-        kind:     'product',
-        eyebrow:  pct > 0 ? `${pct}% off · ${discounted.BrandName}` : discounted.BrandName,
-        title:    discounted.Name,
-        sub:      `Rs ${discounted.MinPrice.toLocaleString('en-IN')}  ·  was Rs ${discounted.MaxComparePrice.toLocaleString('en-IN')}`,
-        cta:      'Shop now',
-        imageUri: resolveImageUrl(discounted.Images),
-        theme:    'photo',
-        itemId:   discounted.ItemID,
-      });
-    } else if (deduped.length > 0) {
-      const p = deduped[0];
-      result.push({
-        kind:     'product',
-        eyebrow:  p.BrandName,
-        title:    p.Name,
-        sub:      `Rs ${p.MinPrice.toLocaleString('en-IN')}`,
-        cta:      'Shop now',
-        imageUri: resolveImageUrl(p.Images),
-        theme:    'photo',
-        itemId:   p.ItemID,
-      });
-    }
-    const catWithImg = categories.find(c => c.CategoryImage);
-    if (catWithImg) {
-      result.push({
-        kind:       'category',
-        eyebrow:    'Shop the category',
-        title:      catWithImg.CategoryName,
-        sub:        `Browse all ${catWithImg.CategoryName}`,
-        cta:        `Explore ${catWithImg.CategoryName}`,
-        imageUri:   resolveImageUrl(catWithImg.CategoryImage),
-        theme:      'split',
-        categoryId: catWithImg.CategoryId,
-      });
-    }
-    return result;
-  }, [deduped, categories]);
+    if (!categories) return null;
+    return categories
+      .filter(c => c.CategoryImage)
+      .slice(0, 2)
+      .map(c => ({
+        kind:       'category' as const,
+        eyebrow:    'SHOP THE CATEGORY',
+        title:      c.CategoryName,
+        sub:        `Browse all ${c.CategoryName}`,
+        cta:        `Explore ${c.CategoryName}`,
+        imageUri:   resolveImageUrl(c.CategoryImage),
+        theme:      'split' as const,
+        categoryId: c.CategoryId,
+      }));
+  }, [categories]);
 
+  // CategorySpotlightCard uses a category *not already* in the hero banners
   const featureCategory = useMemo(() => {
     if (!categories) return null;
-    const spotlightCatId = spotlights?.find(s => s.kind === 'category')?.categoryId;
-    return categories.find(c => c.CategoryImage && c.CategoryId !== spotlightCatId) ?? categories[0];
+    const heroIds = new Set(spotlights?.map(s => s.categoryId) ?? []);
+    return categories.find(c => c.CategoryImage && !heroIds.has(c.CategoryId)) ?? categories[0];
   }, [categories, spotlights]);
 
   const handleBannerPress = useCallback((spot: Spotlight) => {
-    if (spot.kind === 'product' && spot.itemId) {
-      navigation.navigate('Product', { product: spot.itemId });
-    } else if (spot.kind === 'category' && spot.categoryId) {
+    if (spot.kind === 'category' && spot.categoryId) {
       navigation.navigate('Result', { categoryId: spot.categoryId, categoryName: spot.title });
     }
   }, [navigation]);
@@ -598,6 +578,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
         {/* Feed error — shown when all three fetches fail with no cached data */}
         {feedError ? (
@@ -640,6 +621,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     name={item.CategoryName}
                     imageUri={item.CategoryImage}
                     index={index}
+                    active={index === 0}
                     onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
                   />
                 )}
@@ -695,6 +677,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         )}
 
+        {/* Recently viewed — client-side, hidden when empty; surfaces before Brands */}
+        {recentlyViewed.length > 0 && (
+          <ProductRail
+            eyebrow="WHERE YOU LEFT OFF"
+            title="Recently viewed"
+            items={recentlyViewed as unknown as ProductInterface[]}
+            cardWidth={134}
+            actionLabel="View all"
+            onSeeAll={() => navigation.navigate('Result', { categoryName: 'Recently Viewed', itemIds: recentlyViewed.map(p => p.ItemID) })}
+            secondaryAction="Clear"
+            onSecondaryAction={clearRecentlyViewed}
+            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+          />
+        )}
+
         {/* Brands rail */}
         {!feedError && (
           <View style={{ marginTop: Space[8] }}>
@@ -725,9 +722,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             ) : !brandsError ? (
               <View style={styles.brandsRail}>
                 {[0, 1, 2, 3].map((i) => (
-                  <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 70 }}>
-                    <Skeleton width={70} height={70} radius={35} />
-                    <Skeleton width={48} height={9} />
+                  <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 110 }}>
+                    <Skeleton width={110} height={110} radius={16} />
+                    <Skeleton width={64} height={9} />
                   </View>
                 ))}
               </View>
@@ -751,19 +748,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               />
             ) : null}
           </View>
-        )}
-
-        {/* Recently viewed — client-side, hidden when empty */}
-        {recentlyViewed.length > 0 && (
-          <ProductRail
-            eyebrow="WHERE YOU LEFT OFF"
-            title="Recently viewed"
-            items={recentlyViewed as unknown as ProductInterface[]}
-            cardWidth={134}
-            actionLabel="Clear"
-            onSeeAll={clearRecentlyViewed}
-            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-          />
         )}
 
         {/* Smart buys — products with a genuine discount */}

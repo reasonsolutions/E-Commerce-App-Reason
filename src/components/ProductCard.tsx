@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -22,11 +22,6 @@ interface ProductCardProps {
   showHeart?: boolean;
 }
 
-const TONE_GRADS: [string, string][] = [
-  ['#E9E1D3', '#D9CBB7'], ['#DEE2DC', '#C8CEC5'], ['#EADBCF', '#D7C0AF'],
-  ['#DEDFDA', '#C7C9C2'], ['#ECE5D7', '#DBD0BB'], ['#DCD7CF', '#C4BCAE'],
-  ['#E9DCD5', '#D4C0B5'], ['#D9D8C6', '#C2C0A6'], ['#D6DADD', '#BFC5C9'],
-];
 
 const ProductCard: React.FC<ProductCardProps> = ({
   product,
@@ -36,10 +31,10 @@ const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const imgUri = resolveImageUrl(product.Images);
-  const toneIdx = product.ItemID % TONE_GRADS.length;
-  const [t0] = TONE_GRADS[toneIdx];
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   const onLoad = useCallback(() => {
+    setImgLoaded(true);
     Animated.timing(imgOpacity, {
       toValue: 1, duration: 300, useNativeDriver: true,
     }).start();
@@ -51,7 +46,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
     ? Math.round(((product.MaxComparePrice - product.MinPrice) / product.MaxComparePrice) * 100)
     : 0;
 
-  const imgH = Math.round(cardWidth * 1.25);
+  const isNew = (() => {
+    if (!product.CreatedDate) return false;
+    const created = new Date(product.CreatedDate);
+    const ageDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+    return ageDays <= 30;
+  })();
+  const imgH = Math.round(cardWidth * 1.0);
 
   return (
     <TouchableOpacity
@@ -59,19 +60,25 @@ const ProductCard: React.FC<ProductCardProps> = ({
       onPress={onPress}
       activeOpacity={0.86}
     >
-      <View style={[styles.imgWrap, { height: imgH, backgroundColor: t0 }]}>
+      <View style={[styles.imgWrap, { height: imgH, backgroundColor: Colors.surfaceSoft }]}>
         {imgUri ? (
           <>
-            <Skeleton height={imgH} radius={Radius.md} style={StyleSheet.absoluteFillObject} />
+            {!imgLoaded && <Skeleton height={imgH} radius={Radius.md} style={StyleSheet.absoluteFillObject} />}
             <Animated.Image
               source={{ uri: imgUri }}
               style={[styles.img, { opacity: imgOpacity }]}
-              resizeMode="cover"
+              resizeMode="contain"
               onLoad={onLoad}
             />
           </>
         ) : (
           <Text style={styles.initial}>{(product.Name || '?').charAt(0)}</Text>
+        )}
+
+        {isNew && (
+          <View style={styles.conditionBadge}>
+            <Text style={styles.conditionBadgeText}>NEW</Text>
+          </View>
         )}
 
         {hasDiscount && (
@@ -91,8 +98,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
         ) : null}
         <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
         <View style={styles.priceRow}>
-          <Text style={styles.price}>Rs {product.MinPrice.toLocaleString('en-IN')}</Text>
-          {hasDiscount && (
+          {product.MinPrice > 0 ? (
+            <Text style={styles.price}>Rs {product.MinPrice.toLocaleString('en-IN')}</Text>
+          ) : (
+            <Text style={styles.priceUnavailable}>Price unavailable</Text>
+          )}
+          {hasDiscount && product.MinPrice > 0 && (
             <Text style={styles.was}>Rs {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
           )}
         </View>
@@ -121,6 +132,22 @@ const styles = StyleSheet.create({
     fontSize:   52,
     color:      'rgba(40,32,24,0.18)',
     lineHeight: 56,
+  },
+  conditionBadge: {
+    position:          'absolute',
+    top:               8,
+    left:              8,
+    paddingVertical:   3,
+    paddingHorizontal: 7,
+    borderRadius:      6,
+    backgroundColor:   Colors.ink1,
+  },
+  conditionBadgeText: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      9,
+    fontWeight:    '700',
+    color:         '#FFFFFF',
+    letterSpacing: 1.2,
   },
   // Discount badge — bottom-left, frosted white per design
   badge: {
@@ -155,6 +182,7 @@ const styles = StyleSheet.create({
     fontWeight:    '600',
     color:         Colors.ink1,
     lineHeight:    18,
+    minHeight:     36,
     letterSpacing: -0.1,
   },
   priceRow: {
@@ -168,6 +196,13 @@ const styles = StyleSheet.create({
     fontWeight:    '700',
     color:         Colors.ink1,
     letterSpacing: -0.1,
+  },
+  priceUnavailable: {
+    fontFamily:  FontFamily.sans,
+    fontSize:    12,
+    fontWeight:  '400',
+    color:       Colors.ink4,
+    fontStyle:   'italic',
   },
   was: {
     ...Type.caption,

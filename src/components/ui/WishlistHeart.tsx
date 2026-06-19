@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors } from '../../theme';
-import { isLoggedIn } from '../../utils/auth';
+import { Motion } from '../../theme/motion';
 import { useAuthGuard } from '../../hooks/useAuthGuard';
-import { addToWishlist, removeFromWishlist } from '../../api/wishlist';
+import { addToWishlist } from '../../api/wishlist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../../config/storageKeys';
 import { LoginPromptSheet } from './LoginPromptSheet';
@@ -17,22 +17,30 @@ interface WishlistHeartProps {
 export const WishlistHeart: React.FC<WishlistHeartProps> = ({ inventoryId, initialSaved = false }) => {
   const [saved, setSaved] = useState(initialSaved);
   const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
+  const scale = useRef(new Animated.Value(1)).current;
 
-  const toggle = () => {
+  const bounce = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.4, duration: Motion.duration.tap,    useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1.0, duration: Motion.duration.tap,    useNativeDriver: true }),
+    ]).start();
+  }, [scale]);
+
+  const toggle = useCallback(() => {
     guard(async () => {
+      bounce();
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
       const profileCode = raw ? JSON.parse(raw).CustomerProfileCode : null;
       if (!profileCode) return;
       if (saved) {
         setSaved(false);
-        // WishlistCode not available here — fire-and-forget with inventoryId only
-        // removeFromWishlist requires WishlistCode; skip server call, optimistic only
+        // removeFromWishlist requires WishlistCode — optimistic only
       } else {
         setSaved(true);
         addToWishlist(profileCode, inventoryId).catch(() => setSaved(false));
       }
     });
-  };
+  }, [guard, bounce, saved, inventoryId]);
 
   return (
     <>
@@ -42,11 +50,13 @@ export const WishlistHeart: React.FC<WishlistHeartProps> = ({ inventoryId, initi
         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         activeOpacity={0.8}
       >
-        <Icon
-          name={saved ? 'heart' : 'heart-outline'}
-          size={16}
-          color={saved ? Colors.accent : Colors.ink1}
-        />
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <Icon
+            name={saved ? 'heart' : 'heart-outline'}
+            size={16}
+            color={saved ? Colors.accent : Colors.ink1}
+          />
+        </Animated.View>
       </TouchableOpacity>
       {showLoginPrompt && (
         <LoginPromptSheet
@@ -71,7 +81,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.82)',
     alignItems:      'center',
     justifyContent:  'center',
-    // blur equivalent via elevation
     shadowColor:     '#000',
     shadowOffset:    { width: 0, height: 2 },
     shadowOpacity:   0.10,

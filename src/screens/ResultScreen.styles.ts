@@ -178,7 +178,7 @@ export const styles = StyleSheet.create({
     height:          GRID_IMG_H,
     borderRadius:    16,
     overflow:        'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surfaceSoft,
     padding:         Space[2],
   },
   gridImg: {
@@ -218,14 +218,14 @@ export const styles = StyleSheet.create({
   spanCard: {
     width:           SPAN_W,
     overflow:        'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surfaceSoft,
     borderRadius:    16,
     marginBottom:    Space[6],
   },
   spanImgWrap: {
     width:           '100%',
     height:          SPAN_W * 0.65,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surfaceSoft,
     overflow:        'hidden',
     borderRadius:    16,
   },
@@ -363,7 +363,7 @@ export const styles = StyleSheet.create({
     height:          FEAT_IMG_H,
     borderRadius:    16,
     overflow:        'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surfaceSoft,
     padding:         Space[3],
   },
   featuredInfo: {

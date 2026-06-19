@@ -15,18 +15,19 @@ interface CategoryTileProps {
   name: string;
   imageUri: string | null | undefined;
   index: number;
+  active?: boolean;
   onPress: () => void;
 }
 
-export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, index, onPress }) => {
+export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, index, active = false, onPress }) => {
   const [imgFailed, setImgFailed] = useState(false);
   const [t0] = TONE_GRADS[index % TONE_GRADS.length];
   const resolved = imageUri ? resolveImageUrl(imageUri) : '';
   const showImage = !!resolved && !imgFailed;
 
   return (
-    <TouchableOpacity style={styles.wrap} onPress={onPress} activeOpacity={0.75}>
-      <View style={[styles.tile, { backgroundColor: t0 }]}>
+    <TouchableOpacity style={[styles.wrap, active && styles.wrapActive]} onPress={onPress} activeOpacity={0.75}>
+      <View style={[styles.tile, active && styles.tileActive, { backgroundColor: t0 }]}>
         {showImage ? (
           <Image
             source={{ uri: resolved }}
@@ -38,7 +39,7 @@ export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, inde
           <Text style={styles.initial}>{name.charAt(0)}</Text>
         )}
       </View>
-      <Text style={styles.label} numberOfLines={2}>{name}</Text>
+      <Text style={[styles.label, active && styles.labelActive]} numberOfLines={2}>{name}</Text>
     </TouchableOpacity>
   );
 };
@@ -50,6 +51,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap:        Space[2],
   },
+  wrapActive: {
+    width: 86,
+  },
   tile: {
     width:        76,
     height:       76,
@@ -59,6 +63,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth:  StyleSheet.hairlineWidth,
     borderColor:  'rgba(0,0,0,0.04)',
+  },
+  tileActive: {
+    width:       86,
+    height:      86,
+    borderWidth: 2,
+    borderColor: Colors.ink1,
   },
   img: {
     width:  '100%',
@@ -76,5 +86,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textAlign:  'center',
     lineHeight: 15,
+  },
+  labelActive: {
+    color:      Colors.ink1,
+    fontWeight: '700',
   },
 });

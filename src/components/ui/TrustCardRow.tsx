@@ -13,6 +13,14 @@ interface TrustCardRowProps {
 export const TrustCardRow: React.FC<TrustCardRowProps> = ({ policy, shipping }) => {
   const cards: { icon: string; label: string }[] = [];
 
+  if (shipping.FreeShipping) {
+    cards.push({ icon: 'bicycle-outline', label: 'Free Delivery' });
+  }
+
+  if (shipping.EstimatedDeliveryDays) {
+    cards.push({ icon: 'time-outline', label: `Delivers in ${shipping.EstimatedDeliveryDays} days` });
+  }
+
   if (policy.IsReturnable) {
     cards.push({
       icon:  'refresh-outline',
@@ -20,8 +28,11 @@ export const TrustCardRow: React.FC<TrustCardRowProps> = ({ policy, shipping }) 
     });
   }
 
-  if (shipping.FreeShipping) {
-    cards.push({ icon: 'bicycle-outline', label: 'Free Delivery' });
+  if (policy.HasWarranty) {
+    const warrantyLabel = policy.WarrantyPeriod
+      ? `${policy.WarrantyPeriod}${policy.WarrantyType ? ' ' + policy.WarrantyType : ''} Warranty`
+      : 'Warranty Included';
+    cards.push({ icon: 'shield-checkmark-outline', label: warrantyLabel });
   }
 
   if (!cards.length) return null;

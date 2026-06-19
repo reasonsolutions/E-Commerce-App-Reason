@@ -19,9 +19,9 @@ export async function postCnfOrderDetail(
   customerProfileCode: number,
 ): Promise<OrderDetailResponseInterface> {
   const rawRes = await real.postCnfOrderDetail(orderNumber, customerProfileCode);
-  const result = rawRes.result ?? { OrderDetails: [], DeliveryDetail: [], Events: [] };
+  const result = rawRes.result ?? { OrderDetails: [], DeliveryDetail: [] };
   result.OrderDetails = (result.OrderDetails ?? []).map((item: OrderDetailItemExtendedInterface) => {
-    const raw = item as OrderDetailItemExtendedInterface & { InventoryID?: number; ItemID?: number; BrandName?: string; BrandID?: number; SubOrder?: { Code: number; Number: string }; PaymentInfo?: any };
+    const raw = item as OrderDetailItemExtendedInterface & { InventoryID?: number; ItemID?: number; BrandName?: string; BrandID?: number; SubOrder?: { Code: number; Number: string }; PaymentInfo?: any; Events?: any[] };
     return {
       ...item,
       Inventory_Id: item.Inventory_Id ?? raw.InventoryID ?? 0,
@@ -30,8 +30,8 @@ export async function postCnfOrderDetail(
       Brand_Name:   item.Brand_Name   ?? raw.BrandName   ?? '',
       Brand_Id:     item.Brand_Id     ?? raw.BrandID     ?? 0,
       PaymentInfo:  raw.PaymentInfo   ?? undefined,
+      Events:       raw.Events        ?? [],
     };
   });
-  result.Events = result.Events ?? [];
   return result;
 }

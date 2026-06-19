@@ -720,6 +720,7 @@ export interface OrderHistoryItemInterface {
 
 export interface OrderDetailItemExtendedInterface extends OrderHistoryItemInterface {
     CreatedDate: string;
+    Events:      OrderEventInterface[];
 }
 
 export interface SubOrderDetail {
@@ -748,5 +749,5 @@ export interface OrderEventInterface {
 export interface OrderDetailResponseInterface {
     OrderDetails:   OrderDetailItemExtendedInterface[];
     DeliveryDetail: DeliveryAddressInterface[];
-    Events:         OrderEventInterface[];
+    Events?:        OrderEventInterface[];
 }

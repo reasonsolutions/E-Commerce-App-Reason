@@ -60,7 +60,7 @@ export const FadeImage: React.FC<FadeImageProps> = ({
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: Colors.surfaceSoft,
     overflow:        'hidden',
     flexShrink:      0,
   },

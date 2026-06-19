@@ -23,6 +23,8 @@ interface ProductSpecsProps {
   weight?: number | null;
   weightUnit?: string | null;
   description?: string | null;
+  season?: string | null;
+  demographic?: string | null;
 }
 
 const AccordionRow: React.FC<{ title: string; children: React.ReactNode }> = ({
@@ -54,11 +56,15 @@ export const ProductSpecs: React.FC<ProductSpecsProps> = ({
   weight,
   weightUnit,
   description,
+  season,
+  demographic,
 }) => {
   const specRows: [string, string][] = [];
-  if (color)    specRows.push(['Colour',   color]);
-  if (material) specRows.push(['Material', material]);
-  if (care)     specRows.push(['Care',     care]);
+  if (color)       specRows.push(['Colour',      color]);
+  if (material)    specRows.push(['Material',    material]);
+  if (care)        specRows.push(['Care',        care]);
+  if (demographic) specRows.push(['For',         demographic]);
+  if (season)      specRows.push(['Season',      season]);
   if (weight != null) {
     const unit = weightUnit ?? '';
     specRows.push(['Weight', unit ? `${weight} ${unit}` : String(weight)]);

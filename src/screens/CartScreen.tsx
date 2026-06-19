@@ -8,6 +8,8 @@ import {
   StatusBar,
   ScrollView,
   Animated,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -20,6 +22,7 @@ import { Motion } from '../theme/motion';
 import { getSavedCartItems, postDeleteCartItem, updateCartItemQuantity, getGuestCart, updateGuestCartItem, removeFromGuestCart, clearGuestCart } from '../api/cart';
 import type { GuestCartItem } from '../api/cart';
 import { isLoggedIn } from '../utils/auth';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -88,60 +91,48 @@ const CartRow = React.memo<{
 
   return (
     <Animated.View style={[styles.cartRow, anim]}>
-      {/* 4:5 product image — surfaceDeep bg so transparent images don't dissolve */}
       <View style={styles.cartImgWrap}>
         <Animated.Image
-          source={{ uri: item.Images?.split(';')[0] || '' }}
+          source={{ uri: resolveImageUrl(item.Images) }}
           style={[styles.cartImg, { opacity: imgOpacity }]}
           resizeMode="cover"
           onLoad={onLoad}
         />
       </View>
 
-      {/* Content column */}
       <View style={styles.cartContent}>
-        {/* Top: meta + dismiss */}
-        <View style={styles.cartTop}>
-          <View style={styles.cartMeta}>
-            {item.BrandName ? (
-              <Text style={styles.cartBrand}>{item.BrandName}</Text>
-            ) : null}
-            <Text style={styles.cartName} numberOfLines={2}>{item.Name}</Text>
-            {item.Variant ? (
-              <Text style={styles.cartVariant}>{item.Variant}</Text>
-            ) : null}
-          </View>
-          {/* Quiet dismiss — no circle background, just a glyph */}
-          <TouchableOpacity
-            onPress={handleRemove}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Remove item"
-            accessibilityRole="button"
-          >
-            <Text style={styles.removeGlyph}>×</Text>
-          </TouchableOpacity>
+        {item.BrandName ? (
+          <Text style={styles.cartBrand}>{item.BrandName.toUpperCase()}</Text>
+        ) : null}
+        <Text style={styles.cartName} numberOfLines={2}>{item.Name}</Text>
+        {item.Variant ? (
+          <Text style={styles.cartVariant}>{item.Variant}</Text>
+        ) : null}
+
+        <View style={styles.cartPriceRow}>
+          <Text style={styles.cartLineTotal}>Rs {lineTotal.toLocaleString('en-IN')}</Text>
+          {hasDiscount && (
+            <Text style={styles.cartUnitWas}>Rs {comparePrice.toLocaleString('en-IN')}</Text>
+          )}
         </View>
 
-        {/* Bottom: inline stepper + line price */}
         <View style={styles.cartBottom}>
-          {/* Minimal inline qty control — no pill border, just −  N  + */}
-          <View style={styles.qtyControl}>
+          <View style={styles.qtyPill}>
             <TouchableOpacity
               onPress={handleDecrement}
               disabled={item.Quantity <= 1}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={[styles.qtyPillBtn, item.Quantity <= 1 && styles.qtyPillBtnDisabled]}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               accessibilityLabel="Decrease quantity"
               accessibilityRole="button"
             >
-              <Text style={[
-                styles.qtyBtn,
-                item.Quantity <= 1 && styles.qtyBtnDisabled,
-              ]}>−</Text>
+              <Text style={[styles.qtyBtn, item.Quantity <= 1 && styles.qtyBtnDisabled]}>−</Text>
             </TouchableOpacity>
             <Text style={styles.qtyValue}>{item.Quantity}</Text>
             <TouchableOpacity
               onPress={handleIncrement}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.qtyPillBtn}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               accessibilityLabel="Increase quantity"
               accessibilityRole="button"
             >
@@ -149,15 +140,16 @@ const CartRow = React.memo<{
             </TouchableOpacity>
           </View>
 
-          {/* Price block — line total primary, unit "was" subordinate */}
-          <View style={styles.cartPriceBlock}>
-            <Text style={styles.cartLineTotal}>Rs {lineTotal.toFixed(0)}</Text>
-            {hasDiscount && (
-              <Text style={styles.cartUnitWas}>
-                Rs {comparePrice.toFixed(0)}
-              </Text>
-            )}
-          </View>
+          <TouchableOpacity
+            onPress={handleRemove}
+            style={styles.removeBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Remove item"
+            accessibilityRole="button"
+          >
+            <Icon name="trash-outline" size={13} color={Colors.ink4} />
+            <Text style={styles.removeLink}>Remove</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Animated.View>
@@ -199,30 +191,40 @@ const GuestCartRow = React.memo<{
         />
       </View>
       <View style={styles.cartContent}>
-        <View style={styles.cartTop}>
-          <View style={styles.cartMeta}>
-            {item.brandName ? <Text style={styles.cartBrand}>{item.brandName}</Text> : null}
-            <Text style={styles.cartName} numberOfLines={2}>{item.name}</Text>
-            {item.variant ? <Text style={styles.cartVariant}>{item.variant}</Text> : null}
-          </View>
-          <TouchableOpacity onPress={() => { haptic.light(); onRemove(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={styles.removeGlyph}>×</Text>
-          </TouchableOpacity>
+        {item.brandName ? <Text style={styles.cartBrand}>{item.brandName.toUpperCase()}</Text> : null}
+        <Text style={styles.cartName} numberOfLines={2}>{item.name}</Text>
+        {item.variant ? <Text style={styles.cartVariant}>{item.variant}</Text> : null}
+        <View style={styles.cartPriceRow}>
+          <Text style={styles.cartLineTotal}>Rs {(item.price * item.quantity).toLocaleString('en-IN')}</Text>
+          {hasDiscount && <Text style={styles.cartUnitWas}>Rs {item.comparePrice.toLocaleString('en-IN')}</Text>}
         </View>
         <View style={styles.cartBottom}>
-          <View style={styles.qtyControl}>
-            <TouchableOpacity onPress={() => { haptic.light(); if (item.quantity > 1) onUpdateQuantity(item.quantity - 1); }} disabled={item.quantity <= 1} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <View style={styles.qtyPill}>
+            <TouchableOpacity
+              onPress={() => { haptic.light(); if (item.quantity > 1) onUpdateQuantity(item.quantity - 1); }}
+              disabled={item.quantity <= 1}
+              style={[styles.qtyPillBtn, item.quantity <= 1 && styles.qtyPillBtnDisabled]}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
               <Text style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnDisabled]}>−</Text>
             </TouchableOpacity>
             <Text style={styles.qtyValue}>{item.quantity}</Text>
-            <TouchableOpacity onPress={() => { haptic.light(); onUpdateQuantity(item.quantity + 1); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => { haptic.light(); onUpdateQuantity(item.quantity + 1); }}
+              style={styles.qtyPillBtn}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
               <Text style={styles.qtyBtn}>+</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.cartPriceBlock}>
-            <Text style={styles.cartLineTotal}>Rs {(item.price * item.quantity).toFixed(0)}</Text>
-            {hasDiscount && <Text style={styles.cartUnitWas}>Rs {item.comparePrice.toFixed(0)}</Text>}
-          </View>
+          <TouchableOpacity
+            onPress={() => { haptic.light(); onRemove(); }}
+            style={styles.removeBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Icon name="trash-outline" size={13} color={Colors.ink4} />
+            <Text style={styles.removeLink}>Remove</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Animated.View>
@@ -268,6 +270,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const [clearing, setClearing] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const cartItems = optimistic ?? fetched ?? [];
 
@@ -304,6 +307,12 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     }
   }, [fetched, setCartCount, isGuest]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchCart();
+    setRefreshing(false);
+  }, [fetchCart]);
+
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
@@ -314,16 +323,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     }, [fetchCart]),
   );
 
-  const headerOpacity    = useRef(new Animated.Value(0)).current;
-  const headerTranslateY = useRef(new Animated.Value(12)).current;
   const summaryOpacity    = useRef(new Animated.Value(0)).current;
   const summaryTranslateY = useRef(new Animated.Value(10)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(headerOpacity,    { toValue: 1, duration: Motion.duration.settle, delay: 20, useNativeDriver: true }),
-      Animated.timing(headerTranslateY, { toValue: 0, duration: Motion.duration.settle, delay: 20, useNativeDriver: true }),
-    ]).start();
-  }, [headerOpacity, headerTranslateY]);
   useEffect(() => {
     if (!hasFetched) return;
     Animated.parallel([
@@ -331,7 +332,6 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       Animated.timing(summaryTranslateY, { toValue: 0, duration: Motion.duration.settle, delay: 40, useNativeDriver: true }),
     ]).start();
   }, [hasFetched, summaryOpacity, summaryTranslateY]);
-  const headerAnim  = { opacity: headerOpacity,  transform: [{ translateY: headerTranslateY }] };
   const summaryAnim = { opacity: summaryOpacity, transform: [{ translateY: summaryTranslateY }] };
 
   const subtotal = isGuest
@@ -419,18 +419,24 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const renderBody = () => {
     if (!hasFetched && !isError) {
       return (
-        <View style={[styles.fillWrap, { paddingHorizontal: Space.screenH, paddingTop: Space[4] }]}>
-          {[0, 1, 2].map(i => (
-            <View key={i} style={styles.skeletonRow}>
-              <View style={styles.skeletonImg} />
-              <View style={styles.skeletonContent}>
-                <View style={[styles.skeletonLine, { width: '40%' }]} />
-                <View style={[styles.skeletonLine, { width: '70%', marginTop: Space[2] }]} />
-                <View style={[styles.skeletonLine, { width: '55%', marginTop: Space[1] }]} />
-                <View style={[styles.skeletonLine, { width: '30%', marginTop: Space[4] }]} />
-              </View>
-            </View>
-          ))}
+        <View style={styles.fillWrap}>
+          <View style={styles.itemsSection}>
+            {[0, 1, 2].map(i => (
+              <React.Fragment key={i}>
+                {i > 0 && <View style={styles.itemDivider} />}
+                <View style={styles.skeletonRow}>
+                  <View style={styles.skeletonImg} />
+                  <View style={styles.skeletonContent}>
+                    <View style={[styles.skeletonLine, { width: '35%' }]} />
+                    <View style={[styles.skeletonLine, { width: '72%' }]} />
+                    <View style={[styles.skeletonLine, { width: '50%' }]} />
+                    <View style={[styles.skeletonLine, { width: '28%', marginTop: Space[2] }]} />
+                    <View style={[styles.skeletonLine, { width: '55%', marginTop: Space[3] }]} />
+                  </View>
+                </View>
+              </React.Fragment>
+            ))}
+          </View>
         </View>
       );
     }
@@ -491,7 +497,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           style={styles.scroll}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         >
+          {/* ── Bag items ──────────────────────────────────────────────── */}
           <View style={styles.itemsSection}>
             {isGuest
               ? guestItems.map((item, index) => (
@@ -518,36 +526,64 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
                 ))
             }
           </View>
-        </ScrollView>
 
-        {/* ── Summary panel — flush, same surface ──────────────────────── */}
-        <Animated.View style={[styles.summaryPanel, summaryAnim, { paddingBottom: insets.bottom + Space[4] }]}>
-          <View style={styles.summaryTopRule} />
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>Rs {subtotal.toFixed(0)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery</Text>
-            <Text style={styles.summaryFree}>Free</Text>
-          </View>
-
+          {/* ── Savings banner — only when savings are real ────────────── */}
           {totalSavings > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.savingsLabel}>You save</Text>
-              <Text style={styles.savingsValue}>− Rs {totalSavings.toFixed(0)}</Text>
+            <View style={styles.savingsBanner}>
+              <Icon name="gift-outline" size={16} color="#226B3C" />
+              <Text style={styles.savingsBannerText}>
+                You're saving Rs {totalSavings.toFixed(0)} on this order
+              </Text>
             </View>
           )}
 
-          <View style={styles.summaryTotalRule} />
+          {/* ── Order summary card ─────────────────────────────────────── */}
+          <Animated.View style={[styles.summaryCard, summaryAnim]}>
+            <Text style={styles.summaryCardLabel}>ORDER SUMMARY</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryValue}>Rs {subtotal.toFixed(0)}</Text>
+            </View>
+            {totalSavings > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.savingsLabel}>Savings</Text>
+                <Text style={styles.savingsValue}>− Rs {totalSavings.toFixed(0)}</Text>
+              </View>
+            )}
+            <View style={styles.summaryRule} />
+            <View style={styles.summaryPayableBlock}>
+              <Text style={styles.summaryPayableLabel}>PAYABLE NOW</Text>
+              <Text style={styles.summaryPayableAmount}>Rs {subtotal.toLocaleString('en-IN')}</Text>
+            </View>
+          </Animated.View>
 
-          <View style={styles.summaryTotalRow}>
-            <Text style={styles.summaryTotalLabel}>Total</Text>
-            <Text style={styles.summaryTotalValue}>Rs {subtotal.toFixed(0)}</Text>
+          {/* ── Trust strip ────────────────────────────────────────────── */}
+          <View style={styles.trustRow}>
+            {[
+              'Secure Checkout',
+              'Easy Returns',
+              'Safe Payments',
+            ].map(label => (
+              <View key={label} style={styles.trustItem}>
+                <Icon name="checkmark-circle-outline" size={15} color={Colors.ink3} />
+                <Text style={styles.trustText}>{label}</Text>
+              </View>
+            ))}
           </View>
 
+          {/* ── Continue shopping ──────────────────────────────────────── */}
+          <TouchableOpacity
+            style={[styles.continueShoppingBtn, { marginHorizontal: Space.screenH, marginTop: Space[3] }]}
+            onPress={() => navigation.navigate('Home')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <Text style={styles.continueShoppingText}>← Continue Shopping</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* ── Sticky checkout footer ─────────────────────────────────── */}
+        <View style={[styles.summaryPanel, { paddingBottom: insets.bottom + Space[4] }]}>
           <Animated.View style={checkoutTactile.animatedStyle}>
             <TouchableOpacity
               style={styles.checkoutBtn}
@@ -557,10 +593,11 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
               accessibilityRole="button"
               accessibilityLabel="Proceed to checkout"
             >
-              <Text style={styles.checkoutBtnText}>Checkout</Text>
+              <Icon name="lock-closed-outline" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.checkoutBtnText}>Secure Checkout</Text>
             </TouchableOpacity>
           </Animated.View>
-        </Animated.View>
+        </View>
       </View>
     );
   };
@@ -570,8 +607,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
       {/* ── Light inline header ───────────────────────────────────────── */}
-      <Animated.View
-        style={[styles.header, { paddingTop: insets.top + Space[3] }, headerAnim]}
+      <View
+        style={[styles.header, { paddingTop: insets.top + Space[3] }]}
       >
         <View style={styles.headerRow}>
           <TouchableOpacity
@@ -582,15 +619,23 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>My Bag</Text>
-            {hasFetched && itemCount > 0 ? (
-              <Text style={styles.headerCount}>{itemCount} {itemCount === 1 ? 'item' : 'items'}</Text>
-            ) : null}
+            <Text style={styles.headerTitle}>
+              My Bag{hasFetched && itemCount > 0 ? ` (${itemCount})` : ''}
+            </Text>
           </View>
 
           {(isGuest ? guestItems.length : cartItems.length) > 0 ? (
             <TouchableOpacity
-              onPress={clearCart}
+              onPress={() => {
+                Alert.alert(
+                  'Clear bag',
+                  'Remove all items from your bag?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Clear', style: 'destructive', onPress: clearCart },
+                  ],
+                );
+              }}
               disabled={clearing}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
@@ -600,7 +645,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             <View style={styles.headerSpacer} />
           )}
         </View>
-      </Animated.View>
+      </View>
       <View style={styles.headerDivider} />
 
       {renderBody()}
@@ -616,15 +661,17 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   );
 };
 
+const WHITE = '#FFFFFF';
+
 const styles = StyleSheet.create({
   root: {
     flex:            1,
-    backgroundColor: Colors.surface,
+    backgroundColor: WHITE,
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
   header: {
-    backgroundColor:   Colors.surface,
+    backgroundColor:   WHITE,
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[4],
   },
@@ -635,14 +682,13 @@ const styles = StyleSheet.create({
   headerCenter: {
     flex:              1,
     paddingHorizontal: Space[3],
-    gap:               2,
   },
   headerTitle: {
-    fontFamily:  FontFamily.sans,
-    fontSize:    18,
-    fontWeight:  '600',
-    color:       Colors.ink1,
-    letterSpacing: -0.1,
+    fontFamily:    FontFamily.serif,
+    fontSize:      22,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -0.2,
   },
   headerCount: {
     ...Type.label,
@@ -657,30 +703,29 @@ const styles = StyleSheet.create({
   },
   clearBtn: {
     ...Type.caption,
-    color: Colors.ink3,
+    color: Colors.ink4,
   },
 
-  // ── Fill wrappers (error / empty / skeleton) ──────────────────────────────
+  // ── Fill wrappers ─────────────────────────────────────────────────────────
   fillWrap: {
     flex:            1,
-    backgroundColor: Colors.surface,
+    backgroundColor: WHITE,
   },
   skeletonRow: {
-    flexDirection:   'row',
-    gap:             Space[3],
-    paddingVertical: Space[4],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.rule,
+    flexDirection:  'row',
+    gap:            Space[4],
+    paddingVertical: Space[5],
   },
   skeletonImg: {
     width:           80,
     height:          100,
-    borderRadius:    Radius.md,
+    borderRadius:    Radius.sm,
     backgroundColor: Colors.surfaceDeep,
+    flexShrink:      0,
   },
   skeletonContent: {
     flex: 1,
-    paddingTop: Space[1],
+    gap:  Space[2],
   },
   skeletonLine: {
     height:          10,
@@ -697,7 +742,7 @@ const styles = StyleSheet.create({
     gap:               Space[4],
   },
   emptyText: {
-    gap:      Space[2],
+    gap:        Space[2],
     alignItems: 'center',
   },
   emptyTitle: {
@@ -726,7 +771,7 @@ const styles = StyleSheet.create({
   },
   emptyCTAText: {
     ...Type.bodyStrong,
-    color:         '#FFFFFF',
+    color:         WHITE,
     letterSpacing: 0.3,
   },
   emptySecondary: {
@@ -738,20 +783,19 @@ const styles = StyleSheet.create({
     color: Colors.ink3,
   },
 
-  // ── Body layout — items scroll, summary sticky ────────────────────────────
+  // ── Body layout ───────────────────────────────────────────────────────────
   bodyWrap: {
     flex: 1,
   },
   scroll: {
     flex:            1,
-    backgroundColor: Colors.surface,
+    backgroundColor: WHITE,
   },
   scrollContent: {
-    paddingTop:    Space[4],
-    paddingBottom: Space[4],
+    paddingBottom: Space[8],
   },
 
-  // ── Items section — hairline dividers, no card ────────────────────────────
+  // ── Items list — divider-separated, no cards ──────────────────────────────
   itemsSection: {
     paddingHorizontal: Space.screenH,
   },
@@ -763,122 +807,148 @@ const styles = StyleSheet.create({
   // ── Cart row ──────────────────────────────────────────────────────────────
   cartRow: {
     flexDirection:   'row',
-    gap:             Space[3],
-    paddingVertical: Space[4],
+    gap:             Space[4],
+    paddingVertical: Space[5],
   },
-  // 4:5 portrait image — editorial, more surface for the product
   cartImgWrap: {
-    width:            80,
-    height:           100,
-    borderRadius:     Radius.md,
-    overflow:         'hidden',
-    backgroundColor:  Colors.surfaceDeep,
+    width:           80,
+    height:          100,
+    borderRadius:    Radius.sm,
+    overflow:        'hidden',
+    backgroundColor: Colors.surfaceDeep,
+    flexShrink:      0,
   },
   cartImg: {
     width:  '100%',
     height: '100%',
   },
   cartContent: {
-    flex:            1,
-    justifyContent:  'space-between',
-  },
-  cartTop: {
-    flexDirection: 'row',
-    alignItems:    'flex-start',
-    gap:           Space[2],
-  },
-  cartMeta: {
     flex: 1,
-    gap:  3,
+    gap:  4,
   },
   cartBrand: {
     ...Type.label,
     color:         Colors.ink4,
-    letterSpacing: 1.0,
+    letterSpacing: 1.4,
+    fontSize:      9,
   },
   cartName: {
     fontFamily:    FontFamily.serif,
-    fontSize:      14,
+    fontSize:      15,
     fontWeight:    '400',
     color:         Colors.ink1,
     letterSpacing: -0.2,
-    lineHeight:    14 * 1.45,
+    lineHeight:    22,
   },
   cartVariant: {
     ...Type.caption,
-    color:      Colors.ink4,
-    fontSize:   12,
-    lineHeight: 12 * 1.4,
+    color:    Colors.ink4,
+    fontSize: 12,
   },
-  // Quiet ×  dismiss — no background circle
-  removeGlyph: {
-    fontSize:   18,
-    lineHeight: 20,
-    color:      Colors.ink4,
-    fontWeight: '300',
-  },
-
-  // Minimal inline qty control — dash / number / plus, no pill border
-  qtyControl: {
+  cartPriceRow: {
     flexDirection: 'row',
-    alignItems:    'center',
-    gap:           Space[3],
-  },
-  qtyBtn: {
-    fontFamily:  FontFamily.mono,
-    fontSize:    16,
-    color:       Colors.ink2,
-    lineHeight:  20,
-  },
-  qtyBtnDisabled: {
-    color: Colors.ink5,
-  },
-  qtyValue: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      14,
-    color:         Colors.ink1,
-    minWidth:      18,
-    textAlign:     'center',
-    letterSpacing: 0.4,
-  },
-
-  cartBottom: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-  },
-  cartPriceBlock: {
-    alignItems: 'flex-end',
-    gap:        2,
+    alignItems:    'baseline',
+    gap:           Space[2],
+    marginTop:     2,
   },
   cartLineTotal: {
     fontFamily:    FontFamily.serif,
-    fontSize:      16,
-    fontWeight:    '400',
+    fontSize:      15,
     color:         Colors.ink1,
     letterSpacing: -0.3,
-    lineHeight:    16 * 1.2,
   },
   cartUnitWas: {
     ...Type.caption,
     fontSize:           11,
     color:              Colors.ink4,
     textDecorationLine: 'line-through',
-    lineHeight:         11 * 1.4,
+  },
+  cartBottom: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginTop:      Space[2],
+  },
+  removeBtn: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           4,
+  },
+  removeLink: {
+    ...Type.caption,
+    color:   Colors.ink4,
+    fontSize: 12,
   },
 
-  // ── Summary panel — same surface, no background shift ────────────────────
-  summaryPanel: {
-    backgroundColor:   Colors.surface,
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[4],
-    paddingBottom:     Space[4],
-    gap:               Space[3],
+  // ── Qty pill ──────────────────────────────────────────────────────────────
+  qtyPill: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    borderRadius:  Radius.pill,
+    borderWidth:   StyleSheet.hairlineWidth,
+    borderColor:   Colors.rule,
+    overflow:      'hidden',
   },
-  summaryTopRule: {
-    height:          StyleSheet.hairlineWidth,
-    backgroundColor: Colors.rule,
-    marginBottom:    Space[1],
+  qtyPillBtn: {
+    width:           32,
+    height:          32,
+    alignItems:      'center',
+    justifyContent:  'center',
+    backgroundColor: Colors.surfaceDeep,
+  },
+  qtyPillBtnDisabled: {
+    backgroundColor: Colors.surfaceSoft,
+  },
+  qtyBtn: {
+    fontFamily: FontFamily.mono,
+    fontSize:   16,
+    color:      Colors.ink2,
+    lineHeight: 20,
+  },
+  qtyBtnDisabled: {
+    color: Colors.ink5,
+  },
+  qtyValue: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      13,
+    color:         Colors.ink1,
+    minWidth:      28,
+    textAlign:     'center',
+    letterSpacing: 0.4,
+  },
+
+  // ── Savings banner ────────────────────────────────────────────────────────
+  savingsBanner: {
+    marginHorizontal:  Space.screenH,
+    marginTop:         Space[3],
+    paddingVertical:   Space[3],
+    paddingHorizontal: Space[4],
+    backgroundColor:   'rgba(34,107,60,0.07)',
+    borderLeftWidth:   2,
+    borderLeftColor:   '#226B3C',
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               Space[2],
+  },
+  savingsBannerText: {
+    fontFamily: FontFamily.sans,
+    fontSize:   13,
+    fontWeight: '500',
+    color:      '#226B3C',
+    flex:       1,
+  },
+
+  // ── Order summary — flat, no card ─────────────────────────────────────────
+  summaryCard: {
+    marginHorizontal: Space.screenH,
+    marginTop:        Space[2],
+    gap:              Space[3],
+    paddingTop:       Space[4],
+  },
+  summaryCardLabel: {
+    ...Type.label,
+    color:         Colors.ink4,
+    letterSpacing: 2,
   },
   summaryRow: {
     flexDirection:  'row',
@@ -889,62 +959,112 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.ink3,
   },
-  savingsLabel: {
-    ...Type.caption,
-    color: Colors.ink2,
-  },
-  savingsValue: {
-    ...Type.caption,
-    color: Colors.ink2,
-  },
   summaryValue: {
     ...Type.caption,
     color: Colors.ink2,
   },
-  summaryFree: {
+  savingsLabel: {
     ...Type.caption,
-    color: Colors.ink3,
+    color: '#226B3C',
   },
-  summaryTotalRule: {
+  savingsValue: {
+    ...Type.caption,
+    color: '#226B3C',
+  },
+  summaryRule: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
-    marginVertical:  Space[1],
   },
   summaryTotalRow: {
     flexDirection:  'row',
     justifyContent: 'space-between',
     alignItems:     'baseline',
-    marginBottom:   Space[1],
   },
   summaryTotalLabel: {
     fontFamily:    FontFamily.serif,
     fontSize:      17,
-    fontWeight:    '400',
     color:         Colors.ink1,
     letterSpacing: -0.2,
   },
   summaryTotalValue: {
     fontFamily:    FontFamily.serif,
-    fontSize:      24,
-    fontWeight:    '400',
+    fontSize:      22,
     color:         Colors.ink1,
     letterSpacing: -0.5,
   },
+  summaryPayableBlock: {
+    gap: 2,
+  },
+  summaryPayableLabel: {
+    ...Type.label,
+    color:         Colors.ink4,
+    letterSpacing: 1.6,
+    fontSize:      9,
+  },
+  summaryPayableAmount: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      28,
+    color:         Colors.ink1,
+    letterSpacing: -0.8,
+    lineHeight:    32,
+  },
 
-  // Primary checkout CTA — ink1 pill, full-width
+  // ── Trust strip — plain icon row, no card ─────────────────────────────────
+  trustRow: {
+    flexDirection:     'row',
+    justifyContent:    'center',
+    gap:               Space[6],
+    marginHorizontal:  Space.screenH,
+    marginTop:         Space[4],
+    paddingVertical:   Space[3],
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           5,
+  },
+  trustText: {
+    ...Type.caption,
+    color:    Colors.ink3,
+    fontSize: 11,
+  },
+
+  // ── Sticky checkout footer ────────────────────────────────────────────────
+  summaryPanel: {
+    backgroundColor:   WHITE,
+    paddingHorizontal: Space.screenH,
+    paddingTop:        Space[4],
+    paddingBottom:     Space[4],
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
+  },
+  summaryTopRule: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+  },
   checkoutBtn: {
     width:           '100%',
     height:          52,
     borderRadius:    Radius.pill,
     backgroundColor: Colors.ink1,
+    flexDirection:   'row',
     alignItems:      'center',
     justifyContent:  'center',
-    marginTop:       Space[2],
   },
   checkoutBtnText: {
     ...Type.bodyStrong,
-    color:         '#FFFFFF',
+    color:         WHITE,
     letterSpacing: 0.3,
+  },
+  continueShoppingBtn: {
+    alignItems:      'center',
+    paddingVertical: Space[2],
+  },
+  continueShoppingText: {
+    ...Type.caption,
+    color: Colors.ink4,
   },
 });
 

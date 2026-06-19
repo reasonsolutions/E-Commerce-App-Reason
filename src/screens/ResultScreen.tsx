@@ -166,10 +166,8 @@ const FeaturedCard: React.FC<{
     }).start();
   }, [imgOpacity]);
 
-  const hasDiscount = product.ComparePrice > product.Price;
-  const discountPct = hasDiscount
-    ? Math.round(((product.ComparePrice - product.Price) / product.ComparePrice) * 100)
-    : 0;
+  const hasDiscount = (product.DiscountPct ?? 0) > 0;
+  const discountPct = Math.round(product.DiscountPct ?? 0);
 
   return (
     <Animated.View style={[styles.featuredCard, entranceStyle]}>
@@ -236,12 +234,8 @@ const GridTile: React.FC<{
     }).start();
   }, [imgOpacity]);
 
-  const hasDiscount = product.ComparePrice > product.Price;
-  const discountPct = hasDiscount
-    ? Math.round(
-        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
-      )
-    : 0;
+  const hasDiscount = (product.DiscountPct ?? 0) > 0;
+  const discountPct = Math.round(product.DiscountPct ?? 0);
 
   return (
     <Animated.View style={[centered ? styles.gridTileCentered : styles.gridTile, entranceStyle]}>
@@ -259,7 +253,7 @@ const GridTile: React.FC<{
               <Animated.Image
                 source={{ uri: firstImage }}
                 style={[styles.gridImg, { opacity: imgOpacity }]}
-                resizeMode="cover"
+                resizeMode="contain"
                 onLoad={onLoad}
               />
             ) : null}
@@ -310,12 +304,8 @@ const SpanCard: React.FC<{
     }).start();
   }, [imgOpacity]);
 
-  const hasDiscount = product.ComparePrice > product.Price;
-  const discountPct = hasDiscount
-    ? Math.round(
-        ((product.ComparePrice - product.Price) / product.ComparePrice) * 100,
-      )
-    : 0;
+  const hasDiscount = (product.DiscountPct ?? 0) > 0;
+  const discountPct = Math.round(product.DiscountPct ?? 0);
 
   return (
     <Animated.View style={[styles.spanCard, entranceStyle]}>
@@ -334,7 +324,7 @@ const SpanCard: React.FC<{
               <Animated.Image
                 source={{ uri: firstImage }}
                 style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
-                resizeMode="cover"
+                resizeMode="contain"
                 onLoad={onLoad}
               />
             ) : null}

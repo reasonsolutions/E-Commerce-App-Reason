@@ -30,6 +30,7 @@ import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { PaymentModes } from '../config/enum_files/PaymentModes';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
 
 export interface DeliveryAddress {
   OrderDeliveryAddressCode: number;
@@ -359,22 +360,27 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       }
 
       setCartCount(0);
+      const result = response.result;
+      const firstStatus = result?.SubOrders?.[0]?.ItemDetails?.[0]?.OrderStatus ?? 1;
       navigation.navigate('OrderSuccess', {
-        orderNumber:    response.result?.OrderNumber ?? '',
-        itemCount:      items.length,
-        orderTotal:     total,
-        orderCurrency:  'MUR',
-        orderTimestamp: response.result?.CreatedDate ?? null,
-        orderStatus:    response.result?.OrderStatus ?? null,
+        orderNumber:              result?.OrderNumber ?? '',
+        itemCount:                items.length,
+        orderTotal:               result?.TotalAmountAfterDiscount ?? total,
+        orderTotalBeforeDiscount: result?.TotalAmountBeforeDiscount ?? total,
+        orderCurrency:            'MUR',
+        orderTimestamp:           result?.CreatedDate ?? null,
+        orderStatus:              firstStatus,
+        paymentMethod:            result?.PaymentMethod ?? null,
         deliveryAddress: {
           street: [selectedAddr?.Address, selectedAddr?.StreetName].filter(Boolean).join(', '),
           city:   selectedAddr?.City ?? '',
         },
         cartItems: items.map((item: SavedCartItemInterface) => ({
-          name:     item.Name,
-          quantity: item.Quantity,
-          price:    item.Price,
-          image:    item.Images?.split(';').filter(Boolean)[0] ?? '',
+          name:         item.Name,
+          quantity:     item.Quantity,
+          price:        item.Price,
+          comparePrice: item.PriceDetails?.ComparePrice ?? 0,
+          image:        resolveImageUrl(item.Images),
         })),
       });
     } catch (err: any) {

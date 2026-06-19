@@ -14,33 +14,36 @@ import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { useHaptic } from '../hooks/useHaptic';
-import { FadeImage, PrimaryButton, TextLinkButton } from '../components/ui';
+import { FadeImage } from '../components/ui';
+import { useTactile } from '../hooks/useTactile';
 import { formatOrderTimestamp } from '../utils/formatOrderTimestamp';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-// ── Thumbnail dimensions ──────────────────────────────────────────────────────
-const THUMB_SIZE    = 48;
-const THUMB_RADIUS  = Radius.sm;
-const MAX_THUMBS    = 3;
+const HERO_IMG_SIZE = 112;
+const THUMB_RADIUS  = Radius.md;
 
-// ── Animation delays (ms) ────────────────────────────────────────────────────
+const RING_R        = 36;
+const RING_SIZE     = 88;
+const RING_CX       = RING_SIZE / 2;
+const CIRCUMFERENCE = 2 * Math.PI * RING_R;
+
 const DELAY = {
-  mark:        0,
-  headline:  400,
-  snapshot:  600,
-  address:   700,
-  orderNum:  800,
-  ctas:      960,
+  mark:    0,
+  hero:    340,
+  order:   520,
+  address: 640,
+  ctas:    760,
 } as const;
 
-// ── Route param types ────────────────────────────────────────────────────────
 interface CartItemParam {
-  name:     string;
-  quantity: number;
-  price:    number;
-  image:    string;
+  name:          string;
+  quantity:      number;
+  price:         number;
+  comparePrice?: number;
+  image:         string;
 }
 
 interface DeliveryAddressParam {
@@ -49,378 +52,284 @@ interface DeliveryAddressParam {
 }
 
 type OrderSuccessParams = {
-  orderNumber?:     string;
-  itemCount?:       number;
-  orderTotal?:      number;
-  orderCurrency?:   string;
-  orderTimestamp?:  string | null;
-  orderStatus?:     number | null;
-  deliveryAddress?: DeliveryAddressParam | null;
-  cartItems?:       CartItemParam[];
+  orderNumber?:              string;
+  itemCount?:                number;
+  orderTotal?:               number;
+  orderTotalBeforeDiscount?: number;
+  orderCurrency?:            string;
+  orderTimestamp?:           string | null;
+  orderStatus?:              number | null;
+  paymentMethod?:            string | null;
+  deliveryAddress?:          DeliveryAddressParam | null;
+  cartItems?:                CartItemParam[];
 };
 
 type NavigationProp = {
-  navigate: {
-    (screen: string): void;
-    (screen: string, params: Record<string, any>): void;
-  };
-  goBack: () => void;
+  navigate: (screen: string, params?: Record<string, any>) => void;
+  goBack:   () => void;
 };
 
-type OrderSuccessScreenProps = {
+type Props = {
   navigation: NavigationProp;
-  route: {
-    params?: OrderSuccessParams;
-  };
+  route:      { params?: OrderSuccessParams };
 };
 
-// ── Progress dot row — 3 steps: New, Processing, Shipped ─────────────────────
-const STATUS_STEPS = ['New', 'Processing', 'Shipped'] as const;
+// ── Screen ───────────────────────────────────────────────────────────────────
+const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
+  const p = route.params ?? {};
 
-const StatusDots: React.FC<{ orderStatus: number }> = ({ orderStatus }) => {
-  // Status codes: 1=New, 2=Confirmed, 3=Processing, 4=Fulfilled, 5=Shipped
-  // Map to 3-dot display: step 0 (New) ≤ 2, step 1 (Processing) ≤ 4, step 2 (Shipped) = 5
-  const filled = orderStatus <= 2 ? 1 : orderStatus <= 4 ? 2 : 3;
-  return (
-    <View style={statusStyles.row}>
-      {STATUS_STEPS.map((label, i) => {
-        const isActive  = i === filled - 1;
-        const isPast    = i < filled - 1;
-        const isFuture  = i >= filled;
-        return (
-          <View key={label} style={statusStyles.stepWrap}>
-            <View style={[
-              statusStyles.segment,
-              isPast   && statusStyles.segmentPast,
-              isActive && statusStyles.segmentActive,
-              isFuture && statusStyles.segmentFuture,
-            ]} />
-            <Text style={[
-              statusStyles.stepLabel,
-              isActive && statusStyles.stepLabelActive,
-            ]}>
-              {label}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-};
+  const orderNumber              = p.orderNumber ?? '';
+  const itemCount                = p.itemCount   ?? 0;
+  const orderTotal               = p.orderTotal  ?? 0;
+  const orderTotalBeforeDiscount = p.orderTotalBeforeDiscount ?? orderTotal;
+  const orderTimestamp           = p.orderTimestamp ?? null;
+  const paymentMethod            = p.paymentMethod ?? null;
+  const deliveryAddress          = p.deliveryAddress ?? null;
+  const cartItems                = p.cartItems ?? [];
 
-const statusStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    gap:           Space[3],
-    width:         '100%',
-    marginBottom:  Space[2],
-  },
-  stepWrap: {
-    flex:      1,
-    alignItems: 'center',
-    gap:        Space[1] + 1,
-  },
-  segment: {
-    width:        '100%',
-    height:       3,
-    borderRadius: 2,
-  },
-  segmentPast: {
-    backgroundColor: Colors.ink3,
-  },
-  segmentActive: {
-    backgroundColor: Colors.accent,
-  },
-  segmentFuture: {
-    backgroundColor: Colors.rule,
-  },
-  stepLabel: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      9,
-    letterSpacing: 0.3,
-    color:         Colors.ink4,
-    textAlign:     'center',
-  },
-  stepLabelActive: {
-    color: Colors.accent,
-  },
-});
+  const haptic        = useHaptic();
+  const ctaTactile    = useTactile();
+  const ordersTactile = useTactile();
 
-// ── Screen ────────────────────────────────────────────────────────────────────
-const OrderSuccessScreen: React.FC<OrderSuccessScreenProps> = ({ navigation, route }) => {
-  const params          = route.params ?? {};
-  const orderNumber     = params.orderNumber;
-  const itemCount       = params.itemCount     ?? 0;
-  const orderTotal      = params.orderTotal    ?? 0;
-  const orderTimestamp  = params.orderTimestamp ?? null;
-  const orderStatus     = params.orderStatus   ?? null;
-  const deliveryAddress = params.deliveryAddress ?? null;
-  const cartItems       = params.cartItems ?? [];
+  // ── Computed ──────────────────────────────────────────────────────────────
+  const shortOrder = orderNumber
+    ? orderNumber.replace(/^ORDNO_\d{6}/, '#').replace(/^ORDNO_/, '#')
+    : '';
 
-  const haptic = useHaptic();
+  const displayTotal = orderTotal > 0
+    ? `Rs ${orderTotal.toLocaleString('en-IN')}` : null;
 
-  // ── Computed display values ──────────────────────────────────────────────────
-  const displayTotal = `Rs ${orderTotal.toFixed(0)}`;
-  const displayTimestamp = formatOrderTimestamp(orderTimestamp);
-  const itemLabel        = itemCount === 1 ? '1 item' : `${itemCount} items`;
+  const displayTime = formatOrderTimestamp(orderTimestamp);
 
-  // City shown prominently; street as secondary context if city is missing
-  const addressLine = deliveryAddress
-    ? (deliveryAddress.city || deliveryAddress.street || null)
-    : null;
-  const addressDetail = deliveryAddress?.city && deliveryAddress?.street
-    ? deliveryAddress.street
-    : null;
+  const totalSavings = orderTotalBeforeDiscount > orderTotal
+    ? orderTotalBeforeDiscount - orderTotal : 0;
 
-  const visibleThumbs  = cartItems.slice(0, MAX_THUMBS);
-  const extraCount     = cartItems.length > MAX_THUMBS ? cartItems.length - MAX_THUMBS : 0;
-  const hasImages      = visibleThumbs.some(i => !!i.image);
-  const showSnapshot   = itemCount > 0 || orderTotal > 0;
-  const showThumbs     = hasImages && visibleThumbs.length > 0;
-  const showStatus     = typeof orderStatus === 'number' && orderStatus >= 1;
+  const metaParts: string[] = [];
+  if (itemCount > 0) metaParts.push(itemCount === 1 ? '1 item' : `${itemCount} items`);
+  if (displayTime)   metaParts.push(displayTime);
+  const metaLine = metaParts.join('  ·  ');
 
-  // ── Animation values ─────────────────────────────────────────────────────────
-  const RING_R        = 34;
-  const CIRCUMFERENCE = 2 * Math.PI * RING_R;
+  const addrLines: string[] = [];
+  if (deliveryAddress?.street) addrLines.push(deliveryAddress.street);
+  if (deliveryAddress?.city)   addrLines.push(deliveryAddress.city);
 
+  const heroItem    = cartItems.find(i => !!i.image) ?? cartItems[0] ?? null;
+  const extraCount  = heroItem && cartItems.length > 1 ? cartItems.length - 1 : 0;
+  const hasHeroImg  = !!heroItem?.image;
+  const showOrder   = hasHeroImg || !!metaLine || !!paymentMethod;
+  const showAddress   = addrLines.length > 0;
+
+  // ── Animations ────────────────────────────────────────────────────────────
   const strokeOffset = useRef(new Animated.Value(CIRCUMFERENCE)).current;
   const markOpacity  = useRef(new Animated.Value(0)).current;
-
-  const headlineAnim = useRef(new Animated.Value(0)).current;
-  const snapshotAnim = useRef(new Animated.Value(0)).current;
+  const heroAnim     = useRef(new Animated.Value(0)).current;
+  const orderAnim    = useRef(new Animated.Value(0)).current;
   const addressAnim  = useRef(new Animated.Value(0)).current;
-  const orderNumAnim = useRef(new Animated.Value(0)).current;
   const ctasAnim     = useRef(new Animated.Value(0)).current;
 
-  const makeSettle = (val: Animated.Value, delay: number) =>
+  const settle = (val: Animated.Value, delay: number) =>
     Animated.timing(val, {
-      toValue:         1,
-      delay,
-      duration:        Motion.duration.settle,
-      easing:          Motion.easing.out,
-      useNativeDriver: true,
+      toValue: 1, delay, duration: Motion.duration.settle,
+      easing: Motion.easing.out, useNativeDriver: true,
     });
 
   useEffect(() => {
     Animated.timing(strokeOffset, {
-      toValue:         0,
-      duration:        Motion.duration.carry,
-      delay:           DELAY.mark,
-      easing:          Motion.easing.inOut,
-      useNativeDriver: true,
+      toValue: 0, duration: Motion.duration.carry, delay: DELAY.mark,
+      easing: Motion.easing.inOut, useNativeDriver: true,
     }).start(() => {
       Animated.timing(markOpacity, {
-        toValue:         1,
-        duration:        Motion.duration.tap,
-        easing:          Motion.easing.out,
-        useNativeDriver: true,
+        toValue: 1, duration: Motion.duration.tap,
+        easing: Motion.easing.out, useNativeDriver: true,
       }).start();
       haptic.success();
     });
-
     Animated.parallel([
-      makeSettle(headlineAnim, DELAY.headline),
-      makeSettle(snapshotAnim, DELAY.snapshot),
-      makeSettle(addressAnim,  DELAY.address),
-      makeSettle(orderNumAnim, DELAY.orderNum),
-      makeSettle(ctasAnim,     DELAY.ctas),
+      settle(heroAnim,    DELAY.hero),
+      settle(orderAnim,   DELAY.order),
+      settle(addressAnim, DELAY.address),
+      settle(ctasAnim,    DELAY.ctas),
     ]).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const blockStyle = (anim: Animated.Value, initialY = 10) => ({
+  const fade = (anim: Animated.Value, dy = 12) => ({
     opacity:   anim,
-    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [initialY, 0] }) }],
+    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [dy, 0] }) }],
   });
 
-  const handleViewOrders = useCallback(() => {
-    navigation.navigate('Orders');
-  }, [navigation]);
-
-  const handleContinueShopping = useCallback(() => {
-    navigation.navigate('Home');
-  }, [navigation]);
+  const handleTrackOrder       = useCallback(() => navigation.navigate('Orders'), [navigation]);
+  const handleViewOrders       = useCallback(() => navigation.navigate('Orders'), [navigation]);
+  const handleContinueShopping = useCallback(() => navigation.navigate('Home'),   [navigation]);
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={s.root}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={s.scroll}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
 
-        {/* ── Success mark ──────────────────────────────────────────────── */}
-        <View style={styles.markWrap}>
-          <View style={styles.ringWrap}>
-            <View style={styles.ringFill} />
-            <Svg width={72} height={72} style={StyleSheet.absoluteFill}>
+        {/* ── Hero — open, no card, full bleed on surface ─────────────────── */}
+        <Animated.View style={[s.hero, fade(heroAnim, 20)]}>
+
+          {/* Mark */}
+          <View style={s.ringWrap}>
+            <View style={s.ringFill} />
+            <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
               <AnimatedCircle
-                cx={36}
-                cy={36}
-                r={RING_R}
+                cx={RING_CX} cy={RING_CX} r={RING_R}
                 fill="none"
                 stroke={Colors.accent}
-                strokeWidth={1.5}
+                strokeWidth={2}
                 strokeDasharray={CIRCUMFERENCE}
                 strokeDashoffset={strokeOffset}
                 strokeLinecap="round"
-                transform="rotate(-90, 36, 36)"
+                transform={`rotate(-90, ${RING_CX}, ${RING_CX})`}
               />
             </Svg>
-            <Animated.Text style={[styles.markChar, { opacity: markOpacity }]}>
-              ✓
-            </Animated.Text>
+            <Animated.Text style={[s.markChar, { opacity: markOpacity }]}>✓</Animated.Text>
           </View>
-        </View>
 
-        {/* ── Headline ─────────────────────────────────────────────────── */}
-        <Animated.View style={[styles.headlineBlock, blockStyle(headlineAnim, 14)]}>
-          <Text style={styles.headline}>Order placed.</Text>
-          <Text style={styles.subline}>Your order is on the way</Text>
-        </Animated.View>
+          {/* Confirmation text */}
+          <Text style={s.headline}>Order Confirmed</Text>
+          <Text style={s.subline}>Thank you for shopping with us.</Text>
 
-        {/* ── Order snapshot card ──────────────────────────────────────── */}
-        {showSnapshot ? (
-          <Animated.View style={[styles.snapshotBlock, blockStyle(snapshotAnim, 10)]}>
-            <View style={styles.snapshotCard}>
-              {/* Meta: item count · timestamp */}
-              <View style={styles.snapshotMeta}>
-                {itemCount > 0 ? (
-                  <Text style={styles.snapshotMetaText}>{itemLabel}</Text>
-                ) : null}
-                {itemCount > 0 && displayTimestamp ? (
-                  <Text style={styles.snapshotMetaDot}>·</Text>
-                ) : null}
-                {displayTimestamp ? (
-                  <Text style={styles.snapshotMetaText}>Placed {displayTimestamp}</Text>
-                ) : null}
-              </View>
-
-              {/* Order total */}
-              {orderTotal > 0 ? (
-                <Text style={styles.snapshotTotal}>{displayTotal}</Text>
-              ) : null}
-
-              {/* Thumbnail strip — only when real images are available */}
-              {showThumbs ? (
-                <View style={styles.thumbRow}>
-                  {visibleThumbs.map((item, i) => (
-                    <View key={i} style={styles.thumbWrap}>
-                      <FadeImage
-                        uri={item.image}
-                        width={THUMB_SIZE}
-                        height={THUMB_SIZE}
-                        borderRadius={THUMB_RADIUS}
-                      />
-                    </View>
-                  ))}
-                  {extraCount > 0 ? (
-                    <View style={styles.thumbExtra}>
-                      <Text style={styles.thumbExtraText}>+{extraCount}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-            </View>
-          </Animated.View>
-        ) : null}
-
-        {/* ── Delivery address ─────────────────────────────────────────── */}
-        {deliveryAddress ? (
-          <Animated.View style={[styles.infoBlock, blockStyle(addressAnim, 10)]}>
-            <View style={styles.infoRule} />
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>DELIVERING TO</Text>
-              <View style={styles.infoValueStack}>
-                <Text style={styles.infoValuePrimary} numberOfLines={1}>
-                  {addressLine || 'Address not available'}
+          {/* Total — the emotional number, lives in the hero */}
+          {displayTotal ? (
+            <View style={s.totalBlock}>
+              <Text style={s.totalAmount}>{displayTotal}</Text>
+              {shortOrder ? <Text style={s.totalOrderNum}>{shortOrder}</Text> : null}
+              {totalSavings > 0 ? (
+                <Text style={s.savings}>
+                  Saved Rs {totalSavings.toLocaleString('en-IN')}
                 </Text>
-                {addressDetail ? (
-                  <Text style={styles.infoValueSecondary} numberOfLines={1}>
-                    {addressDetail}
-                  </Text>
-                ) : null}
-              </View>
+              ) : null}
             </View>
-            <View style={styles.infoRule} />
-          </Animated.View>
-        ) : null}
+          ) : null}
 
-        {/* ── Order number ─────────────────────────────────────────────── */}
-        {orderNumber ? (
-          <Animated.View style={[styles.infoBlock, blockStyle(orderNumAnim, 10)]}>
-            {!deliveryAddress ? <View style={styles.infoRule} /> : null}
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>ORDER</Text>
-              <Text style={styles.orderNumber}>#{orderNumber}</Text>
-            </View>
-            <View style={styles.infoRule} />
-          </Animated.View>
-        ) : null}
-
-        {/* ── Status timeline ──────────────────────────────────────────── */}
-        {showStatus ? (
-          <Animated.View style={[styles.statusBlock, blockStyle(orderNumAnim, 10)]}>
-            <StatusDots orderStatus={orderStatus!} />
-          </Animated.View>
-        ) : null}
-
-        {/* ── CTAs ─────────────────────────────────────────────────────── */}
-        <Animated.View style={[styles.ctasBlock, blockStyle(ctasAnim, 10)]}>
-          <PrimaryButton
-            label="View My Orders"
-            onPress={handleViewOrders}
-            accessibilityLabel="View my orders"
-          />
-          <TextLinkButton
-            label="Continue Shopping"
-            onPress={handleContinueShopping}
-            accessibilityLabel="Continue shopping"
-          />
         </Animated.View>
 
-        {/* ── Support link ─────────────────────────────────────────────── */}
-        <TouchableOpacity
-          style={styles.supportLink}
-          onPress={handleViewOrders}
-          activeOpacity={0.6}
-          accessibilityRole="link"
-        >
-          <Text style={styles.supportText}>
-            Can't find your order? View order details
-          </Text>
-        </TouchableOpacity>
+        {/* ── Divider ─────────────────────────────────────────────────────── */}
+        {showOrder || showAddress ? (
+          <View style={s.rule} />
+        ) : null}
+
+        {/* ── Order card — images + meta ───────────────────────────────────── */}
+        {showOrder ? (
+          <Animated.View style={[s.card, fade(orderAnim)]}>
+
+            {hasHeroImg ? (
+              <FadeImage
+                uri={heroItem!.image}
+                width={HERO_IMG_SIZE}
+                height={HERO_IMG_SIZE}
+                borderRadius={THUMB_RADIUS}
+              />
+            ) : null}
+
+            <View style={s.orderMeta}>
+              {metaLine ? <Text style={s.meta}>{metaLine}</Text> : null}
+              {paymentMethod ? <Text style={s.payment}>{paymentMethod}</Text> : null}
+              {extraCount > 0 ? (
+                <Text style={s.extraLabel}>+{extraCount} more item{extraCount > 1 ? 's' : ''}</Text>
+              ) : null}
+            </View>
+
+          </Animated.View>
+        ) : null}
+
+        {/* ── Address card ─────────────────────────────────────────────────── */}
+        {showAddress ? (
+          <Animated.View style={[s.card, fade(addressAnim)]}>
+            <View style={s.addrHeader}>
+              <Icon name="location-outline" size={15} color={Colors.accent} />
+              <Text style={s.addrHeaderText}>Delivering To</Text>
+            </View>
+            {addrLines.map((line, i) => (
+              <Text
+                key={i}
+                style={i === 0 ? s.addrPrimary : s.addrSecondary}
+                numberOfLines={2}
+              >
+                {line}
+              </Text>
+            ))}
+          </Animated.View>
+        ) : null}
+
+        {/* ── CTAs ────────────────────────────────────────────────────────── */}
+        <Animated.View style={[s.ctasBlock, fade(ctasAnim)]}>
+
+          <Animated.View style={ctaTactile.animatedStyle}>
+            <TouchableOpacity
+              style={s.primaryBtn}
+              onPress={handleTrackOrder}
+              {...ctaTactile.handlers}
+              activeOpacity={1}
+              accessibilityRole="button"
+            >
+              <Text style={s.primaryBtnText}>Track Order</Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          <Animated.View style={ordersTactile.animatedStyle}>
+            <TouchableOpacity
+              style={s.secondaryBtn}
+              onPress={handleViewOrders}
+              {...ordersTactile.handlers}
+              activeOpacity={1}
+              accessibilityRole="button"
+            >
+              <Text style={s.secondaryBtnText}>View Orders</Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          <TouchableOpacity
+            style={s.tertiaryBtn}
+            onPress={handleContinueShopping}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+          >
+            <Text style={s.tertiaryBtnText}>Continue Shopping</Text>
+          </TouchableOpacity>
+
+        </Animated.View>
 
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   root: {
     flex:            1,
     backgroundColor: Colors.surface,
   },
-  scrollContent: {
+  scroll: {
     flexGrow:          1,
-    alignItems:        'center',
-    justifyContent:    'center',
     paddingHorizontal: Space.screenH,
-    paddingVertical:   Space[10],
+    paddingTop:        Space[6],
+    paddingBottom:     Space[10],
+    gap:               Space[4],
   },
 
-  // ── Mark ─────────────────────────────────────────────────────────────────────
-  markWrap: {
-    marginBottom: Space[8] + Space[2],
-    alignItems:   'center',
+  // ── Hero — open, tinted warm patch behind it ──────────────────────────────
+  hero: {
+    backgroundColor: 'rgba(178,90,61,0.04)',
+    borderRadius:    24,
+    padding:         Space[5],
+    paddingBottom:   Space[6],
+    gap:             Space[2],
   },
   ringWrap: {
-    width:          72,
-    height:         72,
+    width:          RING_SIZE,
+    height:         RING_SIZE,
     alignItems:     'center',
     justifyContent: 'center',
+    marginBottom:   Space[2],
   },
   ringFill: {
     ...StyleSheet.absoluteFillObject,
@@ -429,165 +338,150 @@ const styles = StyleSheet.create({
   },
   markChar: {
     fontFamily: FontFamily.serifItalic,
-    fontSize:   28,
+    fontSize:   26,
     color:      Colors.accent,
     lineHeight: 32,
     marginTop:  2,
   },
-
-  // ── Headline ─────────────────────────────────────────────────────────────────
-  headlineBlock: {
-    alignItems:   'center',
-    marginBottom: Space[8],
-    width:        '100%',
-  },
   headline: {
-    ...Type.title,
-    fontSize:      30,
-    letterSpacing: -0.6,
+    fontFamily:    FontFamily.serif,
+    fontSize:      32,
+    fontWeight:    '400',
     color:         Colors.ink1,
-    textAlign:     'center',
-    marginBottom:  Space[2] + 2,
+    letterSpacing: -0.7,
+    lineHeight:    36,
   },
   subline: {
-    ...Type.body,
+    fontFamily: FontFamily.sans,
+    fontSize:   14,
     color:      Colors.ink3,
-    textAlign:  'center',
-    lineHeight: 16 * 1.55,
+    lineHeight: 20,
   },
-
-  // ── Order snapshot ────────────────────────────────────────────────────────────
-  snapshotBlock: {
-    width:        '100%',
-    marginBottom: Space[5],
+  totalBlock: {
+    marginTop: Space[4],
+    gap:       Space[1],
   },
-  snapshotCard: {
-    backgroundColor: Colors.surfaceSoft,
-    borderRadius:    Radius.md,
-    padding:         Space[5],
+  totalAmount: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      42,
+    fontWeight:    '400',
+    color:         Colors.ink1,
+    letterSpacing: -1.4,
+    lineHeight:    46,
   },
-  snapshotMeta: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    flexWrap:       'wrap',
-    gap:            Space[1] + 1,
-    marginBottom:   Space[2],
-  },
-  snapshotMetaText: {
+  totalOrderNum: {
     fontFamily:    FontFamily.mono,
     fontSize:      11,
     color:         Colors.ink4,
-    letterSpacing: 0.3,
+    letterSpacing: 0.8,
   },
-  snapshotMetaDot: {
-    fontFamily: FontFamily.mono,
-    fontSize:   11,
-    color:      Colors.ink5,
-  },
-  snapshotTotal: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      28,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: -0.6,
-    marginBottom:  Space[4],
-  },
-  thumbRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           Space[2],
-  },
-  thumbWrap: {
-    borderRadius: THUMB_RADIUS,
-    overflow:     'hidden',
-  },
-  thumbExtra: {
-    width:           THUMB_SIZE,
-    height:          THUMB_SIZE,
-    borderRadius:    THUMB_RADIUS,
-    backgroundColor: Colors.surfaceDeep,
-    alignItems:      'center',
-    justifyContent:  'center',
-  },
-  thumbExtraText: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      11,
-    color:         Colors.ink3,
-    letterSpacing: 0.2,
+  savings: {
+    fontFamily: FontFamily.sans,
+    fontSize:   13,
+    color:      '#226B3C',
+    fontWeight: '500',
+    lineHeight: 18,
+    marginTop:  Space[1],
   },
 
-  // ── Info rows (address + order number share this style) ───────────────────────
-  infoBlock: {
-    width:        '100%',
-    marginBottom: 0,
-  },
-  infoRule: {
+  // ── Hairline rule ──────────────────────────────────────────────────────────
+  rule: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
   },
-  infoRow: {
-    flexDirection:   'row',
-    justifyContent:  'space-between',
-    alignItems:      'flex-start',
-    paddingVertical: Space[4],
-    gap:             Space[4],
+
+  // ── Cards — white, float above warm surface ────────────────────────────────
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius:    20,
+    borderWidth:     1,
+    borderColor:     '#EFE9E4',
+    padding:         Space[5],
+    gap:             Space[3],
   },
-  infoLabel: {
-    ...Type.label,
-    color:      Colors.ink3,
-    flexShrink: 0,
-    paddingTop: 2,
+
+  // ── Order meta group ───────────────────────────────────────────────────────
+  orderMeta: {
+    gap: Space[1],
   },
-  infoValueStack: {
-    flex:      1,
-    alignItems: 'flex-end',
-    gap:        2,
+  meta: {
+    fontFamily: FontFamily.sans,
+    fontSize:   14,
+    color:      Colors.ink2,
+    lineHeight: 20,
   },
-  infoValuePrimary: {
+  payment: {
+    ...Type.caption,
+    color: Colors.ink4,
+  },
+  extraLabel: {
+    ...Type.caption,
+    color: Colors.ink4,
+  },
+
+  // ── Address ────────────────────────────────────────────────────────────────
+  addrHeader: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Space[1],
+  },
+  addrHeaderText: {
     fontFamily:    FontFamily.sans,
-    fontSize:      14,
-    fontWeight:    '500',
-    color:         Colors.ink1,
-    textAlign:     'right',
-    letterSpacing: 0.1,
+    fontSize:      12,
+    fontWeight:    '600',
+    color:         Colors.ink3,
+    letterSpacing: 0.2,
   },
-  infoValueSecondary: {
+  addrPrimary: {
+    fontFamily: FontFamily.sans,
+    fontSize:   14,
+    color:      Colors.ink1,
+    lineHeight: 20,
+  },
+  addrSecondary: {
     ...Type.caption,
-    color:     Colors.ink4,
-    textAlign: 'right',
-  },
-  orderNumber: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      15,
-    fontWeight:    '400',
-    color:         Colors.ink1,
-    letterSpacing: 0.8,
+    color:      Colors.ink4,
+    lineHeight: 17,
   },
 
-  // ── Status timeline ───────────────────────────────────────────────────────────
-  statusBlock: {
-    width:        '100%',
-    marginTop:    Space[5],
-    marginBottom: Space[2],
-  },
-
-  // ── CTAs ──────────────────────────────────────────────────────────────────────
+  // ── CTAs ───────────────────────────────────────────────────────────────────
   ctasBlock: {
-    width:     '100%',
-    gap:       Space[2],
-    marginTop: Space[8],
+    gap:       Space[3],
+    marginTop: Space[1],
   },
-  // ── Support link ──────────────────────────────────────────────────────────────
-  supportLink: {
-    marginTop:       Space[6],
-    paddingVertical: Space[2],
+  primaryBtn: {
+    width:           '100%',
+    height:          52,
+    borderRadius:    Radius.pill,
+    backgroundColor: Colors.ink1,
     alignItems:      'center',
+    justifyContent:  'center',
   },
-  supportText: {
+  primaryBtnText: {
+    ...Type.bodyStrong,
+    color:         '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  secondaryBtn: {
+    width:           '100%',
+    height:          52,
+    borderRadius:    Radius.pill,
+    borderWidth:     1,
+    borderColor:     Colors.ink3,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  secondaryBtnText: {
+    ...Type.bodyStrong,
+    color: Colors.ink1,
+  },
+  tertiaryBtn: {
+    alignItems:      'center',
+    paddingVertical: Space[2],
+  },
+  tertiaryBtnText: {
     ...Type.caption,
-    color:         Colors.ink4,
-    textAlign:     'center',
-    letterSpacing: 0.1,
+    color: Colors.ink4,
   },
 });
 

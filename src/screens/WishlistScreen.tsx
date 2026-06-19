@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
   ListRenderItemInfo,
+  RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +32,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { useCart } from '../context/CartContext';
 import { toastEmitter } from '../utils/toastEmitter';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
 
 // ── Grid dimensions — mirrors ResultScreen.styles.ts ─────────────────────────
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -65,7 +67,7 @@ const WishlistCard: React.FC<{
   const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
   const hasDiscount  = comparePrice > price;
   const isOOS        = item.IsInStock === 0;
-  const imageUri     = Array.isArray(item.Images) ? item.Images[0] : '';
+  const imageUri     = resolveImageUrl(Array.isArray(item.Images) ? item.Images[0] : item.Images);
 
   const onImageLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -91,7 +93,7 @@ const WishlistCard: React.FC<{
               <Animated.Image
                 source={{ uri: imageUri }}
                 style={[styles.img, { opacity: imgOpacity }]}
-                resizeMode="cover"
+                resizeMode="contain"
                 onLoad={onImageLoad}
               />
             ) : (
@@ -186,6 +188,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const [items, setItems]         = useState<WishlistItemInterface[]>([]);
   const [addingIds, setAddingIds] = useState<Set<number>>(new Set());
   const [isFTU, setIsFTU]         = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const hasFetched = useRef(false);
 
   const fetchWishlist = useCallback(
@@ -211,6 +214,12 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       }, cancelled),
     [run, profileCode],
   );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchWishlist();
+    setRefreshing(false);
+  }, [fetchWishlist]);
 
   // Sync fetched → items
   React.useEffect(() => {
@@ -359,6 +368,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
           items.length === 0 && styles.listContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={hasFetched.current && !loading ? renderEmpty : null}
         style={styles.list}
         initialNumToRender={8}
@@ -483,7 +493,7 @@ const styles = StyleSheet.create({
     width:           COL_W,
     height:          IMG_H,
     borderRadius:    0,
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: Colors.surface,
     overflow:        'hidden',
     position:        'relative',
   },

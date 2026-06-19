@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, FlatList, StyleSheet } from 'react-native';
 import { ProductInterface } from '../../api/interfaces';
-import { Colors, Space, Radius } from '../../theme';
+import { Space, Radius } from '../../theme';
 import { SectionHead } from './SectionHead';
 import { Skeleton, SkeletonRow } from './Skeleton';
 import ProductCard from '../ProductCard';
@@ -13,6 +13,8 @@ interface ProductRailProps {
   cardWidth?: number;
   onSeeAll?: () => void;
   actionLabel?: string;
+  secondaryAction?: string;
+  onSecondaryAction?: () => void;
   onPress: (itemId: number) => void;
 }
 
@@ -23,6 +25,8 @@ export const ProductRail: React.FC<ProductRailProps> = ({
   cardWidth = 158,
   onSeeAll,
   actionLabel = 'See all',
+  secondaryAction,
+  onSecondaryAction,
   onPress,
 }) => {
   const renderItem = useCallback(
@@ -43,6 +47,8 @@ export const ProductRail: React.FC<ProductRailProps> = ({
         title={title}
         action={onSeeAll ? actionLabel : undefined}
         onAction={onSeeAll}
+        secondaryAction={secondaryAction}
+        onSecondaryAction={onSecondaryAction}
       />
       {items === null ? (
         <SkeletonRow gap={Space[4]} style={styles.rail}>

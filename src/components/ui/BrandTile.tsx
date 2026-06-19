@@ -25,12 +25,12 @@ export const BrandTile: React.FC<BrandTileProps> = ({ name, imageUri, index }) =
   const showImage = !!resolved && !imgFailed;
 
   return (
-    <View style={[styles.circle, { backgroundColor: t0 }]}>
+    <View style={[styles.card, { backgroundColor: t0 }]}>
       {showImage ? (
         <Image
           source={{ uri: resolved }}
           style={styles.img}
-          resizeMode="cover"
+          resizeMode="contain"
           onError={() => setImgFailed(true)}
         />
       ) : (
@@ -43,24 +43,24 @@ export const BrandTile: React.FC<BrandTileProps> = ({ name, imageUri, index }) =
 };
 
 const styles = StyleSheet.create({
-  circle: {
-    width:           70,
-    height:          70,
-    borderRadius:    35,
+  card: {
+    width:           110,
+    height:          110,
+    borderRadius:    16,
     overflow:        'hidden',
     alignItems:      'center',
     justifyContent:  'center',
     borderWidth:     StyleSheet.hairlineWidth,
-    borderColor:     'rgba(0,0,0,0.05)',
+    borderColor:     'rgba(0,0,0,0.06)',
   },
   img: {
-    width:  '80%',
-    height: '80%',
+    width:  '72%',
+    height: '72%',
   },
   mono: {
     fontFamily: FontFamily.serif,
-    fontSize:   24,
+    fontSize:   32,
     fontWeight: '600',
-    lineHeight: 28,
+    lineHeight: 36,
   },
 });

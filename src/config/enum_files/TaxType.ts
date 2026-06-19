@@ -1,4 +1,4 @@
 export enum TaxType {
-  Flat    = 1,
+  Flat = 1,
   Percent = 2,
 }
