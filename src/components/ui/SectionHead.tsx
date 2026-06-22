@@ -66,11 +66,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily:    FontFamily.serif,
-    fontSize:      25,
+    fontSize:      22,
     fontWeight:    '600',
     color:         Colors.ink1,
     letterSpacing: 0.1,
-    lineHeight:    30,
+    lineHeight:    26,
   },
   actions: {
     flexDirection: 'row',

@@ -448,7 +448,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
           name:     item.Name,
           quantity: item.Quantity,
           price:    item.Price,
-          image:    item.Images?.split(';').filter(Boolean)[0] ?? '',
+          image:    item.Images?.split(/[,;]/).filter(Boolean)[0] ?? '',
         })),
       });
     } catch (err: any) {

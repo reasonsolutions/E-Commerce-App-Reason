@@ -251,7 +251,7 @@ const GuestCartRowWrapper = React.memo<{
       item={item}
       onUpdateQuantity={onUpdateQuantity}
       onRemove={onRemove}
-      delay={Math.min(80 + index * 55, 360)}
+      delay={Math.min(index * 55, 280)}
     />
   );
 });
@@ -277,7 +277,11 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const fetchCart = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
-        const loggedIn = await isLoggedIn();
+        // Read in parallel — independent I/O, no need to wait on one before the other
+        const [loggedIn, raw] = await Promise.all([
+          isLoggedIn(),
+          AsyncStorage.getItem(STORAGE_KEYS.userData),
+        ]);
         if (!loggedIn) {
           setIsGuest(true);
           const items = await getGuestCart();
@@ -287,8 +291,6 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           return [];
         }
         setIsGuest(false);
-        // Read fresh from storage — avoids race condition and stale data after account switch
-        const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
         const code = raw ? JSON.parse(raw).CustomerProfileCode : null;
         if (!code) return [];
         const response = await getSavedCartItems(code);
@@ -520,7 +522,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
                       item={item}
                       onUpdateQuantity={handleUpdateQuantity}
                       onRemove={handleRemoveItem}
-                      delay={Math.min(80 + index * 55, 360)}
+                      delay={Math.min(index * 55, 280)}
                     />
                   </React.Fragment>
                 ))

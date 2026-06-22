@@ -29,6 +29,8 @@ export const getProductsByCategory = async (categorycode: string | number, _page
 export const getProductsByBrand = async (_brandId: number | string): Promise<ProductByCategoryProductDetails[]> =>
   delay([] as ProductByCategoryProductDetails[]);
 
+export const getBrandProductCount = async (_brandId: number | string): Promise<number> => delay(0);
+
 
 export const getProductByItemId = async (itemId: number | string) => {
   const id = Number(itemId);

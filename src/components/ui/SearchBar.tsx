@@ -32,13 +32,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
   return (
     <View style={styles.container} onTouchStart={onPress}>
-      <Icon name="search-outline" size={18} color={Colors.ink3} />
+      <Icon name="search-outline" size={18} color={Colors.ink1} />
       <TextInput
         ref={inputRef}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={Colors.ink4}
+        placeholderTextColor={Colors.ink3}
         style={styles.input}
         editable={editable}
         returnKeyType="search"
@@ -69,7 +69,9 @@ const styles = StyleSheet.create({
     alignItems:       'center',
     backgroundColor:  Colors.surfaceDeep,
     borderRadius:     Radius.pill,
-    paddingVertical:  Space[3] - 2,
+    borderWidth:      1,
+    borderColor:      'rgba(0,0,0,0.14)',
+    paddingVertical:  Space[2] + 2,
     paddingHorizontal: Space[3],
     gap: Space[2],
   },

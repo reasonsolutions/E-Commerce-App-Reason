@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { postOrderHistory } from '../api/order';
 import { postSaveCartItems } from '../api/cart';
+import { toastEmitter } from '../utils/toastEmitter';
 import type { OrderHistoryFilters } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -125,7 +126,7 @@ const OrderCard: React.FC<{
   onPress: (group: OrderGroup) => void;
   onReorder: (group: OrderGroup) => void;
   delay: number;
-}> = ({ group, onPress, onReorder, delay }) => {
+}> = React.memo(({ group, onPress, onReorder, delay }) => {
   const haptic = useHaptic();
   const entrance = useEntrance(delay);
   const itemCount = group.items.length;
@@ -207,7 +208,7 @@ const OrderCard: React.FC<{
       </TouchableOpacity>
     </Animated.View>
   );
-};
+});
 
 const cardStyles = StyleSheet.create({
   wrapper: {
@@ -418,7 +419,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
     reload({});
   };
 
-  const handleReorder = (group: OrderGroup) => {
+  const handleReorder = useCallback((group: OrderGroup) => {
     guard(async () => {
       const code = await getProfileCode();
       if (!code) return;
@@ -437,12 +438,12 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         );
         haptic.success();
         setCartCount((prev: number) => prev + group.items.length);
-        navigation.navigate('Cart');
+        toastEmitter.emit('success', 'Added to bag');
       } catch (e: any) {
         setReorderError(e?.message ?? 'Could not add items to cart.');
       }
     });
-  };
+  }, [guard, haptic, setCartCount]);
 
   const activeFilterCount = [
     filters.sortBy && filters.sortBy !== 'desc',
@@ -464,10 +465,14 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   const groupCount = groups.length;
 
+  const handlePressGroup = useCallback((group: OrderGroup) => {
+    navigation.navigate('OrderDetails', { orderItem: group.items[0], orderNumber: group.orderNumber });
+  }, [navigation]);
+
   const renderItem = ({ item, index }: ListRenderItemInfo<OrderGroup>) => (
     <OrderCard
       group={item}
-      onPress={(group) => navigation.navigate('OrderDetails', { orderItem: group.items[0], orderNumber: group.orderNumber })}
+      onPress={handlePressGroup}
       onReorder={handleReorder}
       delay={Math.min(index * 60, 300)}
     />

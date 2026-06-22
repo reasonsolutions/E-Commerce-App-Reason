@@ -89,6 +89,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const [selectedVariantId, setSelectedVariantId] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [wishlisted, setWishlisted] = useState<boolean>(false);
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
@@ -327,14 +328,14 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         Animated.spring(badgeScale, { toValue: Motion.badgePopScale, ...Motion.spring.snap }),
         Animated.spring(badgeScale, { toValue: 1, ...Motion.spring.settle }),
       ]).start();
-      navigation.navigate('Cart');
+      toast.success({ title: 'Added to bag', description: data?.product?.Name ?? '' });
     } catch {
       haptic.warning();
       toast.error({ title: "Couldn't add to bag", description: 'Check your connection and try again.' });
     } finally {
       setAddingToCart(false);
     }
-  }, [profileCode, selectedVariantId, data, quantity, haptic, badgeScale, setCartCount, navigation, isOOS, isBackorder, toast]);
+  }, [profileCode, selectedVariantId, data, quantity, haptic, badgeScale, setCartCount, isOOS, isBackorder, toast]);
 
   const handleWishlistToggle = useCallback(() => {
     guard(async () => {
@@ -455,17 +456,25 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               scrollEventThrottle={16}
             >
               {imageUrls.map((url, i) => (
-                <Image
-                  key={i}
-                  source={{ uri: url }}
-                  style={{ width: SCREEN_W, height: HERO_H, resizeMode: 'contain' }}
-                />
+                failedImages.has(url) ? (
+                  <View key={i} style={[styles.heroPlaceholder, { width: SCREEN_W, height: HERO_H }]} />
+                ) : (
+                  <Image
+                    key={i}
+                    source={{ uri: url }}
+                    style={{ width: SCREEN_W, height: HERO_H }}
+                    resizeMode="contain"
+                    onError={() => setFailedImages(prev => new Set(prev).add(url))}
+                  />
+                )
               ))}
             </ScrollView>
-          ) : imageUrls.length === 1 ? (
+          ) : imageUrls.length === 1 && !failedImages.has(imageUrls[0]) ? (
             <Image
               source={{ uri: imageUrls[0] }}
-              style={{ width: SCREEN_W, height: HERO_H, resizeMode: 'contain' }}
+              style={{ width: SCREEN_W, height: HERO_H }}
+              resizeMode="contain"
+              onError={() => setFailedImages(prev => new Set(prev).add(imageUrls[0]))}
             />
           ) : (
             <View style={[styles.heroPlaceholder, { width: SCREEN_W, height: HERO_H }]} />
@@ -620,7 +629,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                     onPress={() => navigation.navigate('Product', { product: String(p.ItemId) })}
                   >
                     <View style={styles.relatedImgWrap}>
-                      {imgUri ? <Image source={{ uri: imgUri }} style={styles.relatedImg} resizeMode="cover" /> : null}
+                      {imgUri ? <Image source={{ uri: imgUri }} style={styles.relatedImg} resizeMode="contain" /> : null}
                     </View>
                     <Text style={styles.relatedBrand} numberOfLines={1}>{(p.BrandName ?? '').toUpperCase()}</Text>
                     <Text style={styles.relatedName} numberOfLines={2}>{p.Name}</Text>
@@ -996,7 +1005,7 @@ const styles = StyleSheet.create({
   relatedImgWrap: {
     width: 140,
     height: 175,
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: Colors.surfaceSoft,
     marginBottom: Space[2],
     overflow: 'hidden',
   },

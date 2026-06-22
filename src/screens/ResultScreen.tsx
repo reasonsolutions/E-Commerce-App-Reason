@@ -157,7 +157,7 @@ const FeaturedCard: React.FC<{
   const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, 12) };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
-  const firstImage = product.Images ? resolveImageUrl(product.Images.split(';').filter(Boolean)[0]) : null;
+  const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -223,7 +223,7 @@ const GridTile: React.FC<{
   };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
-  const firstImage = product.Images ? resolveImageUrl(product.Images.split(';').filter(Boolean)[0]) : null;
+  const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {
@@ -293,7 +293,7 @@ const SpanCard: React.FC<{
   const entranceStyle = useEntrance(delay, false, 12);
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
-  const firstImage = product.Images ? resolveImageUrl(product.Images.split(';').filter(Boolean)[0]) : null;
+  const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
 
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, {

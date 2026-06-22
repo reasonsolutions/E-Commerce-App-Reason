@@ -10,5 +10,6 @@ export const getCategories            = product.getCategories;
 export const getSubCategories         = product.getSubCategories;
 export const getProductsByCategory    = product.getProductsByCategory;
 export const getProductsByBrand       = product.getProductsByBrand;
+export const getBrandProductCount     = product.getBrandProductCount;
 export const getProductByItemId       = product.getProductByItemId;
 export { getOrgIdForInventory } from './productApi';

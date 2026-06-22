@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { Colors, Space, Radius } from '../theme';
+import { Colors, Space, Radius, Shadow } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   scrollContent: {
-    paddingBottom: Space[4],
+    paddingBottom: Space[10],
   },
 
   // ── Scroll to top ─────────────────────────────────────────────────────────────
@@ -163,17 +163,17 @@ const styles = StyleSheet.create({
   },
   bannerTitle: {
     fontFamily:    FontFamily.serif,
-    fontSize:      29,
+    fontSize:      25,
     fontWeight:    '600',
     color:         '#FFFFFF',
-    lineHeight:    32,
+    lineHeight:    28,
     letterSpacing: 0.05,
   },
   bannerTitleItalic: {
     fontFamily:  FontFamily.serifItalic,
-    fontSize:    34,
+    fontSize:    29,
     fontWeight:  '500',
-    lineHeight:  37,
+    lineHeight:  32,
   },
   bannerSub: {
     fontFamily:  FontFamily.sans,
@@ -270,6 +270,54 @@ const styles = StyleSheet.create({
     color:       Colors.ink1,
   },
 
+  // ── Brand spotlight card ──────────────────────────────────────────────────────
+  brandSpotCard: {
+    borderRadius:    22,
+    backgroundColor: Colors.surfaceSoft,
+    alignItems:      'center',
+    justifyContent:  'center',
+    gap:             Space[3],
+    paddingVertical: Space[8],
+  },
+  brandSpotLogoFrame: {
+    width:           100,
+    height:          100,
+    borderRadius:    Radius.lg,
+    backgroundColor: '#FFFFFF',
+    alignItems:      'center',
+    justifyContent:  'center',
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     'rgba(0,0,0,0.06)',
+    ...Shadow.sm,
+  },
+  brandSpotEyebrow: {
+    ...Type.label,
+    color:         Colors.ink4,
+    letterSpacing: 2.2,
+  },
+  brandSpotTitle: {
+    fontFamily: FontFamily.serifItalic,
+    fontSize:   34,
+    fontWeight: '500',
+    color:      Colors.ink1,
+  },
+  brandSpotCta: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               8,
+    paddingVertical:   13,
+    paddingHorizontal: Space[6],
+    borderRadius:      Radius.pill,
+    backgroundColor:   Colors.ink1,
+    marginTop:         Space[1],
+  },
+  brandSpotCtaText: {
+    fontFamily: FontFamily.sans,
+    fontSize:   14,
+    fontWeight: '700',
+    color:      '#FFFFFF',
+  },
+
   // ── Brands rail ───────────────────────────────────────────────────────────────
   brandsRail: {
     flexDirection:     'row',
@@ -279,11 +327,12 @@ const styles = StyleSheet.create({
   },
   brandChip: {
     alignItems: 'center',
-    width:      110,
-    gap:        Space[2] + 1,
+    width:      56,
+    gap:        Space[1] + 2,
   },
   brandLabel: {
     ...Type.caption,
+    fontSize:   10.5,
     fontWeight: '600',
     color:      Colors.ink2,
     textAlign:  'center',

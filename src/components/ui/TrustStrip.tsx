@@ -14,9 +14,16 @@ const ITEMS = [
 export const TrustStrip: React.FC = () => (
   <View style={styles.wrap}>
     <View style={styles.grid}>
-      {ITEMS.map((it) => (
-        <View key={it.label} style={styles.cell}>
-          <Icon name={it.icon} size={22} color={Colors.ink3} style={styles.icon} />
+      {ITEMS.map((it, i) => (
+        <View
+          key={it.label}
+          style={[
+            styles.cell,
+            i % 2 === 0 && styles.cellDividerRight,
+            i < 2 && styles.cellDividerBottom,
+          ]}
+        >
+          <Icon name={it.icon} size={17} color={Colors.ink3} style={styles.icon} />
           <Text style={styles.label}>{it.label}</Text>
         </View>
       ))}
@@ -33,21 +40,31 @@ const styles = StyleSheet.create({
     borderTopColor:    Colors.rule,
   },
   grid: {
-    flexDirection:  'row',
-    flexWrap:       'wrap',
-    rowGap:         Space[4],
+    flexDirection: 'row',
+    flexWrap:      'wrap',
   },
   cell: {
-    width:       '50%',
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           Space[2] + 2,
+    width:             '50%',
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               Space[2],
+    paddingVertical:   Space[2] + 2,
+    paddingHorizontal: Space[2],
+  },
+  cellDividerRight: {
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: Colors.rule,
+  },
+  cellDividerBottom: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
   },
   icon: {
     flexShrink: 0,
   },
   label: {
     ...Type.caption,
-    color: Colors.ink3,
+    fontSize: 12,
+    color:    Colors.ink3,
   },
 });

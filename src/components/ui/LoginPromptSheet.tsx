@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, {
   BottomSheetView,
   BottomSheetBackdrop,
@@ -77,73 +78,86 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
   );
 
   return (
-    <BottomSheet
-      index={0}
-      snapPoints={['46%']}
-      enablePanDownToClose
-      onClose={onClose}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={styles.sheetBackground}
-      handleIndicatorStyle={styles.handleIndicator}
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <BottomSheetView style={styles.inner}>
+      <GestureHandlerRootView style={styles.modalWrap}>
+        <BottomSheet
+          index={0}
+          snapPoints={['46%']}
+          enablePanDownToClose
+          onClose={onClose}
+          backdropComponent={renderBackdrop}
+          backgroundStyle={styles.sheetBackground}
+          handleIndicatorStyle={styles.handleIndicator}
+        >
+          <BottomSheetView style={styles.inner}>
 
-        {/* Icon + heading */}
-        <View style={styles.headingBlock}>
-          <View style={styles.iconWrap}>
-            <Icon name={icon} size={20} color={Colors.accent} />
-          </View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.body}>{body}</Text>
-        </View>
-
-        {/* Primary CTA */}
-        <Animated.View style={signInTactile.animatedStyle}>
-          <TouchableOpacity
-            {...signInTactile.handlers}
-            activeOpacity={1}
-            onPress={onSignIn}
-            style={styles.primaryBtn}
-          >
-            <Text style={styles.primaryBtnText}>Sign In</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* Secondary + dismiss row */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            onPress={onRegister}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.registerText}>Create Account →</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.footerDivider}>·</Text>
-
-          <TouchableOpacity
-            onPress={onClose}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.dismissText}>Continue browsing</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Benefit chips */}
-        <View style={styles.benefitsRow}>
-          {benefits.map(b => (
-            <View key={b} style={styles.chip}>
-              <Icon name="checkmark" size={10} color={Colors.accent} />
-              <Text style={styles.chipText}>{b}</Text>
+            {/* Icon + heading */}
+            <View style={styles.headingBlock}>
+              <View style={styles.iconWrap}>
+                <Icon name={icon} size={20} color={Colors.accent} />
+              </View>
+              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.body}>{body}</Text>
             </View>
-          ))}
-        </View>
 
-      </BottomSheetView>
-    </BottomSheet>
+            {/* Primary CTA */}
+            <Animated.View style={signInTactile.animatedStyle}>
+              <TouchableOpacity
+                {...signInTactile.handlers}
+                activeOpacity={1}
+                onPress={onSignIn}
+                style={styles.primaryBtn}
+              >
+                <Text style={styles.primaryBtnText}>Sign In</Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* Secondary + dismiss row */}
+            <View style={styles.footer}>
+              <TouchableOpacity
+                onPress={onRegister}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.registerText}>Create Account →</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.footerDivider}>·</Text>
+
+              <TouchableOpacity
+                onPress={onClose}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.dismissText}>Continue browsing</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Benefit chips */}
+            <View style={styles.benefitsRow}>
+              {benefits.map(b => (
+                <View key={b} style={styles.chip}>
+                  <Icon name="checkmark" size={10} color={Colors.accent} />
+                  <Text style={styles.chipText}>{b}</Text>
+                </View>
+              ))}
+            </View>
+
+          </BottomSheetView>
+        </BottomSheet>
+      </GestureHandlerRootView>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  modalWrap: {
+    flex: 1,
+  },
   sheetBackground: {
     backgroundColor:      Colors.surface,
     borderTopLeftRadius:  Radius.lg,

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, Radius } from '../../theme';
@@ -113,30 +113,19 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         ))}
       </View>
 
-      <Modal
-        visible={showPrompt}
-        transparent
-        animationType="none"
-        onRequestClose={() => setShowPrompt(false)}
-        statusBarTranslucent
-      >
-        <View style={styles.modalWrap} pointerEvents="box-none">
-          <LoginPromptSheet
-            context={promptContext}
-            onClose={() => setShowPrompt(false)}
-            onSignIn={() => { setShowPrompt(false); onNavigateToAuth?.('Login'); }}
-            onRegister={() => { setShowPrompt(false); onNavigateToAuth?.('Register'); }}
-          />
-        </View>
-      </Modal>
+      {showPrompt && (
+        <LoginPromptSheet
+          context={promptContext}
+          onClose={() => setShowPrompt(false)}
+          onSignIn={() => { setShowPrompt(false); onNavigateToAuth?.('Login'); }}
+          onRegister={() => { setShowPrompt(false); onNavigateToAuth?.('Register'); }}
+        />
+      )}
     </>
   );
 };
 
 const styles = StyleSheet.create({
-  modalWrap: {
-    flex: 1,
-  },
   container: {
     flexDirection:   'row',
     backgroundColor: Colors.surface,

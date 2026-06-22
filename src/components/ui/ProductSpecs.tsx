@@ -62,7 +62,6 @@ export const ProductSpecs: React.FC<ProductSpecsProps> = ({
   const specRows: [string, string][] = [];
   if (color)       specRows.push(['Colour',      color]);
   if (material)    specRows.push(['Material',    material]);
-  if (care)        specRows.push(['Care',        care]);
   if (demographic) specRows.push(['For',         demographic]);
   if (season)      specRows.push(['Season',      season]);
   if (weight != null) {
@@ -70,10 +69,19 @@ export const ProductSpecs: React.FC<ProductSpecsProps> = ({
     specRows.push(['Weight', unit ? `${weight} ${unit}` : String(weight)]);
   }
 
-  const hasDescription = !!description;
-  const hasSpecs       = specRows.length > 0;
+  const careSteps = care
+    ? care.split('\n').map(line => line.trim()).filter(Boolean)
+    : [];
 
-  if (!hasDescription && !hasSpecs) return null;
+  const descriptionLines = description
+    ? description.split('\n').map(line => line.trim()).filter(Boolean)
+    : [];
+
+  const hasDescription = descriptionLines.length > 0;
+  const hasSpecs        = specRows.length > 0;
+  const hasCare         = careSteps.length > 0;
+
+  if (!hasDescription && !hasSpecs && !hasCare) return null;
 
   return (
     <View style={styles.container}>
@@ -81,7 +89,11 @@ export const ProductSpecs: React.FC<ProductSpecsProps> = ({
 
       {hasDescription && (
         <AccordionRow title="Product Description">
-          <Text style={styles.descriptionText}>{description}</Text>
+          {descriptionLines.map((line, i) => (
+            <Text key={i} style={[styles.descriptionText, i < descriptionLines.length - 1 && styles.descriptionLineSpacing]}>
+              {line}
+            </Text>
+          ))}
         </AccordionRow>
       )}
 
@@ -95,6 +107,16 @@ export const ProductSpecs: React.FC<ProductSpecsProps> = ({
               <Text style={styles.specLabel}>{label}</Text>
               <Text style={styles.specValue}>{value}</Text>
             </View>
+          ))}
+        </AccordionRow>
+      )}
+
+      {hasCare && (
+        <AccordionRow title="Care Instructions">
+          {careSteps.map((step, i) => (
+            <Text key={i} style={[styles.careStep, i < careSteps.length - 1 && styles.careStepSpacing]}>
+              {step}
+            </Text>
           ))}
         </AccordionRow>
       )}
@@ -143,6 +165,9 @@ const styles = StyleSheet.create({
     color:       Colors.ink3,
     lineHeight:  13 * 1.68,
   },
+  descriptionLineSpacing: {
+    marginBottom: Space[3],
+  },
 
   // ── Spec rows ─────────────────────────────────────────────────────────────────
   specRow: {
@@ -168,5 +193,16 @@ const styles = StyleSheet.create({
     color:       Colors.ink1,
     flex:        1,
     textAlign:   'right',
+  },
+
+  // ── Care instructions ────────────────────────────────────────────────────────
+  careStep: {
+    fontFamily: FontFamily.sans,
+    fontSize:   13,
+    color:      Colors.ink3,
+    lineHeight: 13 * 1.68,
+  },
+  careStepSpacing: {
+    marginBottom: Space[3],
   },
 });

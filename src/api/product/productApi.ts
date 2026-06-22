@@ -96,6 +96,20 @@ export const getProductsByBrand = async (
 };
 
 
+export const getBrandProductCount = async (brandId: number | string): Promise<number> => {
+  const response = await axiosInstance.post(productEndpoints.allProducts, {
+    brands: [Number(brandId)],
+    categories: [],
+    subCategories: [],
+    searchQuery: '%',
+    priceRange: { from: null, to: null },
+    discount: null,
+    sortBy: null,
+    pagination: { pageNumber: 1, pageSize: 1 },
+  });
+  return response.data?.result?.TotalRecords ?? 0;
+};
+
 export const getProductByItemId = async (itemId: number | string) => {
   const response = await axiosInstance.get(
     `${productEndpoints.getProductByItemId}?ItemId=${itemId}`,

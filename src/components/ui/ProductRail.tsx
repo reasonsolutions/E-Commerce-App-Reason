@@ -72,6 +72,9 @@ export const ProductRail: React.FC<ProductRailProps> = ({
           snapToInterval={cardWidth + Space[4]}
           decelerationRate="fast"
           removeClippedSubviews
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
         />
       )}
     </View>

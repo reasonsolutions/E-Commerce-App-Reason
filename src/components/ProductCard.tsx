@@ -23,7 +23,7 @@ interface ProductCardProps {
 }
 
 
-const ProductCard: React.FC<ProductCardProps> = ({
+const ProductCard: React.FC<ProductCardProps> = React.memo(({
   product,
   onPress,
   cardWidth = 158,
@@ -32,6 +32,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const imgUri = resolveImageUrl(product.Images);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
 
   const onLoad = useCallback(() => {
     setImgLoaded(true);
@@ -39,6 +40,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
       toValue: 1, duration: 300, useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
+
+  const onError = useCallback(() => {
+    setImgLoaded(true);
+    setImgFailed(true);
+  }, []);
 
   // Guard: only show discount when ComparePrice > Price (server DiscountPct can be wrong)
   const hasDiscount = product.MaxComparePrice > product.MinPrice;
@@ -54,6 +60,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
   })();
   const imgH = Math.round(cardWidth * 1.0);
 
+  const freeShipping = product.ShippingInfo?.FreeShipping ?? false;
+  const deliveryDays = product.ShippingInfo?.EstimatedDeliveryDays;
+
   return (
     <TouchableOpacity
       style={[styles.card, { width: cardWidth }]}
@@ -61,7 +70,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
       activeOpacity={0.86}
     >
       <View style={[styles.imgWrap, { height: imgH, backgroundColor: Colors.surfaceSoft }]}>
-        {imgUri ? (
+        {imgUri && !imgFailed ? (
           <>
             {!imgLoaded && <Skeleton height={imgH} radius={Radius.md} style={StyleSheet.absoluteFillObject} />}
             <Animated.Image
@@ -69,6 +78,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
               style={[styles.img, { opacity: imgOpacity }]}
               resizeMode="contain"
               onLoad={onLoad}
+              onError={onError}
             />
           </>
         ) : (
@@ -99,21 +109,26 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
         <View style={styles.priceRow}>
           {product.MinPrice > 0 ? (
-            <Text style={styles.price}>Rs {product.MinPrice.toLocaleString('en-IN')}</Text>
+            <Text style={styles.price} numberOfLines={1}>Rs {product.MinPrice.toLocaleString('en-IN')}</Text>
           ) : (
-            <Text style={styles.priceUnavailable}>Price unavailable</Text>
+            <Text style={styles.priceUnavailable} numberOfLines={1}>Price unavailable</Text>
           )}
           {hasDiscount && product.MinPrice > 0 && (
-            <Text style={styles.was}>Rs {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
+            <Text style={styles.was} numberOfLines={1}>Rs {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
           )}
         </View>
         {product.Variant ? (
           <Text style={styles.variant} numberOfLines={1}>{product.Variant}</Text>
         ) : null}
+        {freeShipping ? (
+          <Text style={styles.delivery} numberOfLines={1}>
+            Free delivery{deliveryDays ? ` · ${deliveryDays} days` : ''}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   card: {},
@@ -187,6 +202,7 @@ const styles = StyleSheet.create({
   },
   priceRow: {
     flexDirection: 'row',
+    flexWrap:      'wrap',
     alignItems:    'baseline',
     gap:           Space[1] + 2,
   },
@@ -196,6 +212,7 @@ const styles = StyleSheet.create({
     fontWeight:    '700',
     color:         Colors.ink1,
     letterSpacing: -0.1,
+    flexShrink:    0,
   },
   priceUnavailable: {
     fontFamily:  FontFamily.sans,
@@ -213,6 +230,11 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color:      Colors.ink4,
     letterSpacing: 0.1,
+  },
+  delivery: {
+    ...Type.caption,
+    fontSize:   10.5,
+    color:      Colors.success,
   },
 });
 

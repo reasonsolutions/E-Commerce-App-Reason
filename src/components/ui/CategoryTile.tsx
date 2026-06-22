@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
-import { Colors, Radius, Space } from '../../theme';
+import { Colors, Space } from '../../theme';
 import { FontFamily } from '../../theme/fonts';
-import { Type } from '../../theme/typography';
+import { FadeImage } from './FadeImage';
 
 const TONE_GRADS: [string, string][] = [
   ['#E9E1D3', '#D9CBB7'], ['#DEE2DC', '#C8CEC5'], ['#EADBCF', '#D7C0AF'],
@@ -20,24 +20,21 @@ interface CategoryTileProps {
 }
 
 export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, index, active = false, onPress }) => {
-  const [imgFailed, setImgFailed] = useState(false);
   const [t0] = TONE_GRADS[index % TONE_GRADS.length];
   const resolved = imageUri ? resolveImageUrl(imageUri) : '';
-  const showImage = !!resolved && !imgFailed;
+  const size = active ? 70 : 62;
 
   return (
     <TouchableOpacity style={[styles.wrap, active && styles.wrapActive]} onPress={onPress} activeOpacity={0.75}>
-      <View style={[styles.tile, active && styles.tileActive, { backgroundColor: t0 }]}>
-        {showImage ? (
-          <Image
-            source={{ uri: resolved }}
-            style={styles.img}
-            resizeMode="cover"
-            onError={() => setImgFailed(true)}
-          />
-        ) : (
-          <Text style={styles.initial}>{name.charAt(0)}</Text>
-        )}
+      <View style={[styles.tile, active && styles.tileActive]}>
+        <FadeImage
+          uri={resolved}
+          width={size}
+          height={size}
+          resizeMode="cover"
+          fallbackText={name}
+          style={{ backgroundColor: t0 }}
+        />
       </View>
       <Text style={[styles.label, active && styles.labelActive]} numberOfLines={2}>{name}</Text>
     </TouchableOpacity>
@@ -46,18 +43,18 @@ export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, inde
 
 const styles = StyleSheet.create({
   wrap: {
-    width:     76,
+    width:     62,
     flexShrink: 0,
     alignItems: 'center',
-    gap:        Space[2],
+    gap:        Space[1] + 2,
   },
   wrapActive: {
-    width: 86,
+    width: 70,
   },
   tile: {
-    width:        76,
-    height:       76,
-    borderRadius: 20,
+    width:        62,
+    height:       62,
+    borderRadius: 18,
     overflow:     'hidden',
     alignItems:   'center',
     justifyContent: 'center',
@@ -65,27 +62,18 @@ const styles = StyleSheet.create({
     borderColor:  'rgba(0,0,0,0.04)',
   },
   tileActive: {
-    width:       86,
-    height:      86,
+    width:       70,
+    height:      70,
     borderWidth: 2,
     borderColor: Colors.ink1,
   },
-  img: {
-    width:  '100%',
-    height: '100%',
-  },
-  initial: {
-    fontFamily:  FontFamily.serifItalic,
-    fontSize:    34,
-    color:       'rgba(40,32,24,0.22)',
-    lineHeight:  38,
-  },
   label: {
-    ...Type.label,
+    fontFamily: FontFamily.sans,
+    fontSize:   10.5,
+    fontWeight: '500',
     color:      Colors.ink2,
-    letterSpacing: 0.5,
     textAlign:  'center',
-    lineHeight: 15,
+    lineHeight: 13,
   },
   labelActive: {
     color:      Colors.ink1,

@@ -57,7 +57,7 @@ const WishlistCard: React.FC<{
   addingToBag:  boolean;
   onPress:      (itemId: number) => void;
   delay:        number;
-}> = ({ item, onRemove, onAddToBag, addingToBag, onPress, delay }) => {
+}> = React.memo(({ item, onRemove, onAddToBag, addingToBag, onPress, delay }) => {
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
@@ -172,7 +172,7 @@ const WishlistCard: React.FC<{
       </Animated.View>
     </Animated.View>
   );
-};
+});
 
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -236,15 +236,15 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     }, [fetchWishlist]),
   );
 
-  const handleRemove = async (wishlistCode: number) => {
+  const handleRemove = useCallback(async (wishlistCode: number) => {
     if (!profileCode) return;
     setItems(prev => prev.filter(i => i.WishlistCode !== wishlistCode));
     await removeFromWishlist(profileCode, wishlistCode);
     const res = await getWishlist(profileCode);
     if (res.statusCode === 1) setItems(res.result);
-  };
+  }, [profileCode]);
 
-  const handleAddToBag = async (item: WishlistItemInterface) => {
+  const handleAddToBag = useCallback(async (item: WishlistItemInterface) => {
     if (!profileCode || addingIds.has(item.WishlistCode)) return;
     setAddingIds(prev => new Set(prev).add(item.WishlistCode));
     try {
@@ -266,7 +266,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         return next;
       });
     }
-  };
+  }, [profileCode, addingIds, haptic, setCartCount]);
 
   const handlePressItem = useCallback((itemId: number) => {
     navigation.navigate('Product', { product: String(itemId) });
