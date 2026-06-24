@@ -53,8 +53,8 @@ const NavItem: React.FC<{
       accessibilityState={{ selected: isActive }}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
     >
-      <View style={styles.iconWrap}>
-        <Icon name={isActive ? tab.activeIcon : tab.inactiveIcon} size={22} color={iconColor} />
+      <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
+        <Icon name={isActive ? tab.activeIcon : tab.inactiveIcon} size={20} color={iconColor} />
         {tab.route === 'Cart' && cartCount != null && cartCount > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
@@ -144,11 +144,17 @@ const styles = StyleSheet.create({
     position:        'relative',
     alignItems:      'center',
     justifyContent:  'center',
+    width:           40,
+    height:          28,
+    borderRadius:    Radius.pill,
+  },
+  iconWrapActive: {
+    backgroundColor: Colors.accentTint,
   },
   badge: {
     position:          'absolute',
-    top:               -3,
-    right:             -8,
+    top:               -2,
+    right:             4,
     backgroundColor:   Colors.accent,
     borderRadius:      Radius.pill,
     minWidth:          16,

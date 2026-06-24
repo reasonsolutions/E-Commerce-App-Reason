@@ -182,7 +182,7 @@ const FeaturedCard: React.FC<{
               <Animated.Image
                 source={{ uri: firstImage }}
                 style={[styles.gridImg, { opacity: imgOpacity }]}
-                resizeMode="contain"
+                resizeMode="cover"
                 onLoad={onLoad}
               />
             ) : null}
@@ -196,7 +196,7 @@ const FeaturedCard: React.FC<{
             ) : null}
             <Text style={styles.featuredName} numberOfLines={2}>{product.Name}</Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.featuredPrice}>Rs {product.Price.toFixed(0)}</Text>
+              <Text style={styles.featuredPrice}>MUR {product.Price.toFixed(0)}</Text>
               {hasDiscount && (
                 <Text style={styles.heroDiscount}>−{discountPct}%</Text>
               )}
@@ -253,7 +253,7 @@ const GridTile: React.FC<{
               <Animated.Image
                 source={{ uri: firstImage }}
                 style={[styles.gridImg, { opacity: imgOpacity }]}
-                resizeMode="contain"
+                resizeMode="cover"
                 onLoad={onLoad}
               />
             ) : null}
@@ -269,7 +269,7 @@ const GridTile: React.FC<{
               {product.Name}
             </Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.gridPrice}>Rs {product.Price.toFixed(0)}</Text>
+              <Text style={styles.gridPrice}>MUR {product.Price.toFixed(0)}</Text>
               {hasDiscount && (
                 <Text style={styles.heroDiscount}>−{discountPct}%</Text>
               )}
@@ -340,7 +340,7 @@ const SpanCard: React.FC<{
               {product.Name}
             </Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.gridPrice}>Rs {product.Price.toFixed(0)}</Text>
+              <Text style={styles.gridPrice}>MUR {product.Price.toFixed(0)}</Text>
               {hasDiscount && (
                 <Text style={styles.heroDiscount}>−{discountPct}%</Text>
               )}

@@ -38,6 +38,7 @@ export { BrandTile } from './BrandTile';
 export { CategoryTile } from './CategoryTile';
 export { WishlistHeart } from './WishlistHeart';
 export { ProductRail } from './ProductRail';
+export { ProductGrid } from './ProductGrid';
 export { TrustStrip } from './TrustStrip';
 export { DeptFooter } from './DeptFooter';
 export { BreadcrumbRow } from './BreadcrumbRow';

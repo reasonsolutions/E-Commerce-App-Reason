@@ -3,23 +3,14 @@ import { View, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, Radius } from '../../theme';
 import { FontFamily } from '../../theme/fonts';
-import type { ProductPolicyInfo, ProductShippingInfo } from '../../api/interfaces';
+import type { ProductPolicyInfo } from '../../api/interfaces';
 
 interface TrustCardRowProps {
   policy: ProductPolicyInfo;
-  shipping: ProductShippingInfo;
 }
 
-export const TrustCardRow: React.FC<TrustCardRowProps> = ({ policy, shipping }) => {
+export const TrustCardRow: React.FC<TrustCardRowProps> = ({ policy }) => {
   const cards: { icon: string; label: string }[] = [];
-
-  if (shipping.FreeShipping) {
-    cards.push({ icon: 'bicycle-outline', label: 'Free Delivery' });
-  }
-
-  if (shipping.EstimatedDeliveryDays) {
-    cards.push({ icon: 'time-outline', label: `Delivers in ${shipping.EstimatedDeliveryDays} days` });
-  }
 
   if (policy.IsReturnable) {
     cards.push({

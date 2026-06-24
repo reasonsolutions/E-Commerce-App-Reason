@@ -46,11 +46,8 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
     setImgFailed(true);
   }, []);
 
-  // Guard: only show discount when ComparePrice > Price (server DiscountPct can be wrong)
   const hasDiscount = product.MaxComparePrice > product.MinPrice;
-  const discountPct = hasDiscount
-    ? Math.round(((product.MaxComparePrice - product.MinPrice) / product.MaxComparePrice) * 100)
-    : 0;
+  const discountPct = hasDiscount ? Math.round(product.DiscountPct) : 0;
 
   const isNew = (() => {
     if (!product.CreatedDate) return false;
@@ -93,7 +90,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
 
         {hasDiscount && (
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>-{discountPct}%</Text>
+            <Text style={styles.badgeText}>{discountPct}% OFF</Text>
           </View>
         )}
 
@@ -109,12 +106,12 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
         <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
         <View style={styles.priceRow}>
           {product.MinPrice > 0 ? (
-            <Text style={styles.price} numberOfLines={1}>Rs {product.MinPrice.toLocaleString('en-IN')}</Text>
+            <Text style={styles.price} numberOfLines={1}>MUR {product.MinPrice.toLocaleString('en-IN')}</Text>
           ) : (
             <Text style={styles.priceUnavailable} numberOfLines={1}>Price unavailable</Text>
           )}
           {hasDiscount && product.MinPrice > 0 && (
-            <Text style={styles.was} numberOfLines={1}>Rs {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
+            <Text style={styles.was} numberOfLines={1}>MUR {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
           )}
         </View>
         {product.Variant ? (
@@ -131,7 +128,11 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
 });
 
 const styles = StyleSheet.create({
-  card: {},
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius:    Radius.md,
+    paddingBottom:   Space[3],
+  },
   imgWrap: {
     borderRadius:   Radius.md,
     overflow:       'hidden',
@@ -164,26 +165,27 @@ const styles = StyleSheet.create({
     color:         '#FFFFFF',
     letterSpacing: 1.2,
   },
-  // Discount badge — bottom-left, frosted white per design
+  // Discount badge — top-right, solid accent — stronger merchandising signal
   badge: {
     position:          'absolute',
-    left:              8,
-    bottom:            8,
+    top:               8,
+    right:             8,
     paddingVertical:   3,
     paddingHorizontal: 7,
     borderRadius:      6,
-    backgroundColor:   'rgba(255,255,255,0.90)',
+    backgroundColor:   Colors.accent,
   },
   badgeText: {
     fontFamily:    FontFamily.sans,
-    fontSize:      10,
-    fontWeight:    '700',
-    color:         Colors.accent,
+    fontSize:      11.5,
+    fontWeight:    '800',
+    color:         '#FFFFFF',
     letterSpacing: 0.2,
   },
   info: {
-    paddingTop: Space[2] + 1,
-    gap:        3,
+    paddingTop:        Space[2] + 1,
+    paddingHorizontal: Space[2],
+    gap:               3,
   },
   brand: {
     ...Type.label,

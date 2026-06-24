@@ -20,6 +20,7 @@ import {
   PostCartSaveInterface,
   WishlistItemInterface,
   VariantInterface,
+  ProductInterface,
 } from '../api/interfaces';
 import { ItemCondition } from '../config/enum_files/ItemCondition';
 import { postSaveCartItems } from '../api/cart';
@@ -27,6 +28,7 @@ import { getProductByItemId } from '../api/product';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
 import { addToGuestCart } from '../api/cart';
 import { getOrgIdForInventory } from '../api/product';
+import ProductCard from '../components/ProductCard';
 
 import {
   Skeleton,
@@ -56,13 +58,13 @@ import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_H = SCREEN_W * 0.62;
+const HERO_H = SCREEN_W; // 1:1 — matches product photo aspect ratio
 const NAV_H  = 52;
 
 // Design tokens local to this screen
 const INK     = Colors.ink1;
-const COND_BG = '#EDF7EE';
-const COND_FG = '#2E7D32';
+const COND_BG = Colors.surfaceDeep;
+const COND_FG = Colors.ink2;
 
 type ProductFetch = { product: ProductDetailInterface };
 
@@ -76,6 +78,46 @@ const CONDITION_LABELS: Record<number, string> = {
   [ItemCondition.Used]:        'USED',
   [ItemCondition.Refurbished]: 'REFURB',
 };
+
+// Related products arrive as ProductDetailInterface (detail-page shape, pricing
+// nested under Variants[0]) — ProductCard expects the listing shape
+// (ProductInterface, flat MinPrice/MaxComparePrice/DiscountPct). This maps the
+// handful of fields ProductCard actually reads; unused nested objects get inert
+// placeholders since ProductCard never touches them.
+function mapRelatedProductToCard(p: ProductDetailInterface): ProductInterface {
+  const variant = p.Variants?.[0];
+  const price = variant?.PriceDetails?.Price ?? 0;
+  const comparePrice = variant?.PriceDetails?.ComparePrice ?? 0;
+  return {
+    ItemID:                Number(p.ItemId),
+    Name:                  p.Name,
+    OrganisationName:      p.OrganisationName,
+    OrganisationId:        p.OrganisationID,
+    Description:           p.Description,
+    SubcategoryID:         p.SubCategoryId,
+    Images:                p.Images,
+    CreatedDate:           p.DateCreated,
+    BrandID:               String(p.BrandId),
+    BrandName:             p.BrandName,
+    SCName:                p.SubCategoryName,
+    CategoryID:            p.CategoryId,
+    CategoryName:          p.CategoryName,
+    CategoryImage:         p.CategoryImage,
+    RelatedProducts:       null,
+    MinPrice:              price,
+    MaxComparePrice:       comparePrice,
+    DiscountPct:           comparePrice > price ? Math.round(((comparePrice - price) / comparePrice) * 100) : 0,
+    Inventory_Id:          variant ? Number(variant.InventoryId) : undefined,
+    Variant:               variant?.Variant,
+    ComplianceInfo:        p.ComplianceInfo as unknown as ProductInterface['ComplianceInfo'],
+    ProductClassification: p.ProductClassification,
+    Marketing:             p.Marketing,
+    PolicyInfo:            p.PolicyInfo,
+    AdditionalInfo:        p.AdditionalInfo,
+    ShippingInfo:          p.ShippingInfo,
+    Variants:              p.Variants as unknown as ProductInterface['Variants'],
+  };
+}
 
 const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
@@ -163,6 +205,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       const key = scopedKey('recentlyViewed', code);
       return AsyncStorage.getItem(key).then(raw => {
         const prev: any[] = raw ? JSON.parse(raw) : [];
+        const minPrice = preselect?.PriceDetails?.Price ?? 0;
+        const maxComparePrice = preselect?.PriceDetails?.ComparePrice ?? 0;
+        // getProductByItemId has no top-level DiscountPct (unlike allProducts) — derive it here
         const snapshot = {
           ItemID:          itemIdNum,
           Name:            p.Name,
@@ -170,8 +215,11 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           Images:          Array.isArray(p.Images)
             ? (p.Images as unknown as string[]).join(';')
             : p.Images,
-          MinPrice:        preselect?.PriceDetails?.Price ?? 0,
-          MaxComparePrice: preselect?.PriceDetails?.ComparePrice ?? 0,
+          MinPrice:        minPrice,
+          MaxComparePrice: maxComparePrice,
+          DiscountPct:     maxComparePrice > minPrice
+            ? Math.round(((maxComparePrice - minPrice) / maxComparePrice) * 100)
+            : 0,
           Inventory_Id:    preselect?.InventoryId ?? null,
         };
         const next = [snapshot, ...prev.filter((x: any) => x.ItemID !== itemIdNum)].slice(0, 8);
@@ -328,7 +376,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         Animated.spring(badgeScale, { toValue: Motion.badgePopScale, ...Motion.spring.snap }),
         Animated.spring(badgeScale, { toValue: 1, ...Motion.spring.settle }),
       ]).start();
-      toast.success({ title: 'Added to bag', description: data?.product?.Name ?? '' });
+      toast.success({ title: 'Added to bag' });
     } catch {
       haptic.warning();
       toast.error({ title: "Couldn't add to bag", description: 'Check your connection and try again.' });
@@ -521,22 +569,14 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         <Animated.View style={[styles.identityPlate, plateStyle]}>
           {productDetails ? (
             <>
-              {/* Brand + seller eyebrow */}
-              <View style={styles.eyebrowRow}>
-                {productDetails.BrandName ? (
+              {/* Brand eyebrow — seller info moved to SellerCard lower on the page */}
+              {productDetails.BrandName ? (
+                <View style={styles.eyebrowRow}>
                   <Text style={styles.eyebrowBrand}>
                     {productDetails.BrandName.toUpperCase()}
                   </Text>
-                ) : null}
-                {productDetails.BrandName && productDetails.OrganisationName ? (
-                  <Text style={styles.eyebrowDot}>·</Text>
-                ) : null}
-                {productDetails.OrganisationName ? (
-                  <Text style={styles.eyebrowSeller}>
-                    Sold by {productDetails.OrganisationName}
-                  </Text>
-                ) : null}
-              </View>
+                </View>
+              ) : null}
 
               {/* Product name + condition badge inline */}
               <View style={styles.nameBadgeRow}>
@@ -550,11 +590,11 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
               {/* Price row */}
               <View style={styles.priceRow}>
-                <Text style={styles.price}>Rs {activePrice.toFixed(0)}</Text>
+                <Text style={styles.price}>MUR {activePrice.toFixed(0)}</Text>
                 {hasDiscount ? (
                   <>
                     <Text style={styles.comparePrice}>
-                      Rs {activeComparePrice.toFixed(0)}
+                      MUR {activeComparePrice.toFixed(0)}
                     </Text>
                     <Text style={styles.discountInline}>{discountPct}% off</Text>
                   </>
@@ -594,10 +634,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
         {/* Trust cards */}
         {productDetails ? (
-          <TrustCardRow
-            policy={productDetails.PolicyInfo}
-            shipping={productDetails.ShippingInfo}
-          />
+          <TrustCardRow policy={productDetails.PolicyInfo} />
         ) : null}
 
         {/* Description + specs as accordions */}
@@ -612,31 +649,19 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           demographic={(productDetails?.AdditionalInfo?.ProductDemoGraphic as any)?.Description ?? null}
         />
 
-        {/* Related products */}
+        {/* Related products — reuses ProductCard for consistent image fit, corners, pricing */}
         {relatedProducts.length > 0 ? (
           <View style={styles.relatedSection}>
             <Text style={styles.relatedHeading}>YOU MAY ALSO LIKE</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.relatedScroll}>
-              {relatedProducts.map(p => {
-                const firstVariant = p.Variants?.[0];
-                const price = firstVariant?.PriceDetails?.Price ?? 0;
-                const imgUri = resolveImageUrl(p.Images);
-                return (
-                  <TouchableOpacity
-                    key={p.ItemId}
-                    style={styles.relatedCard}
-                    activeOpacity={0.85}
-                    onPress={() => navigation.navigate('Product', { product: String(p.ItemId) })}
-                  >
-                    <View style={styles.relatedImgWrap}>
-                      {imgUri ? <Image source={{ uri: imgUri }} style={styles.relatedImg} resizeMode="contain" /> : null}
-                    </View>
-                    <Text style={styles.relatedBrand} numberOfLines={1}>{(p.BrandName ?? '').toUpperCase()}</Text>
-                    <Text style={styles.relatedName} numberOfLines={2}>{p.Name}</Text>
-                    {price > 0 ? <Text style={styles.relatedPrice}>Rs {price.toLocaleString('en-IN')}</Text> : null}
-                  </TouchableOpacity>
-                );
-              })}
+              {relatedProducts.map(p => (
+                <ProductCard
+                  key={p.ItemId}
+                  product={mapRelatedProductToCard(p)}
+                  cardWidth={140}
+                  onPress={() => navigation.navigate('Product', { product: String(p.ItemId) })}
+                />
+              ))}
             </ScrollView>
           </View>
         ) : null}
@@ -810,7 +835,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space[4],
     paddingTop:        Space[4],
     paddingBottom:     Space[4],
-    backgroundColor:   Colors.surface,
+    backgroundColor:   Colors.surfaceSoft,
     gap:               Space[2],
   },
   eyebrowRow: {
@@ -826,15 +851,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
     textTransform: 'uppercase',
     color:         Colors.ink3,
-  },
-  eyebrowDot: {
-    color:    Colors.ink4,
-    fontSize: 10,
-  },
-  eyebrowSeller: {
-    fontFamily: FontFamily.sans,
-    fontSize:   11,
-    color:      Colors.ink3,
   },
   productName: {
     fontFamily:    FontFamily.sans,
@@ -874,7 +890,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: Space[3],
+    marginTop: Space[1],
   },
   price: {
     fontFamily: FontFamily.serif,
@@ -998,34 +1015,5 @@ const styles = StyleSheet.create({
   relatedScroll: {
     paddingHorizontal: Space.screenH,
     gap: Space[3],
-  },
-  relatedCard: {
-    width: 140,
-  },
-  relatedImgWrap: {
-    width: 140,
-    height: 175,
-    backgroundColor: Colors.surfaceSoft,
-    marginBottom: Space[2],
-    overflow: 'hidden',
-  },
-  relatedImg: {
-    width: '100%',
-    height: '100%',
-  },
-  relatedBrand: {
-    ...Type.label,
-    color: Colors.ink3,
-    marginBottom: 2,
-  },
-  relatedName: {
-    ...Type.caption,
-    color: Colors.ink1,
-    marginBottom: 2,
-  },
-  relatedPrice: {
-    fontFamily: FontFamily.serif,
-    fontSize: 14,
-    color: Colors.ink1,
   },
 });

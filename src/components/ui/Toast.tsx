@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Space } from '../../theme';
+import { Space, Colors } from '../../theme';
 import { FontFamily } from '../../theme/fonts';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
@@ -17,9 +17,9 @@ interface AppToastProps {
 const CONFIG: Record<ToastVariant, { icon: string; iconColor: string; bg: string; textColor: string }> = {
   success: {
     icon:      'checkmark-circle',
-    iconColor: '#2F6F3E',
-    bg:        '#EDF7EF',
-    textColor: '#2F6F3E',
+    iconColor: Colors.ink1,
+    bg:        '#FFFFFF',
+    textColor: Colors.ink1,
   },
   error: {
     icon:      'alert-circle',

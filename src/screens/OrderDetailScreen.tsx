@@ -210,7 +210,7 @@ const ItemCard: React.FC<{
           ) : null}
           <View style={itemCardStyles.priceRow}>
             <Text style={itemCardStyles.price}>
-              Rs {(item.Amount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              MUR {(item.Amount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </Text>
             {item.Quantity > 1 ? (
               <Text style={itemCardStyles.qty}>× {item.Quantity}</Text>
@@ -585,19 +585,19 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         {orderPayment ? (
           <Animated.View style={[styles.section, paymentAnim]}>
             <Text style={styles.sectionEyebrow}>PAYMENT SUMMARY</Text>
-            <DetailRow label="SUBTOTAL" value={`Rs ${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+            <DetailRow label="SUBTOTAL" value={`MUR ${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
             {discount > 0 ? (
-              <DetailRow label="DISCOUNT" value={`− Rs ${discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <DetailRow label="DISCOUNT" value={`− MUR ${discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
             ) : null}
             {orderPayment.DeliveryCharges > 0 ? (
-              <DetailRow label="DELIVERY" value={`Rs ${orderPayment.DeliveryCharges.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <DetailRow label="DELIVERY" value={`MUR ${orderPayment.DeliveryCharges.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
             ) : orderPayment.isFreeShipping ? (
               <DetailRow label="DELIVERY" value="Free" />
             ) : null}
             {orderPayment.CouponAvailed ? (
               <DetailRow label="COUPON" value={orderPayment.CouponAvailed} />
             ) : null}
-            <DetailRow label="TOTAL PAID" value={`Rs ${orderPayment.AmountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} isLast />
+            <DetailRow label="TOTAL PAID" value={`MUR ${orderPayment.AmountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} isLast />
           </Animated.View>
         ) : null}
       </ScrollView>

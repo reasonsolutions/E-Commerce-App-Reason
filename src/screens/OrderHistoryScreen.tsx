@@ -164,7 +164,7 @@ const OrderCard: React.FC<{
 
         {/* Price — dominant */}
         <Text style={cardStyles.total}>
-          Rs {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          MUR {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
         </Text>
 
         {/* Status — second visual priority */}

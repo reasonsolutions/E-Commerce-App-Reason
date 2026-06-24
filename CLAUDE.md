@@ -34,19 +34,29 @@ npx jest
 
 ---
 
+## Tool Preferences
+
+When performing repository-wide code search, prefer `rg` (ripgrep) when available.
+
+When discovering files and directories, prefer `fd` when available.
+
+When exploring repository structure, consider `tree` for a high-level overview.
+
+These are preferences, not requirements. Use the most appropriate tool for the task.
+
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Framework | React Native 0.81.4 — bare CLI, no Expo |
-| Language | TypeScript 5.8.3. Do not add TS to existing `.js` files unless explicitly asked. |
+| Layer      | Choice                                                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Framework  | React Native 0.81.4 — bare CLI, no Expo                                                                                                                                                    |
+| Language   | TypeScript 5.8.3. Do not add TS to existing `.js` files unless explicitly asked.                                                                                                           |
 | Navigation | React Navigation v7 Stack — 14 routes, flat, headers hidden. Always starts on `Home`. `navigationRef` in `src/utils/navigationService.ts` for navigation outside React (e.g. 401 handler). |
-| State | Context API + `useState` (local). `useAsyncState` for async. `CartContext.js` for global cart count only. |
-| HTTP | Axios — `src/api/axiosInstance.ts`. Bearer token injected via Keychain-backed in-memory cache. |
-| Styling | `StyleSheet.create()` + design tokens (default). NativeWind v4 primitives available. |
-| Overlays | `@gorhom/bottom-sheet` v5. RN core `Modal`/`Alert`. No Gluestack overlays. |
-| Animations | `Animated` API + `react-native-reanimated` v4. All durations from `Motion.*`. |
-| Icons | `react-native-vector-icons` |
+| State      | Context API + `useState` (local). `useAsyncState` for async. `CartContext.js` for global cart count only.                                                                                  |
+| HTTP       | Axios — `src/api/axiosInstance.ts`. Bearer token injected via Keychain-backed in-memory cache.                                                                                             |
+| Styling    | `StyleSheet.create()` + design tokens (default). NativeWind v4 primitives available.                                                                                                       |
+| Overlays   | `@gorhom/bottom-sheet` v5. RN core `Modal`/`Alert`. No Gluestack overlays.                                                                                                                 |
+| Animations | `Animated` API + `react-native-reanimated` v4. All durations from `Motion.*`.                                                                                                              |
+| Icons      | `react-native-vector-icons`                                                                                                                                                                |
 
 ---
 
@@ -70,7 +80,7 @@ npx jest
 Each feature owns `src/api/<domain>/`: `productApi.ts`, `mockProductApi.ts`, `index.ts`. Screens import only from the domain barrel — never from implementation files.
 
 ```typescript
-import { getProductsByCategory } from '../api/product';   // correct
+import { getProductsByCategory } from '../api/product'; // correct
 import { getProductsByCategory } from '../api/product/productApi'; // never
 ```
 
@@ -183,19 +193,19 @@ Ad-hoc durations are a hard failure. **Exception:** HomeScreen keeps its own loc
 
 ## Visual Standards (Non-Negotiable)
 
-**Editorial restraint** — Fewer elements. Remove before adding. Decoration requires justification.
+**Direction: "Tira-lite."** Editorial foundation (serif headlines, calm surfaces, restrained motion) stays. Product cards and section banners are allowed more merchandising density than before — richer cards, bigger campaign-style hero banners — but the app should still read as curated, not as a dense marketplace grid. When in doubt, keep the editorial foundation and add density only to cards/banners specifically.
 
-**Serif-led hierarchy** — Product names, prices, headlines, section titles always use `FontFamily.serif`. Never bold sans for these roles.
+**Serif-led hierarchy** — Product names, prices, headlines, section titles always use `FontFamily.serif`. Never bold sans for these roles. This is non-negotiable even as card density increases — it's the app's primary differentiator from Amazon/Flipkart-style marketplaces.
 
 **Mono micro-labels** — Brand names, category eyebrows, section kickers, field labels, order numbers: `Type.label` only.
 
 **Image-first** — Product images dominate. No text overlay on heroes. Identity (brand → name → price) below the image on a calm surface. 4:5 portrait ratio for product cards.
 
-**Calm surfaces** — `Colors.surface` / `surfaceSoft` / `surfaceDeep`. Depth through tone, not shadow. `Shadow.sm` only on sticky/overlapping elements.
+**Calm surfaces** — `Colors.surface` / `surfaceSoft` / `surfaceDeep`. Depth through tone, not shadow. `Shadow.sm` only on sticky/overlapping elements. Applies to screen chrome (headers, backgrounds, dividers) — not a constraint on card density.
 
 **CTA hierarchy** — Primary: full-width ink pill, `Type.bodyStrong` white, `useTactile`. Secondary: `Type.caption` underlined text link, `Colors.ink3`. Never two equal-weight buttons.
 
-**No marketplace density** — No rounded-card boxing on list items. Hairline `Colors.rule` dividers only.
+**Product card density (relaxed)** — Cards may show real, API-backed merchandising signals beyond image/brand/name/price: discount badge (server `DiscountPct`), MRP strikethrough, shipping/delivery line, warranty/returns signal (`PolicyInfo`). Never fabricate data not present in the API response (no placeholder ratings, no fake review counts, no invented badges). Rounded-card boxing on list items is now allowed where it improves scannability — hairline `Colors.rule` dividers remain the default for simple list rows (cart, order history).
 
 **No startup aesthetics** — No purple/violet/blue. No glassmorphism. No gradient blobs. No glow. No confetti.
 
@@ -206,9 +216,9 @@ Ad-hoc durations are a hard failure. **Exception:** HomeScreen keeps its own loc
 ## Haptics
 
 ```typescript
-haptic.light()    // row tap, variant select, wishlist toggle, qty change
-haptic.success()  // add-to-cart confirmed, order placed
-haptic.warning()  // login failure, destructive confirm
+haptic.light(); // row tap, variant select, wishlist toggle, qty change
+haptic.success(); // add-to-cart confirmed, order placed
+haptic.warning(); // login failure, destructive confirm
 ```
 
 ---
@@ -216,46 +226,66 @@ haptic.warning()  // login failure, destructive confirm
 ## Established Patterns
 
 **Async data fetch:**
+
 ```typescript
 const { data, loading, isError, error, run } = useAsyncState<T>(initialValue);
 
-useFocusEffect(useCallback(() => {
-  const cancelled = { current: false };
-  run(async () => { /* fetch */ }, cancelled);
-  return () => { cancelled.current = true; };
-}, [run]));
+useFocusEffect(
+  useCallback(() => {
+    const cancelled = { current: false };
+    run(async () => {
+      /* fetch */
+    }, cancelled);
+    return () => {
+      cancelled.current = true;
+    };
+  }, [run]),
+);
 ```
 
 **Full-screen error:**
+
 ```tsx
-if (isError) return <ErrorState title="..." message={error ?? ''} onRetry={fetchFn} retryLoading={loading} />;
+if (isError)
+  return (
+    <ErrorState
+      title="..."
+      message={error ?? ''}
+      onRetry={fetchFn}
+      retryLoading={loading}
+    />
+  );
 ```
 
 **Skeleton + inline mutation error:**
+
 ```tsx
 if (loading && !data?.length) return <Skeleton height={...} />;
 {mutationError ? <ErrorBanner message={mutationError} onDismiss={() => setMutationError(null)} /> : null}
 ```
 
 **Storage keys — always use the constant:**
+
 ```typescript
 import { STORAGE_KEYS } from '../config/storageKeys';
 AsyncStorage.getItem(STORAGE_KEYS.userData); // never bare string literals
 ```
 
 **User-scoped storage keys — use `scopedKey` for per-user data:**
+
 ```typescript
 import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 // Keys for data that must not bleed between accounts on a shared device:
 // recentlyViewed, recentSearches, wishlistSeen
 const key = scopedKey('recentlyViewed', profileCode); // → 'recentlyViewed_100094'
-const guestKey = scopedKey('recentlyViewed', null);   // → 'recentlyViewed_guest'
+const guestKey = scopedKey('recentlyViewed', null); // → 'recentlyViewed_guest'
 AsyncStorage.getItem(key);
 // Always read profileCode from AsyncStorage.getItem(STORAGE_KEYS.userData) at
 // the call site — never rely on useProfileCode() which is null on first render.
 ```
 
 **Profile code:**
+
 ```typescript
 // In screens that need it for API calls, read directly from AsyncStorage inside the fetch function
 // to avoid race conditions and stale data after account switches:
@@ -265,33 +295,44 @@ const code = raw ? JSON.parse(raw).CustomerProfileCode : null;
 ```
 
 **Toast:**
+
 ```typescript
 import { toastEmitter } from '../utils/toastEmitter';
 toastEmitter.emit('success', 'Added to cart'); // fire-and-forget, works outside React tree
 ```
 
 **Auth guard (protect actions that require login):**
+
 ```typescript
 const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
 // Wrap any action that requires auth:
 guard(() => navigation.navigate('Address', { cartItems }));
 // Render the sheet conditionally:
-{showLoginPrompt && (
-  <LoginPromptSheet
-    context="checkout"   // 'orders' | 'wishlist' | 'profile' | 'checkout' | 'general'
-    onClose={dismissLoginPrompt}
-    onSignIn={() => { dismissLoginPrompt(); navigation.navigate('Login'); }}
-    onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
-  />
-)}
+{
+  showLoginPrompt && (
+    <LoginPromptSheet
+      context="checkout" // 'orders' | 'wishlist' | 'profile' | 'checkout' | 'general'
+      onClose={dismissLoginPrompt}
+      onSignIn={() => {
+        dismissLoginPrompt();
+        navigation.navigate('Login');
+      }}
+      onRegister={() => {
+        dismissLoginPrompt();
+        navigation.navigate('Register');
+      }}
+    />
+  );
+}
 ```
 
 **Press-scale CTA:**
+
 ```tsx
 const { animatedStyle, handlers } = useTactile();
 <Animated.View style={animatedStyle}>
   <TouchableOpacity activeOpacity={1} {...handlers} />
-</Animated.View>
+</Animated.View>;
 // Or use PrimaryButton — useTactile is wired internally.
 ```
 
@@ -323,29 +364,30 @@ All 14 screens are open for redesign when explicitly requested. Login, HomeScree
 
 ## Known Deferred Debt — Do Not Fix as Side Effects
 
-| Item | Notes |
-|---|---|
-| ~~`postCnfOrderDetail` on mock~~ | Switched to real; `Brand_Name`, `InventoryID`, `ItemID`, `SubOrderNumber` fallback mapping added in `order/index.ts` |
-| ~~401 session clearing~~ | Done — `axiosInstance` response interceptor calls `clearSession()` + `resetToLogin()` |
-| ~~Refresh token flow~~ | Done — 401 → refresh → retry wired in `axiosInstance.ts`. Both tokens cleared on logout. |
-| ~~Clock-based token expiry~~ | Removed — expiry is server-driven via 401, not `exp` decode |
-| ~~`SortBy` server-side~~ | Done — `allProducts` payload sends `sortBy`, `ResultScreen` maps sort keys |
-| ~~Tax in order payload~~ | Done — `AddressScreen` maps `PriceDetails.Taxes` into `PlaceOrderTax[]` |
-| ~~Cancel order `SubOrder.Id`~~ | Resolved — `getOrderStatus` returns `SubOrder: { Code, Number }`. Cancel payload uses `SubOrder.Code` directly. End-to-end confirmed working. |
-| ~~Order progress bar~~ | `OrderProgressBar` added — `src/components/ui/OrderProgressBar.tsx`. 6-step segmented bar (Placed → Delivered). Shown inline in `OrderHistoryScreen` (active orders) and in `StatusHero` on `OrderDetailScreen`. Terminal statuses (Cancelled, Returned) return null. |
-| ~~HomeScreen infinite skeleton~~ | Fixed — fetch functions guard `statusCode !== 1`; `fetchInitiated` ref prevents dep-change re-fire loop; each skeleton branch breaks on its specific `isError` flag. |
-| ~~Recently viewed / search bleed between accounts~~ | Fixed — `scopedKey(base, profileCode)` in `storageKeys.ts`. ProductScreen, HomeScreen, SearchScreen, WishlistScreen updated. |
-| ~~Dark header on Address screens~~ | Fixed — `AddressScreen` and `AddressManagementScreen` use light surface header. |
-| `postUpdateCustomer` password | Overwrites stored password — backend fix pending |
-| Tax display in UI | `ProductScreen`, `CartScreen`, `AddressScreen` don't show tax breakdown yet |
-| `getSavedCartItems` tax verification | Unconfirmed whether cart API returns `PriceDetails.Taxes` populated |
-| `useSession` adoption | OrderHistoryScreen, OrderDetailScreen still read AsyncStorage directly |
-| OrganisationID cold-start | `getOrgIdForInventory()` returns empty if user reaches checkout without browsing products |
-| OTP resend | No resend button on OTPVerificationScreen — user has no recovery if OTP expires |
-| Cart badge on logout | Badge count not reset to 0 on logout — shows stale count until next focus |
-| API response types | `axiosInstance` responses untyped (`any`) — incremental hardening deferred |
-| Navigation prop typing | Most screens use `any`-typed nav props — should use `StackNavigationProp` generics |
-| Backend `statusCode: 0` on empty lists | `getCategory` and `getBrands` return `statusCode: 0` when empty instead of `statusCode: 1, result: []`. Frontend guards against this but the backend should be fixed. |
+| Item                                                | Notes                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~`postCnfOrderDetail` on mock~~                    | Switched to real; `Brand_Name`, `InventoryID`, `ItemID`, `SubOrderNumber` fallback mapping added in `order/index.ts`                                                                                                                                                                                                            |
+| ~~401 session clearing~~                            | Done — `axiosInstance` response interceptor calls `clearSession()` + `resetToLogin()`                                                                                                                                                                                                                                           |
+| ~~Refresh token flow~~                              | Done — 401 → refresh → retry wired in `axiosInstance.ts`. Both tokens cleared on logout.                                                                                                                                                                                                                                        |
+| ~~Clock-based token expiry~~                        | Removed — expiry is server-driven via 401, not `exp` decode                                                                                                                                                                                                                                                                     |
+| ~~`SortBy` server-side~~                            | Done — `allProducts` payload sends `sortBy`, `ResultScreen` maps sort keys                                                                                                                                                                                                                                                      |
+| ~~Tax in order payload~~                            | Done — `AddressScreen` maps `PriceDetails.Taxes` into `PlaceOrderTax[]`                                                                                                                                                                                                                                                         |
+| ~~Cancel order `SubOrder.Id`~~                      | Resolved — `getOrderStatus` returns `SubOrder: { Code, Number }`. Cancel payload uses `SubOrder.Code` directly. End-to-end confirmed working.                                                                                                                                                                                   |
+| ~~Order progress bar~~                              | `OrderProgressBar` added — `src/components/ui/OrderProgressBar.tsx`. 6-step segmented bar (Placed → Delivered). Shown inline in `OrderHistoryScreen` (active orders) and in `StatusHero` on `OrderDetailScreen`. Terminal statuses (Cancelled, Returned) return null.                                                           |
+| ~~HomeScreen infinite skeleton~~                    | Fixed — fetch functions guard `statusCode !== 1`; `fetchInitiated` ref prevents dep-change re-fire loop; each skeleton branch breaks on its specific `isError` flag.                                                                                                                                                            |
+| ~~Recently viewed / search bleed between accounts~~ | Fixed — `scopedKey(base, profileCode)` in `storageKeys.ts`. ProductScreen, HomeScreen, SearchScreen, WishlistScreen updated.                                                                                                                                                                                                    |
+| ~~Dark header on Address screens~~                  | Fixed — `AddressScreen` and `AddressManagementScreen` use light surface header.                                                                                                                                                                                                                                                 |
+| `postUpdateCustomer` password                       | Overwrites stored password — backend fix pending                                                                                                                                                                                                                                                                                |
+| Tax display in UI                                   | `ProductScreen`, `CartScreen`, `AddressScreen` don't show tax breakdown yet                                                                                                                                                                                                                                                     |
+| `getSavedCartItems` tax verification                | Unconfirmed whether cart API returns `PriceDetails.Taxes` populated                                                                                                                                                                                                                                                             |
+| `useSession` adoption                               | OrderHistoryScreen, OrderDetailScreen still read AsyncStorage directly                                                                                                                                                                                                                                                          |
+| OrganisationID cold-start                           | `getOrgIdForInventory()` returns empty if user reaches checkout without browsing products                                                                                                                                                                                                                                       |
+| OTP resend                                          | No resend button on OTPVerificationScreen — user has no recovery if OTP expires                                                                                                                                                                                                                                                 |
+| Cart badge on logout                                | Badge count not reset to 0 on logout — shows stale count until next focus                                                                                                                                                                                                                                                       |
+| API response types                                  | `axiosInstance` responses untyped (`any`) — incremental hardening deferred                                                                                                                                                                                                                                                      |
+| Navigation prop typing                              | Most screens use `any`-typed nav props — should use `StackNavigationProp` generics                                                                                                                                                                                                                                              |
+| Backend `statusCode: 0` on empty lists              | `getCategory` and `getBrands` return `statusCode: 0` when empty instead of `statusCode: 1, result: []`. Frontend guards against this but the backend should be fixed.                                                                                                                                                           |
+| "Trending Now" / "Best Sellers" rail                | Blocked on backend — needs a real most-ordered/aggregated-popularity endpoint. `Marketing.Tags` exists in `ProductInterface` but is empty on all products today, so no tag-based merchandising signal exists either. Do not fake this with a client-side proxy (e.g. newest + highest discount) — defer until real data exists. |
 
 ---
 

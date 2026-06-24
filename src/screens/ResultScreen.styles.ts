@@ -8,11 +8,11 @@ const COL_GAP = Space[3];
 
 export const COL_W      = (SCREEN_W - Space.screenH * 2 - COL_GAP) / 2;
 export const SPAN_W     = SCREEN_W - Space.screenH * 2;
-export const GRID_IMG_H = COL_W * 1.25;
+export const GRID_IMG_H = COL_W; // 1:1 — matches product photo aspect ratio
 export const SPAN_IMG_H = SPAN_W * 0.58;
 export const HERO_IMG_H = SCREEN_W * 0.56;
 export const FEAT_W     = SCREEN_W - Space.screenH * 2;
-export const FEAT_IMG_H = FEAT_W * 0.92;
+export const FEAT_IMG_H = FEAT_W; // 1:1 — matches product photo aspect ratio
 
 export const styles = StyleSheet.create({
   root: {
@@ -179,7 +179,6 @@ export const styles = StyleSheet.create({
     borderRadius:    16,
     overflow:        'hidden',
     backgroundColor: Colors.surfaceSoft,
-    padding:         Space[2],
   },
   gridImg: {
     width:  '100%',
@@ -364,7 +363,6 @@ export const styles = StyleSheet.create({
     borderRadius:    16,
     overflow:        'hidden',
     backgroundColor: Colors.surfaceSoft,
-    padding:         Space[3],
   },
   featuredInfo: {
     paddingTop: Space[3],

@@ -14,6 +14,7 @@ import { loginCustomer } from '../api/auth';
 import {
   getSavedCartItems,
   postSaveCartItems,
+  updateCartItemQuantity,
   getGuestCart,
   clearGuestCart,
   type GuestCartItem,
@@ -203,23 +204,40 @@ const Login: React.FC = () => {
       ]);
       setTokenCache(AccessToken);
       if (userData.CustomerProfileCode) {
-        const guestItems = await getGuestCart();
+        const [guestItems, existingCartRes] = await Promise.all([
+          getGuestCart(),
+          getSavedCartItems(userData.CustomerProfileCode).catch(() => null),
+        ]);
+        const existingItems: any[] =
+          existingCartRes?.statusCode === 1 ? existingCartRes.result ?? [] : [];
         if (guestItems.length > 0) {
           await Promise.all(
-            guestItems.map((item: GuestCartItem) =>
-              postSaveCartItems({
-                CustomerProfileCode: userData.CustomerProfileCode,
-                InventoryId: item.inventoryId,
-                Quantity: item.quantity,
-                IsPurchased: false,
-              }).catch(() => {}),
-            ),
+            guestItems.map((item: GuestCartItem) => {
+              const existing = existingItems.find(
+                ci => ci.InventoryId === item.inventoryId,
+              );
+              return existing
+                ? updateCartItemQuantity(
+                    existing.CartDetailsCode,
+                    item.inventoryId,
+                    existing.Quantity + item.quantity,
+                  ).catch(() => {})
+                : postSaveCartItems({
+                    CustomerProfileCode: userData.CustomerProfileCode,
+                    InventoryId: item.inventoryId,
+                    Quantity: item.quantity,
+                    IsPurchased: false,
+                  }).catch(() => {});
+            }),
           );
           await clearGuestCart();
         }
-        const cartRes = await getSavedCartItems(
-          userData.CustomerProfileCode,
-        ).catch(() => null);
+        const cartRes =
+          guestItems.length > 0
+            ? await getSavedCartItems(userData.CustomerProfileCode).catch(
+                () => null,
+              )
+            : existingCartRes;
         if (cartRes?.statusCode === 1) {
           setCartCount(
             (cartRes.result ?? []).reduce(

@@ -110,9 +110,9 @@ const CartRow = React.memo<{
         ) : null}
 
         <View style={styles.cartPriceRow}>
-          <Text style={styles.cartLineTotal}>Rs {lineTotal.toLocaleString('en-IN')}</Text>
+          <Text style={styles.cartLineTotal}>MUR {lineTotal.toLocaleString('en-IN')}</Text>
           {hasDiscount && (
-            <Text style={styles.cartUnitWas}>Rs {comparePrice.toLocaleString('en-IN')}</Text>
+            <Text style={styles.cartUnitWas}>MUR {comparePrice.toLocaleString('en-IN')}</Text>
           )}
         </View>
 
@@ -174,29 +174,39 @@ const GuestCartRow = React.memo<{
   }, [animOpacity, animTranslateY, delay]);
   const anim = { opacity: animOpacity, transform: [{ translateY: animTranslateY }] };
   const imgOpacity = useRef(new Animated.Value(0)).current;
+  const [imgFailed, setImgFailed] = useState(false);
+  const imgUri = resolveImageUrl(item.image);
   const onLoad = useCallback(() => {
     Animated.timing(imgOpacity, { toValue: 1, duration: Motion.duration.settle, easing: Motion.easing.out, useNativeDriver: true }).start();
   }, [imgOpacity]);
+  const onError = useCallback(() => setImgFailed(true), []);
 
   const hasDiscount = item.comparePrice > item.price;
 
   return (
     <Animated.View style={[styles.cartRow, anim]}>
       <View style={styles.cartImgWrap}>
-        <Animated.Image
-          source={{ uri: item.image }}
-          style={[styles.cartImg, { opacity: imgOpacity }]}
-          resizeMode="cover"
-          onLoad={onLoad}
-        />
+        {imgUri && !imgFailed ? (
+          <Animated.Image
+            source={{ uri: imgUri }}
+            style={[styles.cartImg, { opacity: imgOpacity }]}
+            resizeMode="cover"
+            onLoad={onLoad}
+            onError={onError}
+          />
+        ) : (
+          <View style={[styles.cartImg, styles.cartImgFallback]}>
+            <Text style={styles.cartImgFallbackText}>{(item.name || '?').charAt(0).toUpperCase()}</Text>
+          </View>
+        )}
       </View>
       <View style={styles.cartContent}>
         {item.brandName ? <Text style={styles.cartBrand}>{item.brandName.toUpperCase()}</Text> : null}
         <Text style={styles.cartName} numberOfLines={2}>{item.name}</Text>
         {item.variant ? <Text style={styles.cartVariant}>{item.variant}</Text> : null}
         <View style={styles.cartPriceRow}>
-          <Text style={styles.cartLineTotal}>Rs {(item.price * item.quantity).toLocaleString('en-IN')}</Text>
-          {hasDiscount && <Text style={styles.cartUnitWas}>Rs {item.comparePrice.toLocaleString('en-IN')}</Text>}
+          <Text style={styles.cartLineTotal}>MUR {(item.price * item.quantity).toLocaleString('en-IN')}</Text>
+          {hasDiscount && <Text style={styles.cartUnitWas}>MUR {item.comparePrice.toLocaleString('en-IN')}</Text>}
         </View>
         <View style={styles.cartBottom}>
           <View style={styles.qtyPill}>
@@ -534,7 +544,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             <View style={styles.savingsBanner}>
               <Icon name="gift-outline" size={16} color="#226B3C" />
               <Text style={styles.savingsBannerText}>
-                You're saving Rs {totalSavings.toFixed(0)} on this order
+                You're saving MUR {totalSavings.toFixed(0)} on this order
               </Text>
             </View>
           )}
@@ -544,18 +554,18 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             <Text style={styles.summaryCardLabel}>ORDER SUMMARY</Text>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>Rs {subtotal.toFixed(0)}</Text>
+              <Text style={styles.summaryValue}>MUR {subtotal.toFixed(0)}</Text>
             </View>
             {totalSavings > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={styles.savingsLabel}>Savings</Text>
-                <Text style={styles.savingsValue}>− Rs {totalSavings.toFixed(0)}</Text>
+                <Text style={styles.savingsValue}>− MUR {totalSavings.toFixed(0)}</Text>
               </View>
             )}
             <View style={styles.summaryRule} />
             <View style={styles.summaryPayableBlock}>
               <Text style={styles.summaryPayableLabel}>PAYABLE NOW</Text>
-              <Text style={styles.summaryPayableAmount}>Rs {subtotal.toLocaleString('en-IN')}</Text>
+              <Text style={styles.summaryPayableAmount}>MUR {subtotal.toLocaleString('en-IN')}</Text>
             </View>
           </Animated.View>
 
@@ -823,6 +833,15 @@ const styles = StyleSheet.create({
   cartImg: {
     width:  '100%',
     height: '100%',
+  },
+  cartImgFallback: {
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  cartImgFallbackText: {
+    fontFamily: FontFamily.serifItalic,
+    fontSize:   28,
+    color:      'rgba(40,32,24,0.22)',
   },
   cartContent: {
     flex: 1,

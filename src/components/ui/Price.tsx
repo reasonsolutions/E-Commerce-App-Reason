@@ -28,7 +28,7 @@ export const Price: React.FC<PriceProps> = ({
   value,
   was,
   size = 'base',
-  currency = 'Rs ',
+  currency = 'MUR ',
 }) => {
   const fs = mainFontSize[size];
   const strikeFs = Math.max(FontSize.xs, fs - strikeSizeOffset);

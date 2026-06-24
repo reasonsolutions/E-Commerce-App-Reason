@@ -11,3 +11,11 @@ export function resolveImageUrl(path: string | undefined): string {
 export function fallbackImageUrl(seed: number | string, width = 400, height = 500): string {
   return `https://picsum.photos/seed/${seed}/${width}/${height}`;
 }
+
+export function resolveImageUrls(path: string | undefined): string[] {
+  if (!path) return [];
+  return path.split(/[,;]/)
+    .map(s => s.replace(/[\r\n\t]/g, '').trim())
+    .filter(Boolean)
+    .map(resolveImageUrl);
+}

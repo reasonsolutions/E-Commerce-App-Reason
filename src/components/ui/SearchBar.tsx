@@ -67,10 +67,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection:    'row',
     alignItems:       'center',
-    backgroundColor:  Colors.surfaceDeep,
+    backgroundColor:  '#FFFFFF',
     borderRadius:     Radius.pill,
     borderWidth:      1,
-    borderColor:      'rgba(0,0,0,0.14)',
+    borderColor:      Colors.rule,
     paddingVertical:  Space[2] + 2,
     paddingHorizontal: Space[3],
     gap: Space[2],

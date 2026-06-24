@@ -144,6 +144,22 @@ const styles = StyleSheet.create({
     width:  '100%',
     height: '100%',
   },
+  bannerInsetCard: {
+    position:        'absolute',
+    bottom:           20,
+    right:            20,
+    width:            84,
+    height:           104,
+    borderRadius:     12,
+    overflow:         'hidden',
+    borderWidth:      3,
+    borderColor:      '#FFFFFF',
+    ...Shadow.sm,
+  },
+  bannerInsetImg: {
+    width:  '100%',
+    height: '100%',
+  },
   bannerContent: {
     position:   'absolute',
     left:       24,
@@ -217,125 +233,28 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ink1,
   },
 
-  // ── Category rail ─────────────────────────────────────────────────────────────
-  categoryRail: {
+  // ── Shop by category — wrapped grid, 3 per row ──────────────────────────────────
+  categoryGrid: {
     flexDirection:     'row',
+    flexWrap:          'wrap',
+    justifyContent:    'space-between',
     paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[2],
-    gap:               Space[4] - 2,
+    rowGap:            Space[4],
   },
 
-  // ── Category spotlight card ───────────────────────────────────────────────────
-  spotCard: {
-    height:        360,
-    borderRadius:  22,
-    overflow:      'hidden',
-    position:      'relative',
-  },
-  spotContent: {
-    position:  'absolute',
-    inset:     0,
-    padding:   26,
-  },
-  spotEyebrow: {
-    ...Type.label,
-    color:         'rgba(255,255,255,0.72)',
-    letterSpacing: 2.2,
-  },
-  spotTitle: {
-    fontFamily:    FontFamily.serifItalic,
-    fontSize:      38,
-    fontWeight:    '500',
-    color:         '#FFFFFF',
-    lineHeight:    42,
-    marginTop:     Space[3],
-  },
-  spotCtaWrap: {
-    marginTop: Space[4],
-  },
-  spotCta: {
-    alignSelf:         'flex-start',
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               8,
-    paddingVertical:   11,
-    paddingHorizontal: Space[5],
-    borderRadius:      Radius.pill,
-    backgroundColor:   '#FFFFFF',
-  },
-  spotCtaText: {
-    fontFamily:  FontFamily.sans,
-    fontSize:    13,
-    fontWeight:  '700',
-    color:       Colors.ink1,
-  },
-
-  // ── Brand spotlight card ──────────────────────────────────────────────────────
-  brandSpotCard: {
-    borderRadius:    22,
+  // ── Discovery band — tints Brands + Categories for section-to-section rhythm ────
+  discoveryBand: {
     backgroundColor: Colors.surfaceSoft,
-    alignItems:      'center',
-    justifyContent:  'center',
-    gap:             Space[3],
-    paddingVertical: Space[8],
-  },
-  brandSpotLogoFrame: {
-    width:           100,
-    height:          100,
-    borderRadius:    Radius.lg,
-    backgroundColor: '#FFFFFF',
-    alignItems:      'center',
-    justifyContent:  'center',
-    borderWidth:     StyleSheet.hairlineWidth,
-    borderColor:     'rgba(0,0,0,0.06)',
-    ...Shadow.sm,
-  },
-  brandSpotEyebrow: {
-    ...Type.label,
-    color:         Colors.ink4,
-    letterSpacing: 2.2,
-  },
-  brandSpotTitle: {
-    fontFamily: FontFamily.serifItalic,
-    fontSize:   34,
-    fontWeight: '500',
-    color:      Colors.ink1,
-  },
-  brandSpotCta: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               8,
-    paddingVertical:   13,
-    paddingHorizontal: Space[6],
-    borderRadius:      Radius.pill,
-    backgroundColor:   Colors.ink1,
-    marginTop:         Space[1],
-  },
-  brandSpotCtaText: {
-    fontFamily: FontFamily.sans,
-    fontSize:   14,
-    fontWeight: '700',
-    color:      '#FFFFFF',
+    paddingTop:       Space[6],
+    paddingBottom:    Space[8],
   },
 
-  // ── Brands rail ───────────────────────────────────────────────────────────────
+  // ── Featured brands — compact horizontal rail ───────────────────────────────────
   brandsRail: {
     flexDirection:     'row',
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[2],
     gap:               Space[4],
-  },
-  brandChip: {
-    alignItems: 'center',
-    width:      56,
-    gap:        Space[1] + 2,
-  },
-  brandLabel: {
-    ...Type.caption,
-    fontSize:   10.5,
-    fontWeight: '600',
-    color:      Colors.ink2,
-    textAlign:  'center',
   },
 });
 

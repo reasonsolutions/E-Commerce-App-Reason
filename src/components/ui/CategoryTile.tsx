@@ -17,66 +17,49 @@ interface CategoryTileProps {
   index: number;
   active?: boolean;
   onPress: () => void;
+  width: number;
 }
 
-export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, index, active = false, onPress }) => {
+export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, index, onPress, width }) => {
   const [t0] = TONE_GRADS[index % TONE_GRADS.length];
   const resolved = imageUri ? resolveImageUrl(imageUri) : '';
-  const size = active ? 70 : 62;
 
   return (
-    <TouchableOpacity style={[styles.wrap, active && styles.wrapActive]} onPress={onPress} activeOpacity={0.75}>
-      <View style={[styles.tile, active && styles.tileActive]}>
+    <TouchableOpacity style={[styles.wrap, { width }]} onPress={onPress} activeOpacity={0.85}>
+      <View style={[styles.tile, { width, height: width }]}>
         <FadeImage
           uri={resolved}
-          width={size}
-          height={size}
+          width={width}
+          height={width}
           resizeMode="cover"
           fallbackText={name}
           style={{ backgroundColor: t0 }}
         />
       </View>
-      <Text style={[styles.label, active && styles.labelActive]} numberOfLines={2}>{name}</Text>
+      <Text style={styles.label} numberOfLines={2}>{name}</Text>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   wrap: {
-    width:     62,
-    flexShrink: 0,
     alignItems: 'center',
-    gap:        Space[1] + 2,
-  },
-  wrapActive: {
-    width: 70,
+    gap:        Space[2],
   },
   tile: {
-    width:        62,
-    height:       62,
-    borderRadius: 18,
-    overflow:     'hidden',
-    alignItems:   'center',
-    justifyContent: 'center',
-    borderWidth:  StyleSheet.hairlineWidth,
-    borderColor:  'rgba(0,0,0,0.04)',
-  },
-  tileActive: {
-    width:       70,
-    height:      70,
-    borderWidth: 2,
-    borderColor: Colors.ink1,
+    borderRadius:    20,
+    overflow:        'hidden',
+    alignItems:      'center',
+    justifyContent:  'center',
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     'rgba(0,0,0,0.04)',
   },
   label: {
     fontFamily: FontFamily.sans,
-    fontSize:   10.5,
-    fontWeight: '500',
-    color:      Colors.ink2,
-    textAlign:  'center',
-    lineHeight: 13,
-  },
-  labelActive: {
+    fontSize:   12.5,
+    fontWeight: '600',
     color:      Colors.ink1,
-    fontWeight: '700',
+    textAlign:  'center',
+    lineHeight: 16,
   },
 });

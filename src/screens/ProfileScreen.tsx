@@ -599,7 +599,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <MenuRow
               icon="help-circle-outline"
               label="Help Center"
-              onPress={() => {}}
+              onPress={() => { haptic.light(); navigation.navigate('HelpCenter'); }}
             />
             <MenuRow
               icon="mail-outline"

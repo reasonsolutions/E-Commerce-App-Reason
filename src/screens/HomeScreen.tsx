@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -19,8 +20,8 @@ import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
 import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interfaces';
-import { getProductsByCategory, getCategories, getBrands, getBrandProductCount } from '../api/product';
-import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { getProductsByCategory, getCategories, getBrands } from '../api/product';
+import { resolveImageUrl, resolveImageUrls } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import { homeCache } from '../utils/homeCache';
 import { useFocusEffect } from '@react-navigation/native';
@@ -30,13 +31,16 @@ import { BRAND } from '../config/brand';
 import { useAsyncState } from '../hooks/useAsyncState';
 import {
   SearchBar, Skeleton, BottomNavBar,
-  SectionHead, BrandTile, CategoryTile, ProductRail,
-  TrustStrip, DeptFooter, FadeImage,
+  SectionHead, BrandTile, CategoryTile, ProductRail, ProductGrid,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space } from '../theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+// Category tile width — wrapped grid, 3 per row (divides evenly, no orphaned row)
+const CATEGORY_GAP = Space[3];
+const categoryTileW = (SCREEN_W - Space.screenH * 2 - CATEGORY_GAP * 2) / 3;
 
 // ── Recently viewed snapshot — only the fields ProductCard actually reads ────
 interface RecentlyViewedItem {
@@ -46,6 +50,7 @@ interface RecentlyViewedItem {
   Images:          string;
   MinPrice:        number;
   MaxComparePrice: number;
+  DiscountPct?:    number;
   Inventory_Id?:   number | null;
 }
 
@@ -57,6 +62,7 @@ interface Spotlight {
   sub: string;
   cta: string;
   imageUri: string;
+  secondaryImageUri?: string;
   theme: 'photo' | 'split';
   itemId?: number;
   categoryId?: number;
@@ -111,6 +117,16 @@ const BannerCard: React.FC<{ spot: Spotlight; height: number; onPress: () => voi
           </View>
         </View>
       </View>
+
+      {spot.secondaryImageUri ? (
+        <View style={styles.bannerInsetCard}>
+          <Image
+            source={{ uri: spot.secondaryImageUri }}
+            style={styles.bannerInsetImg}
+            resizeMode="cover"
+          />
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 };
@@ -172,71 +188,6 @@ const BannerSlot: React.FC<{
   );
 };
 
-// ── Category spotlight card (EditFeature) ─────────────────────────────────────
-const CategorySpotlightCard: React.FC<{
-  category: CategoryInterface;
-  onPress: () => void;
-}> = ({ category, onPress }) => {
-  const imgOpacity = useRef(new Animated.Value(0)).current;
-  const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-  }, [imgOpacity]);
-  const imgUri = resolveImageUrl(category.CategoryImage);
-
-  return (
-    <TouchableOpacity style={styles.spotCard} onPress={onPress} activeOpacity={0.88}>
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.ink1 }]} />
-      {imgUri ? (
-        <Animated.Image
-          source={{ uri: imgUri }}
-          style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
-          resizeMode="cover"
-          onLoad={onLoad}
-        />
-      ) : null}
-      <LinearGradient
-        colors={['rgba(18,15,12,0.70)', 'rgba(18,15,12,0.10)', 'rgba(18,15,12,0.68)']}
-        locations={[0, 0.46, 1]}
-        style={StyleSheet.absoluteFillObject}
-        pointerEvents="none"
-      />
-      <View style={styles.spotContent}>
-        <Text style={styles.spotEyebrow}>SHOP THE CATEGORY</Text>
-        <Text style={styles.spotTitle}>{category.CategoryName}</Text>
-        <View style={{ flex: 1 }} />
-        <View style={styles.spotCtaWrap}>
-          <View style={styles.spotCta}>
-            <Text style={styles.spotCtaText}>Explore {category.CategoryName}</Text>
-            <Icon name="arrow-forward" size={15} color={Colors.ink1} />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-};
-
-// ── Brand spotlight card — centered logo on a tinted surface, not a cover photo ──
-const BrandSpotlightCard: React.FC<{
-  brand: GetBrandItem;
-  onPress: () => void;
-}> = ({ brand, onPress }) => {
-  const imgUri = resolveImageUrl(brand.BrandImage);
-
-  return (
-    <TouchableOpacity style={styles.brandSpotCard} onPress={onPress} activeOpacity={0.88}>
-      <View style={styles.brandSpotLogoFrame}>
-        <FadeImage uri={imgUri} width={64} height={64} resizeMode="contain" fallbackText={brand.BrandName} />
-      </View>
-      <Text style={styles.brandSpotEyebrow}>FEATURED BRAND</Text>
-      <Text style={styles.brandSpotTitle}>{brand.BrandName}</Text>
-      <View style={styles.brandSpotCta}>
-        <Text style={styles.brandSpotCtaText}>Shop {brand.BrandName}</Text>
-        <Icon name="arrow-forward" size={15} color="#FFFFFF" />
-      </View>
-    </TouchableOpacity>
-  );
-};
-
 // ── Back-press / logout logic ─────────────────────────────────────────────────
 type NavigationProp = {
   navigate: (screen: string, params?: any) => void;
@@ -282,10 +233,9 @@ function useCustomBackHandler(navigation: NavigationProp) {
 
 // Module-level product cache — survives remounts within an app session
 // categories + brands also written to homeCache so SearchScreen can read them
-let _cachedProducts:     ProductInterface[]   | null = null;
-let _cachedCategories:   CategoryInterface[]  | null = homeCache.categories;
-let _cachedBrands:       GetBrandItem[]       | null = homeCache.brands;
-let _cachedFeaturedBrand: GetBrandItem        | null = null;
+let _cachedProducts:   ProductInterface[]  | null = null;
+let _cachedCategories: CategoryInterface[] | null = homeCache.categories;
+let _cachedBrands:     GetBrandItem[]      | null = homeCache.brands;
 
 type HomeScreenProps = { navigation: NavigationProp };
 
@@ -330,37 +280,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { data: products,   run: runProducts,   isError: productsError   } = useAsyncState<ProductInterface[]>(_cachedProducts);
   const { data: brands,     run: runBrands,     isError: brandsError     } = useAsyncState<GetBrandItem[]>(_cachedBrands);
 
-  // Featured brand — the one with the most products, by real TotalRecords count
-  const [featuredBrand, setFeaturedBrand] = useState<GetBrandItem | null>(_cachedFeaturedBrand);
-
   // Risk 2 fix: cartCount change only updates the cue, never re-fires API calls
   useEffect(() => {
     setShowResumeCue(cartCount > 0);
   }, [cartCount]);
-
-  // Once brands load, pick the one with the highest real product count.
-  // Cached at module level so this only runs once per app session.
-  useEffect(() => {
-    if (!brands || brands.length === 0 || _cachedFeaturedBrand) return;
-    let cancelled = false;
-    (async () => {
-      const counts = await Promise.all(
-        brands.map(b => getBrandProductCount(b.BrandId).catch(() => 0)),
-      );
-      if (cancelled) return;
-      let best = brands[0];
-      let bestCount = counts[0] ?? 0;
-      for (let i = 1; i < brands.length; i++) {
-        if (counts[i] > bestCount) {
-          best = brands[i];
-          bestCount = counts[i];
-        }
-      }
-      _cachedFeaturedBrand = best;
-      setFeaturedBrand(best);
-    })();
-    return () => { cancelled = true; };
-  }, [brands]);
 
   // Tracks whether fetches have been initiated this session — prevents re-firing
   // when individual fetches complete and change the state that deps previously read.
@@ -438,8 +361,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     _cachedCategories = null;
     _cachedProducts   = null;
     _cachedBrands     = null;
-    _cachedFeaturedBrand = null;
-    setFeaturedBrand(null);
     homeCache.categories = null;
     homeCache.brands     = null;
     fetchInitiated.current = false;
@@ -511,8 +432,68 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     [deduped],
   );
 
-  // Hero banners are all category-focused — up to 2 categories with images
+  // Featured category — the category with the most real fetched products,
+  // shown as its own curated rail (e.g. "Footwear") instead of one more
+  // generic grid. Label is the real CategoryName — no invented copy.
+  const featuredCategoryName = useMemo(() => {
+    if (!deduped || deduped.length === 0) return null;
+    const counts = new Map<string, number>();
+    for (const p of deduped) {
+      if (!p.CategoryName) continue;
+      counts.set(p.CategoryName, (counts.get(p.CategoryName) ?? 0) + 1);
+    }
+    let best: string | null = null;
+    let bestCount = 0;
+    for (const [name, count] of counts) {
+      if (count > bestCount) { best = name; bestCount = count; }
+    }
+    return bestCount >= 3 ? best : null;
+  }, [deduped]);
+
+  const featuredCategoryProducts = useMemo(
+    () => (deduped && featuredCategoryName)
+      ? deduped.filter(p => p.CategoryName === featuredCategoryName)
+      : null,
+    [deduped, featuredCategoryName],
+  );
+
+  // Hero banners — real merchandising: brand + its best real discount, picked
+  // from the brand with the single highest-discount product. Falls back to
+  // category banners if there's no discounted product data yet.
   const spotlights: Spotlight[] | null = useMemo(() => {
+    if (deduped === null) return null;
+
+    const bestPerBrand = new Map<string, ProductInterface>();
+    for (const p of deduped) {
+      if (!(p.MaxComparePrice > p.MinPrice) || !p.BrandName) continue;
+      const existing = bestPerBrand.get(p.BrandName);
+      if (!existing || p.DiscountPct > existing.DiscountPct) {
+        bestPerBrand.set(p.BrandName, p);
+      }
+    }
+
+    const topProducts = Array.from(bestPerBrand.values())
+      .sort((a, b) => b.DiscountPct - a.DiscountPct)
+      .slice(0, 2);
+
+    if (topProducts.length > 0) {
+      return topProducts.map(p => {
+        const allImages = resolveImageUrls(p.Images);
+        return {
+          kind:              'product' as const,
+          eyebrow:           p.BrandName.toUpperCase(),
+          title:             p.BrandName,
+          sub:               `Up to ${Math.round(p.DiscountPct)}% off`,
+          cta:               `Shop ${p.BrandName}`,
+          imageUri:          allImages[0] ?? '',
+          secondaryImageUri: allImages[1] ?? undefined,
+          theme:             'split' as const,
+          itemId:            p.ItemID,
+        };
+      });
+    }
+
+    // Fallback — no discounted products yet, use category banners
     if (!categories) return null;
     return categories
       .filter(c => c.CategoryImage)
@@ -527,17 +508,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         theme:      'split' as const,
         categoryId: c.CategoryId,
       }));
-  }, [categories]);
-
-  // CategorySpotlightCard uses a category *not already* in the hero banners
-  const featureCategory = useMemo(() => {
-    if (!categories) return null;
-    const heroIds = new Set(spotlights?.map(s => s.categoryId) ?? []);
-    return categories.find(c => c.CategoryImage && !heroIds.has(c.CategoryId)) ?? categories[0];
-  }, [categories, spotlights]);
+  }, [deduped, categories]);
 
   const handleBannerPress = useCallback((spot: Spotlight) => {
-    if (spot.kind === 'category' && spot.categoryId) {
+    if (spot.kind === 'product' && spot.itemId) {
+      navigation.navigate('Product', { product: spot.itemId });
+    } else if (spot.kind === 'category' && spot.categoryId) {
       navigation.navigate('Result', { categoryId: spot.categoryId, categoryName: spot.title });
     }
   }, [navigation]);
@@ -649,9 +625,83 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         )}
 
+        {/* Discovery band — Brands + Categories on a tinted surface for visual rhythm */}
+        {!feedError && (
+          <View style={[styles.discoveryBand, { marginTop: Space[3] }]}>
+            {/* Featured brands — compact horizontal row */}
+            <View>
+              <SectionHead
+                eyebrow="MERCHANTS"
+                title="Featured brands"
+                action="View all"
+                onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
+              />
+              {brands ? (
+                <FlatList
+                  data={brands}
+                  keyExtractor={(item) => String(item.BrandId)}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.brandsRail}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
+                    >
+                      <BrandTile name={item.BrandName} imageUri={item.BrandImage} index={0} />
+                    </TouchableOpacity>
+                  )}
+                />
+              ) : !brandsError ? (
+                <View style={styles.brandsRail}>
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <View key={i} style={{ alignItems: 'center', gap: Space[1] + 2, width: 60 }}>
+                      <Skeleton width={52} height={52} radius={14} />
+                      <Skeleton width={40} height={9} />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            {/* Shop by category — wrapped grid, 3 per row */}
+            <View style={{ marginTop: Space[6] }}>
+              <SectionHead
+                eyebrow="BROWSE"
+                title="Shop by category"
+                action="All"
+                onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
+              />
+              {categories ? (
+                <View style={styles.categoryGrid}>
+                  {categories.map((item) => (
+                    <CategoryTile
+                      key={item.CategoryId}
+                      name={item.CategoryName}
+                      imageUri={item.CategoryImage}
+                      index={0}
+                      width={categoryTileW}
+                      onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
+                    />
+                  ))}
+                </View>
+              ) : !categoriesError ? (
+                <View style={styles.categoryGrid}>
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <View key={i} style={{ alignItems: 'center', gap: Space[2], width: categoryTileW }}>
+                      <Skeleton width={categoryTileW} height={categoryTileW} radius={20} />
+                      <Skeleton width={categoryTileW * 0.7} height={9} />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          </View>
+        )}
+
         {/* New arrivals — most recently added products, real CreatedDate sort */}
         {(newArrivals === null || (newArrivals && newArrivals.length > 0)) && (
-          <ProductRail
+          <ProductGrid
             eyebrow="JUST IN"
             title="New arrivals"
             items={newArrivals}
@@ -660,9 +710,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         )}
 
+        {/* Featured category collection — curated rail for the best-stocked
+            fetched category, real CategoryName as the title, not invented copy */}
+        {featuredCategoryProducts && featuredCategoryProducts.length > 0 && (
+          <ProductGrid
+            eyebrow="COLLECTION"
+            title={featuredCategoryName ?? ''}
+            items={featuredCategoryProducts}
+            onSeeAll={() => navigation.navigate('Result', { categoryName: featuredCategoryName ?? 'All Products' })}
+            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+          />
+        )}
+
         {/* Smart buys — products with a genuine discount */}
         {(smartBuys === null || (smartBuys && smartBuys.length > 0)) && (
-          <ProductRail
+          <ProductGrid
             eyebrow="ON SALE"
             title="Smart buys"
             items={smartBuys}
@@ -670,112 +732,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
           />
         )}
-
-        {/* Featured brands — moved up as a trust signal */}
-        {!feedError && (
-          <View style={{ marginTop: Space[8] }}>
-            <SectionHead
-              eyebrow="MERCHANTS"
-              title="Featured brands"
-              action="View all"
-              onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
-            />
-            {brands ? (
-              <FlatList
-                data={brands}
-                keyExtractor={(item) => String(item.BrandId)}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.brandsRail}
-                renderItem={({ item, index }) => (
-                  <TouchableOpacity
-                    style={styles.brandChip}
-                    activeOpacity={0.75}
-                    onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
-                  >
-                    <BrandTile name={item.BrandName} imageUri={item.BrandImage} index={index} />
-                    <Text style={styles.brandLabel} numberOfLines={1}>{item.BrandName}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            ) : !brandsError ? (
-              <View style={styles.brandsRail}>
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <View key={i} style={{ alignItems: 'center', gap: Space[1] + 2, width: 56 }}>
-                    <Skeleton width={56} height={56} radius={16} />
-                    <Skeleton width={40} height={9} />
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
-        )}
-
-        {/* Brand spotlight card — featured brand has the highest real product count */}
-        {!feedError && featuredBrand && (
-          <View style={{ marginTop: Space[6], paddingHorizontal: Space.screenH }}>
-            <BrandSpotlightCard
-              brand={featuredBrand}
-              onPress={() => navigation.navigate('Result', { brandId: featuredBrand.BrandId, categoryName: featuredBrand.BrandName })}
-            />
-          </View>
-        )}
-
-        {/* Shop by category */}
-        {!feedError && (
-          <View style={{ marginTop: Space[8] }}>
-            <SectionHead
-              eyebrow="BROWSE"
-              title="Shop by category"
-              action="All"
-              onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
-            />
-            {categories ? (
-              <FlatList
-                data={categories}
-                keyExtractor={(item) => String(item.CategoryId)}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoryRail}
-                renderItem={({ item, index }) => (
-                  <CategoryTile
-                    name={item.CategoryName}
-                    imageUri={item.CategoryImage}
-                    index={index}
-                    active={index === 0}
-                    onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
-                  />
-                )}
-              />
-            ) : !categoriesError ? (
-              <View style={styles.categoryRail}>
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <View key={i} style={{ alignItems: 'center', gap: Space[1] + 2, width: 62 }}>
-                    <Skeleton width={62} height={62} radius={18} />
-                    <Skeleton width={44} height={9} />
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
-        )}
-
-        {/* Category spotlight card */}
-        {!feedError && (featureCategory ? (
-          <View style={{ marginTop: Space[8], paddingHorizontal: Space.screenH }}>
-            <CategorySpotlightCard
-              category={featureCategory}
-              onPress={() => navigation.navigate('Result', { categoryId: featureCategory.CategoryId, categoryName: featureCategory.CategoryName })}
-            />
-          </View>
-        ) : categories === null && !categoriesError ? (
-          <View style={{ marginTop: Space[8], paddingHorizontal: Space.screenH }}>
-            <Skeleton height={360} radius={22} />
-          </View>
-        ) : null)}
-
-        {/* Trust strip */}
-        <TrustStrip />
 
         {/* Recently viewed — personalized, surfaces near the bottom */}
         {recentlyViewed.length > 0 && (
@@ -791,12 +747,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
           />
         )}
-
-        {/* Browse all departments footer */}
-        <DeptFooter
-          categoryCount={categories?.length ?? 0}
-          onPress={() => navigation.navigate('Result', { categoryName: 'All Products' })}
-        />
       </ScrollView>
 
       {/* ── Scroll to top button ─────────────────────────────────────────────── */}
