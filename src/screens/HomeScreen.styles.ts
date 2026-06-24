@@ -233,28 +233,38 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ink1,
   },
 
-  // ── Shop by category — wrapped grid, 3 per row ──────────────────────────────────
-  categoryGrid: {
-    flexDirection:     'row',
-    flexWrap:          'wrap',
-    justifyContent:    'space-between',
+  // ── Shop by category — compact horizontal rail ──────────────────────────────────
+  categoryRail: {
     paddingHorizontal: Space.screenH,
-    rowGap:            Space[4],
+    paddingBottom:     Space[2],
+    gap:               Space[4],
   },
-
-  // ── Discovery band — tints Brands + Categories for section-to-section rhythm ────
-  discoveryBand: {
-    backgroundColor: Colors.surfaceSoft,
-    paddingTop:       Space[6],
-    paddingBottom:    Space[8],
-  },
-
-  // ── Featured brands — compact horizontal rail ───────────────────────────────────
-  brandsRail: {
+  categoryRailSkeleton: {
     flexDirection:     'row',
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[2],
     gap:               Space[4],
+  },
+
+  // ── Category discovery band — tinted surface directly after trust strip ────────
+  discoveryBand: {
+    backgroundColor: Colors.surfaceSoft,
+    paddingTop:      Space[5],
+    paddingBottom:   Space[5],
+    marginTop:       Space[4],
+  },
+
+  // ── Featured brands section wrapper ─────────────────────────────────────────────
+  brandsSection: {
+    marginTop:       Space[6],
+    paddingVertical: Space[2],
+  },
+
+  // ── Featured brands — horizontal scroll rail ────────────────────────────────────
+  brandsRail: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[2],
+    gap:               Space[3],
   },
 });
 

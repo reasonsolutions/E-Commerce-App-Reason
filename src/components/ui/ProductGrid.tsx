@@ -91,6 +91,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                   <ProductCard
                     product={row.large}
                     cardWidth={LARGE_W}
+                    showDelivery={false}
                     onPress={() => handlePress(row.large.ItemID)}
                   />
                 </View>
@@ -99,6 +100,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     <ProductCard
                       product={row.small}
                       cardWidth={SMALL_W}
+                      showDelivery={false}
                       onPress={() => handlePress(row.small!.ItemID)}
                     />
                   </View>
@@ -110,6 +112,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                   <ProductCard
                     product={row.left}
                     cardWidth={COL_W}
+                    showDelivery={false}
                     onPress={() => handlePress(row.left.ItemID)}
                   />
                 </View>
@@ -118,6 +121,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     <ProductCard
                       product={row.right}
                       cardWidth={COL_W}
+                      showDelivery={false}
                       onPress={() => handlePress(row.right!.ItemID)}
                     />
                   </View>

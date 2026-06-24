@@ -30,6 +30,7 @@ export const getProductsByBrand = async (_brandId: number | string): Promise<Pro
   delay([] as ProductByCategoryProductDetails[]);
 
 export const getBrandProductCount = async (_brandId: number | string): Promise<number> => delay(0);
+export const getCategoryProductCount = async (_categoryId: number | string): Promise<number> => delay(0);
 
 
 export const getProductByItemId = async (itemId: number | string) => {

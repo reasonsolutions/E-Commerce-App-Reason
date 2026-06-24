@@ -23,6 +23,8 @@ import { Colors } from '../theme';
 import { CardStyleInterpolators } from '@react-navigation/stack';
 import EcomPaymentScreen from '../screens/PaymentScreen';
 import HelpCenterScreen from '../screens/HelpCenterScreen';
+import BrandsScreen from '../screens/BrandsScreen';
+import CategoriesScreen from '../screens/CategoriesScreen';
 
 const Stack = createStackNavigator();
 
@@ -76,6 +78,8 @@ const AppNavigator = () => {
         <Stack.Screen name="Search" component={SearchScreen} />
         <Stack.Screen name="EcomPayment" component={EcomPaymentScreen} />
         <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
+        <Stack.Screen name="Brands" component={BrandsScreen} />
+        <Stack.Screen name="Categories" component={CategoriesScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

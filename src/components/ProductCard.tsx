@@ -20,6 +20,7 @@ interface ProductCardProps {
   onPress?: (event: GestureResponderEvent) => void;
   cardWidth?: number;
   showHeart?: boolean;
+  showDelivery?: boolean;
 }
 
 
@@ -28,6 +29,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   onPress,
   cardWidth = 158,
   showHeart = true,
+  showDelivery = true,
 }) => {
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const imgUri = resolveImageUrl(product.Images);
@@ -47,7 +49,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   }, []);
 
   const hasDiscount = product.MaxComparePrice > product.MinPrice;
-  const discountPct = hasDiscount ? Math.round(product.DiscountPct) : 0;
+  const discountPct = hasDiscount && product.DiscountPct > 0 ? Math.round(product.DiscountPct) : 0;
 
   const isNew = (() => {
     if (!product.CreatedDate) return false;
@@ -66,7 +68,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
       onPress={onPress}
       activeOpacity={0.86}
     >
-      <View style={[styles.imgWrap, { height: imgH, backgroundColor: Colors.surfaceSoft }]}>
+      <View style={[styles.imgWrap, { height: imgH, backgroundColor: Colors.surfaceDeep }]}>
         {imgUri && !imgFailed ? (
           <>
             {!imgLoaded && <Skeleton height={imgH} radius={Radius.md} style={StyleSheet.absoluteFillObject} />}
@@ -88,11 +90,6 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
           </View>
         )}
 
-        {hasDiscount && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{discountPct}% OFF</Text>
-          </View>
-        )}
 
         {showHeart && product.Inventory_Id ? (
           <WishlistHeart inventoryId={product.Inventory_Id} />
@@ -113,11 +110,14 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
           {hasDiscount && product.MinPrice > 0 && (
             <Text style={styles.was} numberOfLines={1}>MUR {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
           )}
+          {discountPct > 0 && (
+            <Text style={styles.discountLabel} numberOfLines={1}>−{discountPct}%</Text>
+          )}
         </View>
         {product.Variant ? (
           <Text style={styles.variant} numberOfLines={1}>{product.Variant}</Text>
         ) : null}
-        {freeShipping ? (
+        {showDelivery && freeShipping ? (
           <Text style={styles.delivery} numberOfLines={1}>
             Free delivery{deliveryDays ? ` · ${deliveryDays} days` : ''}
           </Text>
@@ -129,7 +129,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius:    Radius.md,
     paddingBottom:   Space[3],
   },
@@ -165,21 +165,11 @@ const styles = StyleSheet.create({
     color:         '#FFFFFF',
     letterSpacing: 1.2,
   },
-  // Discount badge — top-right, solid accent — stronger merchandising signal
-  badge: {
-    position:          'absolute',
-    top:               8,
-    right:             8,
-    paddingVertical:   3,
-    paddingHorizontal: 7,
-    borderRadius:      6,
-    backgroundColor:   Colors.accent,
-  },
-  badgeText: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      11.5,
-    fontWeight:    '800',
-    color:         '#FFFFFF',
+  discountLabel: {
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    fontWeight:    '700',
+    color:         Colors.accent,
     letterSpacing: 0.2,
   },
   info: {
@@ -188,19 +178,21 @@ const styles = StyleSheet.create({
     gap:               3,
   },
   brand: {
-    ...Type.label,
+    fontFamily:    FontFamily.mono,
+    fontSize:      9,
+    fontWeight:    '400',
     color:         Colors.ink4,
-    letterSpacing: 1.6,
-    fontSize:      9.5,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   name: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      13.5,
-    fontWeight:    '600',
+    fontFamily:    FontFamily.serif,
+    fontSize:      14,
+    fontWeight:    '400',
     color:         Colors.ink1,
-    lineHeight:    18,
-    minHeight:     36,
-    letterSpacing: -0.1,
+    lineHeight:    19,
+    minHeight:     38,
+    letterSpacing: 0.1,
   },
   priceRow: {
     flexDirection: 'row',
@@ -210,8 +202,8 @@ const styles = StyleSheet.create({
   },
   price: {
     fontFamily:    FontFamily.sans,
-    fontSize:      14,
-    fontWeight:    '700',
+    fontSize:      13,
+    fontWeight:    '600',
     color:         Colors.ink1,
     letterSpacing: -0.1,
     flexShrink:    0,

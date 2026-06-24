@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     borderRadius:     Radius.pill,
     borderWidth:      1,
     borderColor:      Colors.rule,
-    paddingVertical:  Space[2] + 2,
+    paddingVertical:  Space[2] - 1,
     paddingHorizontal: Space[3],
     gap: Space[2],
   },

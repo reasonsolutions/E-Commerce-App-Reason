@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
-  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -21,7 +20,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
 import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interfaces';
 import { getProductsByCategory, getCategories, getBrands } from '../api/product';
-import { resolveImageUrl, resolveImageUrls } from '../utils/resolveImageUrl';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import { homeCache } from '../utils/homeCache';
 import { useFocusEffect } from '@react-navigation/native';
@@ -31,16 +30,15 @@ import { BRAND } from '../config/brand';
 import { useAsyncState } from '../hooks/useAsyncState';
 import {
   SearchBar, Skeleton, BottomNavBar,
-  SectionHead, BrandTile, CategoryTile, ProductRail, ProductGrid,
+  SectionHead, BrandTile, CategoryTile, ProductRail, ProductGrid, TrustStrip,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space } from '../theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// Category tile width — wrapped grid, 3 per row (divides evenly, no orphaned row)
-const CATEGORY_GAP = Space[3];
-const categoryTileW = (SCREEN_W - Space.screenH * 2 - CATEGORY_GAP * 2) / 3;
+// Category tile width — horizontal rail, ~3.5 tiles visible (peek encourages scroll)
+const categoryTileW = Math.round((SCREEN_W - Space.screenH * 2) / 3.5);
 
 // ── Recently viewed snapshot — only the fields ProductCard actually reads ────
 interface RecentlyViewedItem {
@@ -62,7 +60,6 @@ interface Spotlight {
   sub: string;
   cta: string;
   imageUri: string;
-  secondaryImageUri?: string;
   theme: 'photo' | 'split';
   itemId?: number;
   categoryId?: number;
@@ -92,18 +89,26 @@ const BannerCard: React.FC<{ spot: Spotlight; height: number; onPress: () => voi
           onLoad={onLoad}
         />
       ) : null}
+      {/* Scrim — bottom-anchored on both themes so text always reads regardless of image brightness */}
       <LinearGradient
-        colors={
-          isEditorial
-            ? ['rgba(18,15,12,0.80)', 'rgba(18,15,12,0.80)', 'rgba(18,15,12,0.18)']
-            : ['rgba(18,15,12,0.04)', 'rgba(18,15,12,0.04)', 'rgba(18,15,12,0.70)']
-        }
-        locations={isEditorial ? [0, 0.38, 1] : [0, 0.30, 1]}
-        start={{ x: isEditorial ? 0 : 0, y: isEditorial ? 0 : 0 }}
-        end={{ x: isEditorial ? 1 : 0, y: isEditorial ? 0 : 1 }}
+        colors={['rgba(18,15,12,0)', 'rgba(18,15,12,0.30)', 'rgba(18,15,12,0.82)']}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
       />
+      {/* Extra left-side vignette for editorial (split) theme */}
+      {isEditorial && (
+        <LinearGradient
+          colors={['rgba(18,15,12,0.55)', 'rgba(18,15,12,0)']}
+          locations={[0, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        />
+      )}
       <View style={[styles.bannerContent, isEditorial && styles.bannerContentSplit]}>
         <Text style={styles.bannerEyebrow}>{spot.eyebrow}</Text>
         <Text style={[styles.bannerTitle, isEditorial && styles.bannerTitleItalic]} numberOfLines={2}>
@@ -118,15 +123,6 @@ const BannerCard: React.FC<{ spot: Spotlight; height: number; onPress: () => voi
         </View>
       </View>
 
-      {spot.secondaryImageUri ? (
-        <View style={styles.bannerInsetCard}>
-          <Image
-            source={{ uri: spot.secondaryImageUri }}
-            style={styles.bannerInsetImg}
-            resizeMode="cover"
-          />
-        </View>
-      ) : null}
     </TouchableOpacity>
   );
 };
@@ -457,6 +453,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     [deduped, featuredCategoryName],
   );
 
+
   // Hero banners — real merchandising: brand + its best real discount, picked
   // from the brand with the single highest-discount product. Falls back to
   // category banners if there's no discounted product data yet.
@@ -477,20 +474,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       .slice(0, 2);
 
     if (topProducts.length > 0) {
-      return topProducts.map(p => {
-        const allImages = resolveImageUrls(p.Images);
-        return {
-          kind:              'product' as const,
-          eyebrow:           p.BrandName.toUpperCase(),
-          title:             p.BrandName,
-          sub:               `Up to ${Math.round(p.DiscountPct)}% off`,
-          cta:               `Shop ${p.BrandName}`,
-          imageUri:          allImages[0] ?? '',
-          secondaryImageUri: allImages[1] ?? undefined,
-          theme:             'split' as const,
-          itemId:            p.ItemID,
-        };
-      });
+      return topProducts.map(p => ({
+        kind:    'product' as const,
+        eyebrow: p.BrandName.toUpperCase(),
+        title:   p.BrandName,
+        sub:     `Up to ${Math.round(p.DiscountPct)}% off`,
+        cta:     `Shop ${p.BrandName}`,
+        imageUri: resolveImageUrl(p.Images),
+        theme:   'split' as const,
+        itemId:  p.ItemID,
+      }));
     }
 
     // Fallback — no discounted products yet, use category banners
@@ -605,7 +598,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        {/* Feed error — shown when all three fetches fail with no cached data */}
+        {/* Feed error */}
         {feedError ? (
           <ErrorState
             title="Feed didn't load."
@@ -615,129 +608,139 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         ) : null}
 
-        {/* BannerSlot */}
+        {/* 1. Hero banners */}
         {!feedError && (
           <View style={{ marginTop: Space[5] }}>
-            <BannerSlot
-              spots={spotlights}
-              onPress={handleBannerPress}
-            />
+            <BannerSlot spots={spotlights} onPress={handleBannerPress} />
           </View>
         )}
 
-        {/* Discovery band — Brands + Categories on a tinted surface for visual rhythm */}
+        {/* 2. Trust signals — horizontal single-row strip */}
+        {!feedError && <TrustStrip />}
+
+        {/* 3. Shop by category — directly after trust, before any products */}
         {!feedError && (
-          <View style={[styles.discoveryBand, { marginTop: Space[3] }]}>
-            {/* Featured brands — compact horizontal row */}
-            <View>
-              <SectionHead
-                eyebrow="MERCHANTS"
-                title="Featured brands"
-                action="View all"
-                onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
+          <View style={styles.discoveryBand}>
+            <SectionHead
+              eyebrow="SHOP BY"
+              title="Category"
+              action="All"
+              onAction={() => navigation.navigate('Categories')}
+            />
+            {categories ? (
+              <FlatList
+                data={categories}
+                keyExtractor={(item) => String(item.CategoryId)}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryRail}
+                renderItem={({ item, index }) => (
+                  <CategoryTile
+                    name={item.CategoryName}
+                    imageUri={item.CategoryImage}
+                    index={index}
+                    width={categoryTileW}
+                    onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
+                  />
+                )}
               />
-              {brands ? (
-                <FlatList
-                  data={brands}
-                  keyExtractor={(item) => String(item.BrandId)}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.brandsRail}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
-                    >
-                      <BrandTile name={item.BrandName} imageUri={item.BrandImage} index={0} />
-                    </TouchableOpacity>
-                  )}
-                />
-              ) : !brandsError ? (
-                <View style={styles.brandsRail}>
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <View key={i} style={{ alignItems: 'center', gap: Space[1] + 2, width: 60 }}>
-                      <Skeleton width={52} height={52} radius={14} />
-                      <Skeleton width={40} height={9} />
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-
-            {/* Shop by category — wrapped grid, 3 per row */}
-            <View style={{ marginTop: Space[6] }}>
-              <SectionHead
-                eyebrow="BROWSE"
-                title="Shop by category"
-                action="All"
-                onAction={() => navigation.navigate('Result', { categoryName: 'All Products' })}
-              />
-              {categories ? (
-                <View style={styles.categoryGrid}>
-                  {categories.map((item) => (
-                    <CategoryTile
-                      key={item.CategoryId}
-                      name={item.CategoryName}
-                      imageUri={item.CategoryImage}
-                      index={0}
-                      width={categoryTileW}
-                      onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
-                    />
-                  ))}
-                </View>
-              ) : !categoriesError ? (
-                <View style={styles.categoryGrid}>
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <View key={i} style={{ alignItems: 'center', gap: Space[2], width: categoryTileW }}>
-                      <Skeleton width={categoryTileW} height={categoryTileW} radius={20} />
-                      <Skeleton width={categoryTileW * 0.7} height={9} />
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </View>
+            ) : !categoriesError ? (
+              <View style={styles.categoryRailSkeleton}>
+                {[0, 1, 2, 3].map((i) => (
+                  <View key={i} style={{ alignItems: 'center', gap: Space[2], width: categoryTileW }}>
+                    <Skeleton width={categoryTileW} height={categoryTileW} radius={20} />
+                    <Skeleton width={categoryTileW * 0.7} height={9} />
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </View>
         )}
 
-        {/* New arrivals — most recently added products, real CreatedDate sort */}
+        {/* 4. New arrivals — horizontal product rail, breaks grid monotony */}
         {(newArrivals === null || (newArrivals && newArrivals.length > 0)) && (
-          <ProductGrid
+          <ProductRail
             eyebrow="JUST IN"
             title="New arrivals"
             items={newArrivals}
+            cardWidth={148}
+            actionLabel="See all"
             onSeeAll={() => navigation.navigate('Result', { categoryName: 'New Arrivals' })}
             onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
           />
         )}
 
-        {/* Featured category collection — curated rail for the best-stocked
-            fetched category, real CategoryName as the title, not invented copy */}
-        {featuredCategoryProducts && featuredCategoryProducts.length > 0 && (
-          <ProductGrid
-            eyebrow="COLLECTION"
-            title={featuredCategoryName ?? ''}
-            items={featuredCategoryProducts}
-            onSeeAll={() => navigation.navigate('Result', { categoryName: featuredCategoryName ?? 'All Products' })}
-            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-          />
-        )}
-
-        {/* Smart buys — products with a genuine discount */}
+        {/* 5. Best deals — 2-col grid for price-led browsing */}
         {(smartBuys === null || (smartBuys && smartBuys.length > 0)) && (
           <ProductGrid
             eyebrow="ON SALE"
-            title="Smart buys"
+            title="Best deals"
             items={smartBuys}
             onSeeAll={() => navigation.navigate('Result', { categoryName: 'Deals' })}
             onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
           />
         )}
 
-        {/* Recently viewed — personalized, surfaces near the bottom */}
-        {recentlyViewed.length > 0 && (
+        {/* 6. Featured brands — breaks the product grid rhythm */}
+        {!feedError && (
+          <View style={styles.brandsSection}>
+            <SectionHead
+              eyebrow="FEATURED"
+              title="Brands"
+              action="View all"
+              onAction={() => navigation.navigate('Brands')}
+            />
+            {brands ? (
+              <FlatList
+                data={brands}
+                keyExtractor={(item) => String(item.BrandId)}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.brandsRail}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
+                  >
+                    <BrandTile
+                      name={item.BrandName}
+                      imageUri={item.BrandImage}
+                      index={0}
+                    />
+                  </TouchableOpacity>
+                )}
+              />
+            ) : !brandsError ? (
+              <View style={[styles.brandsRail, { flexDirection: 'row' }]}>
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <View key={i} style={{ alignItems: 'center', gap: Space[1] + 2, width: 72 }}>
+                    <Skeleton width={64} height={64} radius={16} />
+                    <Skeleton width={48} height={9} />
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {/* 7. Featured category collection — horizontal rail, different layout from grid */}
+        {featuredCategoryProducts && featuredCategoryProducts.length > 0 && (
           <ProductRail
-            eyebrow="WHERE YOU LEFT OFF"
-            title="Recently viewed"
+            eyebrow="COLLECTION"
+            title={featuredCategoryName ?? ''}
+            items={featuredCategoryProducts}
+            cardWidth={148}
+            actionLabel="See all"
+            onSeeAll={() => navigation.navigate('Result', { categoryName: featuredCategoryName ?? 'All Products' })}
+            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+          />
+        )}
+
+        {/* 8. Recently viewed — only when there's enough history */}
+        {recentlyViewed.length >= 4 && (
+          <ProductRail
+            eyebrow="RECENTLY VIEWED"
+            title="Continue browsing"
             items={recentlyViewed as unknown as ProductInterface[]}
             cardWidth={134}
             actionLabel="View all"

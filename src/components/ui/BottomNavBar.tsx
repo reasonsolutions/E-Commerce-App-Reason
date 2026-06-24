@@ -53,7 +53,7 @@ const NavItem: React.FC<{
       accessibilityState={{ selected: isActive }}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
     >
-      <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
+      <View style={styles.iconWrap}>
         <Icon name={isActive ? tab.activeIcon : tab.inactiveIcon} size={20} color={iconColor} />
         {tab.route === 'Cart' && cartCount != null && cartCount > 0 && (
           <View style={styles.badge}>
@@ -127,38 +127,34 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection:   'row',
-    backgroundColor: Colors.surface,
+    flexDirection:     'row',
+    backgroundColor:   Colors.surface,
     paddingHorizontal: Space[1],
-    borderTopWidth:  StyleSheet.hairlineWidth,
-    borderTopColor:  Colors.rule,
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    Colors.rule,
   },
   tab: {
     flex:          1,
     alignItems:    'center',
-    paddingTop:    Space[3],
+    paddingTop:    10,
     paddingBottom: Space[2],
-    gap:           5,
+    gap:           3,
   },
   iconWrap: {
-    position:        'relative',
-    alignItems:      'center',
-    justifyContent:  'center',
-    width:           40,
-    height:          28,
-    borderRadius:    Radius.pill,
-  },
-  iconWrapActive: {
-    backgroundColor: Colors.accentTint,
+    position:       'relative',
+    alignItems:     'center',
+    justifyContent: 'center',
+    width:          36,
+    height:         24,
   },
   badge: {
     position:          'absolute',
-    top:               -2,
-    right:             4,
+    top:               -3,
+    right:             2,
     backgroundColor:   Colors.accent,
     borderRadius:      Radius.pill,
-    minWidth:          16,
-    height:            16,
+    minWidth:          15,
+    height:            15,
     justifyContent:    'center',
     alignItems:        'center',
     paddingHorizontal: 3,
@@ -167,20 +163,20 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color:      '#FFFFFF',
-    fontSize:   9,
-    fontFamily: FontFamily.sans,
+    fontSize:   8.5,
+    fontFamily: FontFamily.mono,
     fontWeight: '700',
     lineHeight: 11,
   },
   label: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      10,
+    fontFamily:    FontFamily.mono,
+    fontSize:      9,
     fontWeight:    '400',
     color:         Colors.ink4,
-    letterSpacing: 0.2,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   labelActive: {
-    color:      Colors.accent,
-    fontWeight: '500',
+    color: Colors.accent,
   },
 });

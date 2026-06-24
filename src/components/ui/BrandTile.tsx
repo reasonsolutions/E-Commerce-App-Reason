@@ -19,8 +19,8 @@ export const BrandTile: React.FC<BrandTileProps> = ({ name, imageUri }) => {
       <View style={styles.card}>
         <FadeImage
           uri={resolved}
-          width={36}
-          height={36}
+          width={40}
+          height={40}
           resizeMode="contain"
           fallbackText={name}
         />
@@ -32,14 +32,14 @@ export const BrandTile: React.FC<BrandTileProps> = ({ name, imageUri }) => {
 
 const styles = StyleSheet.create({
   wrap: {
-    width:      60,
+    width:      72,
     alignItems: 'center',
-    gap:        6,
+    gap:        4,
   },
   card: {
-    width:           52,
-    height:          52,
-    borderRadius:    14,
+    width:           64,
+    height:          64,
+    borderRadius:    16,
     overflow:        'hidden',
     alignItems:      'center',
     justifyContent:  'center',
@@ -48,10 +48,12 @@ const styles = StyleSheet.create({
     borderColor:     'rgba(0,0,0,0.06)',
   },
   label: {
-    fontFamily: FontFamily.sans,
-    fontSize:   10.5,
-    fontWeight: '600',
+    fontFamily: FontFamily.mono,
+    fontSize:   9.5,
+    fontWeight: '400',
     color:      Colors.ink2,
     textAlign:  'center',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 });
