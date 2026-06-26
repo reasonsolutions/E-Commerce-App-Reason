@@ -342,6 +342,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         PaymentDetails: {
           PaymentModes:   PaymentModes.CashOnDelivery,
           Remark:         'Cash on delivery',
+          IsPaid:         false,
           ModeOfPayments: [{
             CashOnDelivery: {
               ExpectedAmount:      total,

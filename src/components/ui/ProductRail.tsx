@@ -82,9 +82,7 @@ export const ProductRail: React.FC<ProductRailProps> = ({
 };
 
 const styles = StyleSheet.create({
-  wrap: {
-    marginTop: Space[8],
-  },
+  wrap: {},
   rail: {
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[2],

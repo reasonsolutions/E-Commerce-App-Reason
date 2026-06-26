@@ -2,6 +2,15 @@
 
 ---
 
+## Guiding Principles
+
+- Prefer existing patterns over introducing new abstractions.
+- Read nearby code before inventing new architecture.
+- Minimize surface area of changes.
+- Treat this document as architectural guidance. The repository is the source of truth for implementation details and current project state.
+
+---
+
 ## Safety Rules (Strict — override all other instructions)
 
 - Do not read `.env` files or any sensitive configuration/secrets
@@ -10,14 +19,6 @@
 - Do not refactor multiple files unless explicitly requested
 - Limit changes strictly to explicitly mentioned files only
 - Do not generate or suggest changes outside the requested scope
-
----
-
-## Operating Mode
-
-- Implement changes directly using Edit/Write tools
-- Make precise, minimal changes — respect existing architecture, patterns, naming
-- Ask for clarification if scope is ambiguous
 
 ---
 
@@ -36,27 +37,25 @@ npx jest
 
 ## Tool Preferences
 
-When performing repository-wide code search, prefer `rg` (ripgrep) when available.
+Prefer `rg` for repository-wide search, `fd` for file discovery, `tree` for structure overview. Preferences, not requirements.
 
-When discovering files and directories, prefer `fd` when available.
-
-When exploring repository structure, consider `tree` for a high-level overview.
-
-These are preferences, not requirements. Use the most appropriate tool for the task.
+---
 
 ## Stack
 
 | Layer      | Choice                                                                                                                                                                                     |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Framework  | React Native 0.81.4 — bare CLI, no Expo                                                                                                                                                    |
-| Language   | TypeScript 5.8.3. Do not add TS to existing `.js` files unless explicitly asked.                                                                                                           |
-| Navigation | React Navigation v7 Stack — 14 routes, flat, headers hidden. Always starts on `Home`. `navigationRef` in `src/utils/navigationService.ts` for navigation outside React (e.g. 401 handler). |
+| Framework  | React Native — bare CLI, no Expo                                                                                                                                                           |
+| Language   | TypeScript. Do not add TS to existing `.js` files unless explicitly asked.                                                                                                                 |
+| Navigation | React Navigation Stack — flat, headers hidden. Always starts on `Home`. `navigationRef` in `src/utils/navigationService.ts` for navigation outside React (e.g. 401 handler).               |
 | State      | Context API + `useState` (local). `useAsyncState` for async. `CartContext.js` for global cart count only.                                                                                  |
 | HTTP       | Axios — `src/api/axiosInstance.ts`. Bearer token injected via Keychain-backed in-memory cache.                                                                                             |
 | Styling    | `StyleSheet.create()` + design tokens (default). NativeWind v4 primitives available.                                                                                                       |
-| Overlays   | `@gorhom/bottom-sheet` v5. RN core `Modal`/`Alert`. No Gluestack overlays.                                                                                                                 |
-| Animations | `Animated` API + `react-native-reanimated` v4. All durations from `Motion.*`.                                                                                                              |
+| Overlays   | `@gorhom/bottom-sheet`. RN core `Modal`/`Alert`. No Gluestack overlays.                                                                                                                     |
+| Animations | `Animated` API + `react-native-reanimated`.                                                                                                                                                |
 | Icons      | `react-native-vector-icons`                                                                                                                                                                |
+
+Exact dependency versions: check `package.json` directly rather than trusting this doc.
 
 ---
 
@@ -66,7 +65,7 @@ These are preferences, not requirements. Use the most appropriate tool for the t
 - **No Gluestack overlay packages.** `@gluestack-ui/actionsheet`, modal, popover, menu etc. depend on `react-dom`/`react-aria`/`react-transition-group` — ESM-only, incompatible with bare RN CLI. Metro cannot bundle them. Use `@gorhom/bottom-sheet` and RN core instead.
 - **No centralized API router.** No `services.ts` or `integrations.ts`. Domain-scoped ownership is the architecture.
 - **No adapter/domain-model layer.** DTOs are consumed directly. No normalization layer.
-- **No navigation architecture changes.** Flat Stack, 14 routes. No tabs, nested stacks, or deep-link routing.
+- **No navigation architecture changes.** Flat Stack. No tabs, nested stacks, or deep-link routing.
 - **No broad TS migration of JS files.** `CartContext.js`, `AppNavigator.js` remain JS.
 - **`src/stubs/`** — Metro resolver shims for `react-dom`, `react-transition-group`, `gluestack-overlay`. Keep. Removing causes build failures.
 - **`src/components/gluestack/Actionsheet.tsx`** — re-implements Gluestack Actionsheet API via `@gorhom/bottom-sheet`. Preserves import surface. Keep.
@@ -77,12 +76,14 @@ These are preferences, not requirements. Use the most appropriate tool for the t
 
 ### Domain ownership
 
-Each feature owns `src/api/<domain>/`: `productApi.ts`, `mockProductApi.ts`, `index.ts`. Screens import only from the domain barrel — never from implementation files.
+Each feature owns `src/api/<domain>/`: `xxxApi.ts`, `xxxMockApi.ts`, `index.ts`. Screens import only from the domain barrel — never from implementation files.
 
 ```typescript
 import { getProductsByCategory } from '../api/product'; // correct
 import { getProductsByCategory } from '../api/product/productApi'; // never
 ```
+
+Check each domain's `index.ts` before assuming mock or real — don't rely on this doc for current rollout status.
 
 ### Adding a new API endpoint
 
@@ -95,19 +96,13 @@ import { getProductsByCategory } from '../api/product/productApi'; // never
 
 All responses: `{ statusCode: 1|0, result: {...}, userMessage: string }`. Unwrap at call site. Application-level auto-raise (`statusCode !== 1`) is commented out in `axiosInstance.ts` — do not uncomment.
 
-### Domain mock/real status
-
-Read each domain's `index.ts` before assuming mock or real. Currently: all domains are real. Order = `placeOrder`, `postPlacedMultipleOrder`, `postOrderHistory`, `postCnfOrderDetail`, `cancelOrder` all real.
-
 ### Enums
 
-Server-side enums live in `src/config/enum_files/` — one file per enum. Import directly from the specific file, no barrel index. These are used in `src/api/interfaces.ts` to type numeric fields from API responses. Do not use raw `number` for fields that have a corresponding enum.
+Server-side enums live in `src/config/enum_files/` — one file per enum, no barrel index. Used in `src/api/interfaces.ts` to type numeric API fields. Never use raw `number` for a field that has a corresponding enum — check `src/config/enum_files/` for the exact name before adding a new numeric field.
 
-Full enum list: `OrderStatus` (re-exported as `OrderStatusCode` from `interfaces.ts`), `CustomerCancellationReason` (+ `CancellationReasonLabel`), `RefundMode` (+ `RefundModeLabel`), `CustomerPlatform`, `PaymentModes`, `TaxType`, `VATCategory`, `CouponDiscountType`, `SortBy`, `ItemCondition`, `ProductDemographic`, `Season`, `WeightUnit`, `DimensionUnit`, `VolumeUnit`, `WarrantyType`, `HazardClass`, `HazardLabel`, `MerchantStaffRole`, `VerificationStatus`, `Status`, `AdjustmentReason`, `AdjustmentType`, `InventoryStockFilter`, `ReceiptSearchFilter`, `MerchantCancellationReason`, `CountFilter`.
+### Sorting
 
-### SortBy
-
-`allProducts` endpoint accepts `sortBy: SortBy | null` in the request body. `SortBy.LowToHigh = 1`, `SortBy.HighToLow = 2`. All three product fetch functions (`getAllProducts`, `getProductsByCategory`, `getProductsByBrand`) accept an optional `sortBy` parameter. `ResultScreen` maps `price_asc`/`price_desc` to server-side sort; `newest`/`default` remain client-side.
+Server-side sort is the default where supported (`sortBy: SortBy | null` on product fetches). Check the relevant `xxxApi.ts` and calling screen before assuming a field sorts client-side vs. server-side.
 
 ---
 
@@ -119,10 +114,6 @@ src/components/
 │                 Text, Pressable, Divider, ScrollView, Image). Zero logic.
 ├── ui/           Semantic reusable UI — visual identity, design tokens, local animation.
 │                 Exported via ui/index.ts.
-│                 Key state components: EmptyState (icon+title+body+trustLine?+action?),
-│                 ErrorBanner (inline mutation error), Skeleton/SkeletonRow (shimmer),
-│                 SkeletonGrid (2-col product grid skeleton, cols/rows/showPriceLine/showButton),
-│                 TrustLine (lock icon + ink4 caption, for checkout/account empty states).
 ├── system/       App-state components — ErrorState (full-screen fetch error + retry),
 │                 RetryButton. InlineError is deprecated; use ErrorBanner instead.
 └── gluestack/    Infrastructure bridge — Actionsheet.tsx only.
@@ -138,88 +129,23 @@ src/components/
 - NativeWind `className` available on primitives for static layout.
 - **`className` is for static values only.** Animated styles, conditional colors, calculated dimensions → `style={}` always.
 - Match the existing approach in any file you modify.
-- **Never hardcode** hex colors, raw spacing, or raw font sizes. Always use tokens.
-
----
-
-## Design System
-
-### Tokens (`src/theme/tokens.ts`) — import from `'../theme'`
-
-- `Colors.ink1`–`ink5` — text/icon scale
-- `Colors.surface` / `surfaceSoft` / `surfaceDeep` — warm surface tiers
-- `Colors.accent` — ember `#B25A3D`. Sparingly: discount markers, wishlist fill, CTA active, success ring. Max 3 per screen.
-- `Colors.rule` — hairline dividers only. No other divider color.
-- `Colors.danger` — destructive actions only. Not for discount badges.
-- `Space.screenH` = 20px horizontal edge padding. `Space[1]`–`Space[12]` spacing scale.
-
-### Fonts (`src/theme/fonts.ts`)
-
-```
-FontFamily.serif       // InstrumentSerif-Regular — names, headlines, prices
-FontFamily.serifItalic // InstrumentSerif-Italic — wordmarks, taglines
-FontFamily.mono        // JetBrainsMono-Regular — brand labels, order numbers, meta
-FontFamily.sans        // undefined — system sans, body/UI text
-```
-
-### Typography (`src/theme/typography.ts`) — always use `Type.*` presets
-
-```
-Type.display    serif 40px  — hero headlines
-Type.title      serif 28px  — screen/section titles
-Type.heading    serif 22px  — product names, card titles
-Type.priceLarge serif 32px  — cart total, hero price
-Type.price      serif 22px  — standard prices
-Type.label      mono 11px uppercase — brand labels, eyebrows, kickers, order numbers
-Type.body       sans 16px   — body copy
-Type.bodyStrong sans 16px medium — CTA labels
-Type.caption    sans 13px   — secondary text, metadata
-```
-
-### Motion (`src/theme/motion.ts`) — all animations must bind to one of these
-
-```
-Motion.duration.tap    = 120ms  — press states, icon fills, badge bumps
-Motion.duration.settle = 320ms  — list entrances, screen-in, sheet rise
-Motion.duration.carry  = 560ms  — hero parallax, success draw, image scrub
-Motion.spring.settle   — damping 18, stiffness 80
-Motion.spring.snap     — damping 14, stiffness 180
-Motion.pressScale      = 0.98
-```
-
-Ad-hoc durations are a hard failure. **Exception:** HomeScreen keeps its own local entrance animation (500ms/440ms, initialY=14) — do not replace.
+- **Never hardcode** hex colors, raw spacing, font sizes, or animation durations. Always use tokens from `src/theme/`.
 
 ---
 
 ## Visual Standards (Non-Negotiable)
 
-**Direction: "Tira-lite."** Editorial foundation (serif headlines, calm surfaces, restrained motion) stays. Product cards and section banners are allowed more merchandising density than before — richer cards, bigger campaign-style hero banners — but the app should still read as curated, not as a dense marketplace grid. When in doubt, keep the editorial foundation and add density only to cards/banners specifically.
+- **"Tira-lite" direction.** Editorial foundation (serif headlines, calm surfaces, restrained motion) stays. Cards/banners may carry more merchandising density than a typical marketplace, but the app should still read as curated, not dense.
+- **Serif-led hierarchy.** Product names, prices, headlines, section titles always `FontFamily.serif`. Never bold sans for these roles — this is the app's primary differentiator from Amazon/Flipkart-style UIs.
+- **Mono micro-labels.** Brand names, category eyebrows, kickers, field labels, order numbers: `Type.label` only.
+- **Image-first.** Product images dominate, no text overlay on heroes. Identity (brand → name → price) below the image. 4:5 portrait ratio for product cards.
+- **Calm surfaces.** Depth through tone (`Colors.surface`/`surfaceSoft`/`surfaceDeep`), not shadow. `Shadow.sm` only on sticky/overlapping elements.
+- **CTA hierarchy.** Primary: full-width ink pill, `Type.bodyStrong` white, `useTactile`. Secondary: `Type.caption` underlined text link, `Colors.ink3`. Never two equal-weight buttons.
+- **Product card density (relaxed).** Real, API-backed signals only (discount badge, MRP strikethrough, shipping line, warranty signal). Never fabricate data absent from the API response.
+- **No startup aesthetics.** No purple/violet/blue, glassmorphism, gradient blobs, glow, or confetti.
+- **Restrained motion.** Staggered, calm entrances; press feedback via scale (0.98) from `Motion.pressScale`, not opacity flash. All durations bind to `Motion.duration.*` (`src/theme/motion.ts`) — ad-hoc durations are a hard failure.
 
-**Serif-led hierarchy** — Product names, prices, headlines, section titles always use `FontFamily.serif`. Never bold sans for these roles. This is non-negotiable even as card density increases — it's the app's primary differentiator from Amazon/Flipkart-style marketplaces.
-
-**Mono micro-labels** — Brand names, category eyebrows, section kickers, field labels, order numbers: `Type.label` only.
-
-**Image-first** — Product images dominate. No text overlay on heroes. Identity (brand → name → price) below the image on a calm surface. 4:5 portrait ratio for product cards.
-
-**Calm surfaces** — `Colors.surface` / `surfaceSoft` / `surfaceDeep`. Depth through tone, not shadow. `Shadow.sm` only on sticky/overlapping elements. Applies to screen chrome (headers, backgrounds, dividers) — not a constraint on card density.
-
-**CTA hierarchy** — Primary: full-width ink pill, `Type.bodyStrong` white, `useTactile`. Secondary: `Type.caption` underlined text link, `Colors.ink3`. Never two equal-weight buttons.
-
-**Product card density (relaxed)** — Cards may show real, API-backed merchandising signals beyond image/brand/name/price: discount badge (server `DiscountPct`), MRP strikethrough, shipping/delivery line, warranty/returns signal (`PolicyInfo`). Never fabricate data not present in the API response (no placeholder ratings, no fake review counts, no invented badges). Rounded-card boxing on list items is now allowed where it improves scannability — hairline `Colors.rule` dividers remain the default for simple list rows (cart, order history).
-
-**No startup aesthetics** — No purple/violet/blue. No glassmorphism. No gradient blobs. No glow. No confetti.
-
-**Restrained motion** — Staggered, calm entrances. Press feedback via scale (0.98), not opacity flash.
-
----
-
-## Haptics
-
-```typescript
-haptic.light(); // row tap, variant select, wishlist toggle, qty change
-haptic.success(); // add-to-cart confirmed, order placed
-haptic.warning(); // login failure, destructive confirm
-```
+Token values (colors, type scale, exact motion durations) live in `src/theme/` — read those files directly rather than trusting hardcoded numbers in docs.
 
 ---
 
@@ -338,11 +264,11 @@ const { animatedStyle, handlers } = useTactile();
 
 ---
 
-## Screen Status
+## Screens
 
-All 14 screens are open for redesign when explicitly requested. Login, HomeScreen, ProductScreen, and OrderSuccessScreen serve as the visual and interaction reference standard — follow their patterns when redesigning other screens, but they can also be modified if requested.
+All screens are open for redesign when explicitly requested.
 
-**Header pattern:** Light surface header (serif 22px title, `ink1`, hairline `Colors.rule` divider, `Colors.surface` background) is used on: WishlistScreen, CartScreen, AddressScreen, AddressManagementScreen, OrderHistoryScreen. Dark editorial header (`DarkHeader` component, `Colors.ink1` background) is used on: OrderDetailScreen. Never use dark header for screens reachable from the bottom nav or checkout flow.
+Never introduce new header styles. Reuse the existing light surface header or `DarkHeader` according to existing navigation patterns — never use the dark header on screens reachable from the bottom nav or checkout flow.
 
 ---
 
@@ -352,42 +278,11 @@ All 14 screens are open for redesign when explicitly requested. Login, HomeScree
 
 **Auth:** JWT in Keychain (`STORAGE_KEYS.authToken`). Refresh token in Keychain (`STORAGE_KEYS.refreshToken`). User data in AsyncStorage (`STORAGE_KEYS.userData`). App always starts on `Home` — no session check at startup. `isLoggedIn()` in `src/utils/auth.ts` checks Keychain presence only — no clock-based expiry check. Token expiry is detected reactively via 401.
 
-**Token lifecycle:** Access token lifetime = 15 minutes. Refresh token lifetime = 7 days. Login payload requires `ClientType: 'MOB-RN-2F9A'` — injected automatically by `loginCustomer()` in `authApi.ts`, callers do not pass it. On login, both tokens are stored in Keychain. On logout/401-no-recovery, both are cleared via `clearSession()`.
-
-**401 handling:** `axiosInstance.ts` response interceptor catches 401 → calls `token/getEcommAccessToken` with refresh token as Bearer → on success updates Keychain + in-memory cache + retries original request. Multiple concurrent 401s share one `_refreshPromise` to avoid duplicate refresh calls. If refresh also fails → `clearSession()` + `resetToLogin()`. Auth endpoints (`token/postLoginCustomer`, `token/getEcommAccessToken`, `postCreateCustomer`, `postConfirmCustomer`) are excluded from Bearer token injection.
+**401 handling:** `axiosInstance.ts` response interceptor catches 401 → refreshes via refresh token → retries original request. Concurrent 401s share one `_refreshPromise`. If refresh also fails → `clearSession()` + `resetToLogin()`. Auth endpoints (`token/postLoginCustomer`, `token/getEcommAccessToken`, `postCreateCustomer`, `postConfirmCustomer`) are excluded from Bearer token injection.
 
 **Guest browsing:** Unauthenticated users land on Home and can browse freely. Protected actions (wishlist toggle, checkout, Orders/Wishlist/Profile tabs) are guarded by `useAuthGuard` hook — shows `LoginPromptSheet` instead of navigating. Guest cart stored in AsyncStorage under `STORAGE_KEYS.guestCart` as `GuestCartItem[]`, merged to server cart on login.
 
 **Screen-local:** `useState` + `useAsyncState`. Re-run on focus via `useFocusEffect`.
-
----
-
-## Known Deferred Debt — Do Not Fix as Side Effects
-
-| Item                                                | Notes                                                                                                                                                                                                                                                                                                                           |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~`postCnfOrderDetail` on mock~~                    | Switched to real; `Brand_Name`, `InventoryID`, `ItemID`, `SubOrderNumber` fallback mapping added in `order/index.ts`                                                                                                                                                                                                            |
-| ~~401 session clearing~~                            | Done — `axiosInstance` response interceptor calls `clearSession()` + `resetToLogin()`                                                                                                                                                                                                                                           |
-| ~~Refresh token flow~~                              | Done — 401 → refresh → retry wired in `axiosInstance.ts`. Both tokens cleared on logout.                                                                                                                                                                                                                                        |
-| ~~Clock-based token expiry~~                        | Removed — expiry is server-driven via 401, not `exp` decode                                                                                                                                                                                                                                                                     |
-| ~~`SortBy` server-side~~                            | Done — `allProducts` payload sends `sortBy`, `ResultScreen` maps sort keys                                                                                                                                                                                                                                                      |
-| ~~Tax in order payload~~                            | Done — `AddressScreen` maps `PriceDetails.Taxes` into `PlaceOrderTax[]`                                                                                                                                                                                                                                                         |
-| ~~Cancel order `SubOrder.Id`~~                      | Resolved — `getOrderStatus` returns `SubOrder: { Code, Number }`. Cancel payload uses `SubOrder.Code` directly. End-to-end confirmed working.                                                                                                                                                                                   |
-| ~~Order progress bar~~                              | `OrderProgressBar` added — `src/components/ui/OrderProgressBar.tsx`. 6-step segmented bar (Placed → Delivered). Shown inline in `OrderHistoryScreen` (active orders) and in `StatusHero` on `OrderDetailScreen`. Terminal statuses (Cancelled, Returned) return null.                                                           |
-| ~~HomeScreen infinite skeleton~~                    | Fixed — fetch functions guard `statusCode !== 1`; `fetchInitiated` ref prevents dep-change re-fire loop; each skeleton branch breaks on its specific `isError` flag.                                                                                                                                                            |
-| ~~Recently viewed / search bleed between accounts~~ | Fixed — `scopedKey(base, profileCode)` in `storageKeys.ts`. ProductScreen, HomeScreen, SearchScreen, WishlistScreen updated.                                                                                                                                                                                                    |
-| ~~Dark header on Address screens~~                  | Fixed — `AddressScreen` and `AddressManagementScreen` use light surface header.                                                                                                                                                                                                                                                 |
-| `postUpdateCustomer` password                       | Overwrites stored password — backend fix pending                                                                                                                                                                                                                                                                                |
-| Tax display in UI                                   | `ProductScreen`, `CartScreen`, `AddressScreen` don't show tax breakdown yet                                                                                                                                                                                                                                                     |
-| `getSavedCartItems` tax verification                | Unconfirmed whether cart API returns `PriceDetails.Taxes` populated                                                                                                                                                                                                                                                             |
-| `useSession` adoption                               | OrderHistoryScreen, OrderDetailScreen still read AsyncStorage directly                                                                                                                                                                                                                                                          |
-| OrganisationID cold-start                           | `getOrgIdForInventory()` returns empty if user reaches checkout without browsing products                                                                                                                                                                                                                                       |
-| OTP resend                                          | No resend button on OTPVerificationScreen — user has no recovery if OTP expires                                                                                                                                                                                                                                                 |
-| Cart badge on logout                                | Badge count not reset to 0 on logout — shows stale count until next focus                                                                                                                                                                                                                                                       |
-| API response types                                  | `axiosInstance` responses untyped (`any`) — incremental hardening deferred                                                                                                                                                                                                                                                      |
-| Navigation prop typing                              | Most screens use `any`-typed nav props — should use `StackNavigationProp` generics                                                                                                                                                                                                                                              |
-| Backend `statusCode: 0` on empty lists              | `getCategory` and `getBrands` return `statusCode: 0` when empty instead of `statusCode: 1, result: []`. Frontend guards against this but the backend should be fixed.                                                                                                                                                           |
-| "Trending Now" / "Best Sellers" rail                | Blocked on backend — needs a real most-ordered/aggregated-popularity endpoint. `Marketing.Tags` exists in `ProductInterface` but is empty on all products today, so no tag-based merchandising signal exists either. Do not fake this with a client-side proxy (e.g. newest + highest discount) — defer until real data exists. |
 
 ---
 
@@ -402,6 +297,12 @@ All 14 screens are open for redesign when explicitly requested. Login, HomeScree
 
 ---
 
+## Side Effects
+
+Do not fix unrelated technical debt unless explicitly requested. If you suspect a known issue, verify the current implementation before acting.
+
+---
+
 ## Reference
 
-`docs/project-modernization-audit.md` — rationale for architectural decisions, phase history, full screen status table, detailed component inventory. Use as background context, not as an active blueprint.
+`docs/project-modernization-audit.md` — rationale for architectural decisions, phase history, detailed component inventory. Background context, not an active blueprint.

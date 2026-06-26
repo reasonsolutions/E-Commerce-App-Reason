@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontFamily:    FontFamily.serifItalic,
-    fontSize:      30,
+    fontSize:      26,
     fontWeight:    '700',
     color:         Colors.ink1,
     letterSpacing: -0.1,
@@ -113,22 +113,22 @@ const styles = StyleSheet.create({
   // ── Scroll to top ─────────────────────────────────────────────────────────────
   scrollTopBtn: {
     position: 'absolute',
-    right:    Space[5],
-    bottom:   80,
+    right:    Space[4],
+    bottom:   72,
     zIndex:   20,
   },
   scrollTopInner: {
-    width:           36,
-    height:          36,
-    borderRadius:    18,
-    backgroundColor: Colors.surface,
+    width:           30,
+    height:          30,
+    borderRadius:    15,
+    backgroundColor: Colors.surfaceDeep,
     alignItems:      'center',
     justifyContent:  'center',
     shadowColor:     '#000',
     shadowOffset:    { width: 0, height: 1 },
-    shadowOpacity:   0.08,
-    shadowRadius:    4,
-    elevation:       2,
+    shadowOpacity:   0.06,
+    shadowRadius:    3,
+    elevation:       1,
   },
 
   // ── BannerSlot ───────────────────────────────────────────────────────────────
@@ -178,24 +178,26 @@ const styles = StyleSheet.create({
     letterSpacing: 2.2,
   },
   bannerTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      25,
-    fontWeight:    '600',
+    fontFamily:    FontFamily.serifItalic,
+    fontSize:      32,
+    fontWeight:    '400',
     color:         '#FFFFFF',
-    lineHeight:    28,
-    letterSpacing: 0.05,
+    lineHeight:    36,
+    letterSpacing: 0.2,
   },
   bannerTitleItalic: {
     fontFamily:  FontFamily.serifItalic,
-    fontSize:    29,
-    fontWeight:  '500',
-    lineHeight:  32,
+    fontSize:    32,
+    fontWeight:  '400',
+    lineHeight:  36,
   },
   bannerSub: {
-    fontFamily:  FontFamily.sans,
-    fontSize:    13,
-    color:       'rgba(255,255,255,0.82)',
-    lineHeight:  18,
+    fontFamily:    FontFamily.mono,
+    fontSize:      10,
+    color:         'rgba(255,255,255,0.60)',
+    lineHeight:    14,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
   bannerCtaWrap: {
     marginTop: Space[1],
@@ -204,17 +206,18 @@ const styles = StyleSheet.create({
     alignSelf:         'flex-start',
     flexDirection:     'row',
     alignItems:        'center',
-    gap:               8,
-    paddingVertical:   11,
+    gap:               6,
+    paddingVertical:   9,
     paddingHorizontal: Space[5],
     borderRadius:      Radius.pill,
     backgroundColor:   '#FFFFFF',
   },
   bannerCtaText: {
-    fontFamily:  FontFamily.sans,
-    fontSize:    13,
-    fontWeight:  '700',
-    color:       Colors.ink1,
+    fontFamily:    FontFamily.sans,
+    fontSize:      12,
+    fontWeight:    '700',
+    color:         Colors.ink1,
+    letterSpacing: 0.1,
   },
   bannerDots: {
     flexDirection:  'row',
@@ -254,10 +257,21 @@ const styles = StyleSheet.create({
     marginTop:       Space[4],
   },
 
-  // ── Featured brands section wrapper ─────────────────────────────────────────────
-  brandsSection: {
-    marginTop:       Space[6],
-    paddingVertical: Space[2],
+  // ── Section background alternation ───────────────────────────────────────────────
+  sectionSurface: {
+    backgroundColor: Colors.surface,
+    paddingTop:      Space[6],
+    paddingBottom:   Space[3],
+  },
+  sectionSoft: {
+    backgroundColor: Colors.surfaceSoft,
+    paddingTop:      Space[6],
+    paddingBottom:   Space[5],
+  },
+  sectionDeep: {
+    backgroundColor: Colors.surfaceDeep,
+    paddingTop:      Space[6],
+    paddingBottom:   Space[5],
   },
 
   // ── Featured brands — horizontal scroll rail ────────────────────────────────────

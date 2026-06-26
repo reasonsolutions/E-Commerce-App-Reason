@@ -1,14 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
 import { Colors, Space } from '../../theme';
 import { FontFamily } from '../../theme/fonts';
-import { FadeImage } from './FadeImage';
 
-const TONE_GRADS: [string, string][] = [
-  ['#E9E1D3', '#D9CBB7'], ['#DEE2DC', '#C8CEC5'], ['#EADBCF', '#D7C0AF'],
-  ['#DEDFDA', '#C7C9C2'], ['#ECE5D7', '#DBD0BB'], ['#DCD7CF', '#C4BCAE'],
-  ['#E9DCD5', '#D4C0B5'], ['#D9D8C6', '#C2C0A6'], ['#D6DADD', '#BFC5C9'],
+const TONE_FILLS: string[] = [
+  '#EDE8E0', '#E4E8E2', '#EDE3D9', '#E2E4DF',
+  '#EDE7DB', '#E0DBD3', '#EDE0D9', '#DBD9C8', '#D8DCE0',
 ];
 
 interface CategoryTileProps {
@@ -17,24 +15,29 @@ interface CategoryTileProps {
   index: number;
   active?: boolean;
   onPress: () => void;
-  width: number;
+  width?: number;
 }
 
-export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, index, onPress, width }) => {
-  const [t0] = TONE_GRADS[index % TONE_GRADS.length];
+const CIRCLE = 68;
+
+export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, index, onPress }) => {
+  const fill = TONE_FILLS[index % TONE_FILLS.length];
   const resolved = imageUri ? resolveImageUrl(imageUri) : '';
+  const [failed, setFailed] = useState(false);
 
   return (
-    <TouchableOpacity style={[styles.wrap, { width }]} onPress={onPress} activeOpacity={0.85}>
-      <View style={[styles.tile, { width, height: width }]}>
-        <FadeImage
-          uri={resolved}
-          width={width}
-          height={width}
-          resizeMode="cover"
-          fallbackText={name}
-          style={{ backgroundColor: t0 }}
-        />
+    <TouchableOpacity style={styles.wrap} onPress={onPress} activeOpacity={0.82}>
+      <View style={[styles.circle, { backgroundColor: fill }]}>
+        {resolved && !failed ? (
+          <Image
+            source={{ uri: resolved }}
+            style={styles.img}
+            resizeMode="cover"
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <Text style={styles.initial}>{name.charAt(0).toUpperCase()}</Text>
+        )}
       </View>
       <Text style={styles.label} numberOfLines={2}>{name}</Text>
     </TouchableOpacity>
@@ -43,23 +46,33 @@ export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, inde
 
 const styles = StyleSheet.create({
   wrap: {
+    width:      76,
     alignItems: 'center',
     gap:        Space[2],
   },
-  tile: {
-    borderRadius:    20,
-    overflow:        'hidden',
-    alignItems:      'center',
-    justifyContent:  'center',
-    borderWidth:     StyleSheet.hairlineWidth,
-    borderColor:     'rgba(0,0,0,0.04)',
+  circle: {
+    width:          CIRCLE,
+    height:         CIRCLE,
+    borderRadius:   CIRCLE / 2,
+    overflow:       'hidden',
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  img: {
+    width:  CIRCLE,
+    height: CIRCLE,
+  },
+  initial: {
+    fontFamily: FontFamily.serifItalic,
+    fontSize:   26,
+    color:      'rgba(40,32,24,0.28)',
   },
   label: {
     fontFamily: FontFamily.sans,
-    fontSize:   12.5,
-    fontWeight: '600',
-    color:      Colors.ink1,
+    fontSize:   11,
+    fontWeight: '500',
+    color:      Colors.ink2,
     textAlign:  'center',
-    lineHeight: 16,
+    lineHeight: 14,
   },
 });

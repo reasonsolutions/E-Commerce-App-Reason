@@ -37,8 +37,8 @@ import { Colors, Space } from '../theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// Category tile width — horizontal rail, ~3.5 tiles visible (peek encourages scroll)
-const categoryTileW = Math.round((SCREEN_W - Space.screenH * 2) / 3.5);
+// Category tile fixed width — circle 68px + label, 5+ visible with a peek
+const categoryTileW = 76;
 
 // ── Recently viewed snapshot — only the fields ProductCard actually reads ────
 interface RecentlyViewedItem {
@@ -89,26 +89,24 @@ const BannerCard: React.FC<{ spot: Spotlight; height: number; onPress: () => voi
           onLoad={onLoad}
         />
       ) : null}
-      {/* Scrim — bottom-anchored on both themes so text always reads regardless of image brightness */}
+      {/* Bottom scrim — text legibility on any image */}
       <LinearGradient
-        colors={['rgba(18,15,12,0)', 'rgba(18,15,12,0.30)', 'rgba(18,15,12,0.82)']}
-        locations={[0, 0.45, 1]}
+        colors={['rgba(18,15,12,0)', 'rgba(18,15,12,0.28)', 'rgba(18,15,12,0.78)']}
+        locations={[0, 0.42, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
       />
-      {/* Extra left-side vignette for editorial (split) theme */}
-      {isEditorial && (
-        <LinearGradient
-          colors={['rgba(18,15,12,0.55)', 'rgba(18,15,12,0)']}
-          locations={[0, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
-      )}
+      {/* Left vignette — consistent text contrast regardless of image brightness */}
+      <LinearGradient
+        colors={['rgba(18,15,12,0.62)', 'rgba(18,15,12,0.20)', 'rgba(18,15,12,0)']}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
       <View style={[styles.bannerContent, isEditorial && styles.bannerContentSplit]}>
         <Text style={styles.bannerEyebrow}>{spot.eyebrow}</Text>
         <Text style={[styles.bannerTitle, isEditorial && styles.bannerTitleItalic]} numberOfLines={2}>
@@ -118,7 +116,7 @@ const BannerCard: React.FC<{ spot: Spotlight; height: number; onPress: () => voi
         <View style={styles.bannerCtaWrap}>
           <View style={styles.bannerCta}>
             <Text style={styles.bannerCtaText}>{spot.cta}</Text>
-            <Icon name="arrow-forward" size={15} color={Colors.ink1} />
+            <Icon name="arrow-forward" size={13} color={Colors.ink1} />
           </View>
         </View>
       </View>
@@ -251,7 +249,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const handleScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y;
-    const shouldShow = y > 600;
+    const shouldShow = y > 900;
     setShowScrollTop(prev => {
       if (prev !== shouldShow) {
         Animated.timing(scrollTopOpacity, {
@@ -475,14 +473,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
     if (topProducts.length > 0) {
       return topProducts.map(p => ({
-        kind:    'product' as const,
-        eyebrow: p.BrandName.toUpperCase(),
-        title:   p.BrandName,
-        sub:     `Up to ${Math.round(p.DiscountPct)}% off`,
-        cta:     `Shop ${p.BrandName}`,
+        kind:     'product' as const,
+        eyebrow:  p.BrandName.toUpperCase(),
+        title:    p.BrandName,
+        sub:      p.CategoryName ?? '',
+        cta:      'Shop Collection',
         imageUri: resolveImageUrl(p.Images),
-        theme:   'split' as const,
-        itemId:  p.ItemID,
+        theme:    'split' as const,
+        itemId:   p.ItemID,
       }));
     }
 
@@ -493,7 +491,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       .slice(0, 2)
       .map(c => ({
         kind:       'category' as const,
-        eyebrow:    'SHOP THE CATEGORY',
+        eyebrow:    'EXPLORE',
         title:      c.CategoryName,
         sub:        `Browse all ${c.CategoryName}`,
         cta:        `Explore ${c.CategoryName}`,
@@ -646,10 +644,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               />
             ) : !categoriesError ? (
               <View style={styles.categoryRailSkeleton}>
-                {[0, 1, 2, 3].map((i) => (
-                  <View key={i} style={{ alignItems: 'center', gap: Space[2], width: categoryTileW }}>
-                    <Skeleton width={categoryTileW} height={categoryTileW} radius={20} />
-                    <Skeleton width={categoryTileW * 0.7} height={9} />
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <View key={i} style={{ alignItems: 'center', gap: Space[2], width: 76 }}>
+                    <Skeleton width={68} height={68} radius={34} />
+                    <Skeleton width={48} height={9} />
                   </View>
                 ))}
               </View>
@@ -657,33 +655,37 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         )}
 
-        {/* 4. New arrivals — horizontal product rail, breaks grid monotony */}
+        {/* 4. New arrivals — surface (default), horizontal rail */}
         {(newArrivals === null || (newArrivals && newArrivals.length > 0)) && (
-          <ProductRail
-            eyebrow="JUST IN"
-            title="New arrivals"
-            items={newArrivals}
-            cardWidth={148}
-            actionLabel="See all"
-            onSeeAll={() => navigation.navigate('Result', { categoryName: 'New Arrivals' })}
-            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-          />
+          <View style={styles.sectionSurface}>
+            <ProductRail
+              eyebrow="JUST IN"
+              title="New arrivals"
+              items={newArrivals}
+              cardWidth={148}
+              actionLabel="See all"
+              onSeeAll={() => navigation.navigate('Result', { categoryName: 'New Arrivals' })}
+              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+            />
+          </View>
         )}
 
-        {/* 5. Best deals — 2-col grid for price-led browsing */}
+        {/* 5. Best deals — surfaceDeep (warm cream), 2-col grid */}
         {(smartBuys === null || (smartBuys && smartBuys.length > 0)) && (
-          <ProductGrid
-            eyebrow="ON SALE"
-            title="Best deals"
-            items={smartBuys}
-            onSeeAll={() => navigation.navigate('Result', { categoryName: 'Deals' })}
-            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-          />
+          <View style={styles.sectionDeep}>
+            <ProductGrid
+              eyebrow="ON SALE"
+              title="Best deals"
+              items={smartBuys}
+              onSeeAll={() => navigation.navigate('Result', { categoryName: 'Deals' })}
+              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+            />
+          </View>
         )}
 
-        {/* 6. Featured brands — breaks the product grid rhythm */}
+        {/* 6. Brands — surfaceSoft, breaks rhythm after the grid */}
         {!feedError && (
-          <View style={styles.brandsSection}>
+          <View style={styles.sectionSoft}>
             <SectionHead
               eyebrow="FEATURED"
               title="Brands"
@@ -702,11 +704,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     activeOpacity={0.75}
                     onPress={() => navigation.navigate('Result', { brandId: item.BrandId, categoryName: item.BrandName })}
                   >
-                    <BrandTile
-                      name={item.BrandName}
-                      imageUri={item.BrandImage}
-                      index={0}
-                    />
+                    <BrandTile name={item.BrandName} imageUri={item.BrandImage} index={0} />
                   </TouchableOpacity>
                 )}
               />
@@ -723,32 +721,36 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         )}
 
-        {/* 7. Featured category collection — horizontal rail, different layout from grid */}
+        {/* 7. Collection — surface, horizontal rail */}
         {featuredCategoryProducts && featuredCategoryProducts.length > 0 && (
-          <ProductRail
-            eyebrow="COLLECTION"
-            title={featuredCategoryName ?? ''}
-            items={featuredCategoryProducts}
-            cardWidth={148}
-            actionLabel="See all"
-            onSeeAll={() => navigation.navigate('Result', { categoryName: featuredCategoryName ?? 'All Products' })}
-            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-          />
+          <View style={styles.sectionSurface}>
+            <ProductRail
+              eyebrow="COLLECTION"
+              title={featuredCategoryName ?? ''}
+              items={featuredCategoryProducts}
+              cardWidth={148}
+              actionLabel="See all"
+              onSeeAll={() => navigation.navigate('Result', { categoryName: featuredCategoryName ?? 'All Products' })}
+              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+            />
+          </View>
         )}
 
-        {/* 8. Recently viewed — only when there's enough history */}
+        {/* 8. Recently viewed — surfaceSoft, only when there's enough history */}
         {recentlyViewed.length >= 4 && (
-          <ProductRail
-            eyebrow="RECENTLY VIEWED"
-            title="Continue browsing"
-            items={recentlyViewed as unknown as ProductInterface[]}
-            cardWidth={134}
-            actionLabel="View all"
-            onSeeAll={() => navigation.navigate('Result', { categoryName: 'Recently Viewed', itemIds: recentlyViewed.map(p => p.ItemID) })}
-            secondaryAction="Clear"
-            onSecondaryAction={clearRecentlyViewed}
-            onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
-          />
+          <View style={styles.sectionSoft}>
+            <ProductRail
+              eyebrow="RECENTLY VIEWED"
+              title="Continue browsing"
+              items={recentlyViewed as unknown as ProductInterface[]}
+              cardWidth={134}
+              actionLabel="View all"
+              onSeeAll={() => navigation.navigate('Result', { categoryName: 'Recently Viewed', itemIds: recentlyViewed.map(p => p.ItemID) })}
+              secondaryAction="Clear"
+              onSecondaryAction={clearRecentlyViewed}
+              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+            />
+          </View>
         )}
       </ScrollView>
 
@@ -762,7 +764,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           activeOpacity={0.85}
           style={styles.scrollTopInner}
         >
-          <Icon name="arrow-up" size={18} color={Colors.ink1} />
+          <Icon name="arrow-up" size={14} color={Colors.ink2} />
         </TouchableOpacity>
       </Animated.View>
 

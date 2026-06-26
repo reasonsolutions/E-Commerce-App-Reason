@@ -57,7 +57,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
     const ageDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
     return ageDays <= 30;
   })();
-  const imgH = Math.round(cardWidth * 1.0);
+  const imgH = Math.round(cardWidth * 0.88);
 
   const freeShipping = product.ShippingInfo?.FreeShipping ?? false;
   const deliveryDays = product.ShippingInfo?.EstimatedDeliveryDays;
@@ -75,7 +75,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
             <Animated.Image
               source={{ uri: imgUri }}
               style={[styles.img, { opacity: imgOpacity }]}
-              resizeMode="contain"
+              resizeMode="cover"
               onLoad={onLoad}
               onError={onError}
             />
@@ -173,39 +173,40 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   info: {
-    paddingTop:        Space[2] + 1,
+    paddingTop:        Space[2],
     paddingHorizontal: Space[2],
-    gap:               3,
+    gap:               2,
   },
   brand: {
     fontFamily:    FontFamily.mono,
-    fontSize:      9,
+    fontSize:      8.5,
     fontWeight:    '400',
     color:         Colors.ink4,
-    letterSpacing: 1.2,
+    letterSpacing: 1.0,
     textTransform: 'uppercase',
   },
   name: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      14,
-    fontWeight:    '400',
+    fontFamily:    FontFamily.sans,
+    fontSize:      13,
+    fontWeight:    '500',
     color:         Colors.ink1,
-    lineHeight:    19,
-    minHeight:     38,
-    letterSpacing: 0.1,
+    lineHeight:    17,
+    minHeight:     34,
+    letterSpacing: -0.1,
   },
   priceRow: {
     flexDirection: 'row',
     flexWrap:      'wrap',
     alignItems:    'baseline',
-    gap:           Space[1] + 2,
+    gap:           Space[1] + 1,
+    marginTop:     1,
   },
   price: {
     fontFamily:    FontFamily.sans,
     fontSize:      13,
-    fontWeight:    '600',
+    fontWeight:    '700',
     color:         Colors.ink1,
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
     flexShrink:    0,
   },
   priceUnavailable: {

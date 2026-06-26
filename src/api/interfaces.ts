@@ -611,6 +611,7 @@ export interface PlaceOrderPaymentDetails {
   PaymentModes:    number;
   Remark:          string;
   ModeOfPayments:  PlaceOrderModeOfPayment[];
+  IsPaid:          boolean;
 }
 
 export interface PlaceOrderInterface {

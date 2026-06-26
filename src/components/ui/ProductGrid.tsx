@@ -136,9 +136,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
 };
 
 const styles = StyleSheet.create({
-  wrap: {
-    marginTop: Space[6],
-  },
+  wrap: {},
   grid: {
     flexDirection:     'row',
     flexWrap:          'wrap',

@@ -51,13 +51,13 @@ const styles = StyleSheet.create({
     alignItems:        'flex-end',
     justifyContent:    'space-between',
     paddingHorizontal: Space.screenH,
-    marginBottom:      Space[4] - 2,
+    marginBottom:      Space[3],
     gap:               Space[3],
   },
   left: {
     flex:    1,
     minWidth: 0,
-    gap:     5,
+    gap:     2,
   },
   eyebrow: {
     ...Type.label,

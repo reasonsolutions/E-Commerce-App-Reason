@@ -414,6 +414,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
         PaymentDetails: {
           PaymentModes:   2, //isCard ? 3:16,
           Remark:         isCard ? 'Card payment via MIPS' : 'Mobile money payment via MIPS',
+          IsPaid:         true,
           ModeOfPayments: modeOfPayments,
         },
       };
