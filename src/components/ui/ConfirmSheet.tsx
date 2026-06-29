@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ink1,
   },
   btnDestructive: {
-    backgroundColor: Colors.danger,
+    backgroundColor: Colors.ink1,
   },
   btnText: {
     ...Type.bodyStrong,
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   btnTextDestructive: {
-    color: '#FFFFFF',
+    color: Colors.dangerTint,
   },
   cancelWrap: {
     alignSelf: 'center',

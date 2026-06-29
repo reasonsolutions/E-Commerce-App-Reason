@@ -15,6 +15,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 import { useProfileCode } from '../hooks/useProfileCode';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
 import { postSaveCartItems } from '../api/cart';
@@ -40,13 +42,8 @@ const COL_GAP  = Space[3];
 const COL_W    = (SCREEN_W - Space.screenH * 2 - COL_GAP) / 2;
 const IMG_H    = COL_W * 1.25; // 4:5 portrait
 
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-  goBack:   () => void;
-};
-
 type WishlistScreenProps = {
-  navigation: NavigationProp;
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 // ── Grid card ─────────────────────────────────────────────────────────────────
@@ -164,6 +161,7 @@ const WishlistCard: React.FC<{
             <TouchableOpacity
               style={styles.notifyBtn}
               activeOpacity={0.82}
+              onPress={() => toastEmitter.emit('info', "We'll notify you when this is back in stock")}
             >
               <Text style={styles.notifyBtnText}>Notify Me</Text>
             </TouchableOpacity>
@@ -221,16 +219,14 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     setRefreshing(false);
   }, [fetchWishlist]);
 
-  // Sync fetched → items
+  // Sync fetched → items (including clearing to empty, so removals elsewhere reflect correctly)
   React.useEffect(() => {
-    if (fetched && fetched.length > 0) setItems(fetched);
+    if (fetched) setItems(fetched);
   }, [fetched]);
 
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
-      // Skip reload if already loaded — preserves scroll position when tabbing back
-      if (hasFetched.current) return () => { cancelled.current = true; };
       fetchWishlist(cancelled);
       return () => { cancelled.current = true; };
     }, [fetchWishlist]),
@@ -394,7 +390,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           activeOpacity={0.6}
         >
-          <Icon name="arrow-back" size={22} color={Colors.ink1} />
+          <Icon name="chevron-back" size={22} color={Colors.ink1} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           My Wishlist

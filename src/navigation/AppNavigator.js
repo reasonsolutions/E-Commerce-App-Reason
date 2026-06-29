@@ -25,6 +25,7 @@ import EcomPaymentScreen from '../screens/PaymentScreen';
 import HelpCenterScreen from '../screens/HelpCenterScreen';
 import BrandsScreen from '../screens/BrandsScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
+import LegalScreen from '../screens/LegalScreen';
 
 const Stack = createStackNavigator();
 
@@ -80,6 +81,7 @@ const AppNavigator = () => {
         <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
         <Stack.Screen name="Brands" component={BrandsScreen} />
         <Stack.Screen name="Categories" component={CategoriesScreen} />
+        <Stack.Screen name="Legal" component={LegalScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

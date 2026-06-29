@@ -7,12 +7,13 @@ import {
   FlatList,
   TouchableOpacity,
   StatusBar,
-  Platform,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 import { getBrands } from '../api/product';
 import type { GetBrandItem } from '../api/interfaces';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -31,13 +32,8 @@ const COL_GAP   = Space[2];
 const CARD_W    = (SCREEN_W - OUTER_PAD * 2 - COL_GAP * (NUM_COLS - 1)) / NUM_COLS;
 const LOGO_SIZE = Math.round(CARD_W * 0.44);
 
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-  goBack: () => void;
-};
-
 type BrandsScreenProps = {
-  navigation: NavigationProp;
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 const BrandCard: React.FC<{
@@ -124,7 +120,7 @@ const BrandsScreen: React.FC<BrandsScreenProps> = ({ navigation }) => {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Icon
-            name={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'}
+            name="chevron-back"
             size={22}
             color={Colors.ink1}
           />
@@ -290,7 +286,7 @@ const styles = StyleSheet.create({
     width:           LOGO_SIZE + 12,
     height:          LOGO_SIZE + 12,
     borderRadius:    12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     alignItems:      'center',
     justifyContent:  'center',
     borderWidth:     StyleSheet.hairlineWidth,

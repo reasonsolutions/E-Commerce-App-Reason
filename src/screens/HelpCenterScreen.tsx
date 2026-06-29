@@ -16,18 +16,15 @@ import { Colors, Space } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useHaptic } from '../hooks/useHaptic';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-  goBack:   () => void;
-};
-
 type HelpCenterScreenProps = {
-  navigation: NavigationProp;
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 interface FaqItem {
@@ -157,7 +154,7 @@ const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }) => {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           activeOpacity={0.6}
         >
-          <Icon name="arrow-back" size={22} color={Colors.ink1} />
+          <Icon name="chevron-back" size={22} color={Colors.ink1} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Help Center</Text>
         <View style={styles.headerRight} />

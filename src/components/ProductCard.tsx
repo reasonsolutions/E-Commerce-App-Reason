@@ -14,6 +14,7 @@ import { WishlistHeart } from './ui/WishlistHeart';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
+import { Motion } from '../theme/motion';
 
 interface ProductCardProps {
   product: ProductInterface;
@@ -39,7 +40,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   const onLoad = useCallback(() => {
     setImgLoaded(true);
     Animated.timing(imgOpacity, {
-      toValue: 1, duration: 300, useNativeDriver: true,
+      toValue: 1, duration: Motion.duration.settle, useNativeDriver: true,
     }).start();
   }, [imgOpacity]);
 

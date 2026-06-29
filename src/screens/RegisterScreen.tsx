@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { postCreateCustomer } from '../api/auth';
+import { userFacingMessage } from '../api/apiError';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -22,17 +23,8 @@ import { FloatingLabelInput } from '../components/ui/FloatingLabelInput';
 import { useHaptic } from '../hooks/useHaptic';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { BRAND } from '../config/brand';
-
-type RootStackParamList = {
-  Login: undefined;
-  OTPVerification: {
-    CustomerName: string;
-    EmailID: string;
-    MobileNumber: string;
-    CountryCode: number;
-    Password: string;
-  };
-};
+import { setPendingPassword } from '../utils/registrationState';
+import type { RootStackParamList } from '../navigation/types';
 
 const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -103,16 +95,16 @@ const RegisterScreen: React.FC = () => {
       }
 
       setLoading(false);
+      setPendingPassword(password);
       navigation.navigate('OTPVerification', {
         CustomerName: name.trim(),
         EmailID:      email.trim(),
         MobileNumber: mobile.trim(),
         CountryCode:  230,
-        Password:     password,
       });
-    } catch (error: any) {
+    } catch (error) {
       setLoading(false);
-      setFieldError(error?.message ?? 'Something went wrong. Please try again.');
+      setFieldError(userFacingMessage(error));
       shake();
     }
   }, [loading, name, email, mobile, password, navigation, shake]);
@@ -211,6 +203,23 @@ const RegisterScreen: React.FC = () => {
                 <Text style={styles.loginTextBold}>Log in</Text>
               </Text>
             </TouchableOpacity>
+
+            <Text style={styles.legalText}>
+              {'By creating an account you agree to our '}
+              <Text
+                style={styles.legalLink}
+                onPress={() => navigation.navigate('Legal', { type: 'terms' })}
+              >
+                Terms of Service
+              </Text>
+              {' and '}
+              <Text
+                style={styles.legalLink}
+                onPress={() => navigation.navigate('Legal', { type: 'privacy' })}
+              >
+                Privacy Policy
+              </Text>
+            </Text>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -294,6 +303,17 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color:      Colors.ink2,
     fontWeight: '500',
+  },
+  legalText: {
+    ...Type.caption,
+    color:     Colors.ink4,
+    textAlign: 'center',
+    marginTop: Space[3],
+  },
+  legalLink: {
+    ...Type.caption,
+    color:          Colors.ink2,
+    textDecorationLine: 'underline',
   },
 });
 

@@ -22,13 +22,12 @@ import { FontFamily } from '../theme/fonts';
 import { EmptyState } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { homeCache } from '../utils/homeCache';
+import { useFocusEffect } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
+import type { CategoryInterface } from '../api/interfaces';
 
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-  goBack: () => void;
-};
-
-type Props = { navigation: NavigationProp };
+type Props = { navigation: StackNavigationProp<RootStackParamList> };
 
 const SearchScreen: React.FC<Props> = ({ navigation }) => {
   const insets      = useSafeAreaInsets();
@@ -40,6 +39,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [searchError,    setSearchError]    = useState(false);
   const [retrying,       setRetrying]       = useState(false);
+  const [cachedCategories, setCachedCategories] = useState<CategoryInterface[] | null>(homeCache.categories);
   const lastQueryRef    = useRef('');
   const profileCodeRef  = useRef<number | null>(null);
 
@@ -62,6 +62,13 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
     });
     return () => sub.remove();
   }, [navigation]);
+
+  // Re-sync from homeCache on focus — HomeScreen may not have fetched yet on first mount
+  useFocusEffect(
+    useCallback(() => {
+      setCachedCategories(homeCache.categories);
+    }, []),
+  );
 
   const fetchSuggestions = useCallback(async (text: string) => {
     try {
@@ -144,7 +151,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.backBtn}
         >
-          <Icon name="arrow-back" size={22} color={Colors.ink1} />
+          <Icon name="chevron-back" size={22} color={Colors.ink1} />
         </TouchableOpacity>
 
         <View style={styles.inputWrap}>
@@ -275,7 +282,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
       )}
 
       {/* ── First-time user — category chips from live catalog ──────────── */}
-      {showFTU && (homeCache.categories?.length ?? 0) > 0 && (
+      {showFTU && (cachedCategories?.length ?? 0) > 0 && (
         <ScrollView
           style={styles.ftuScroll}
           contentContainerStyle={styles.ftuContent}
@@ -284,14 +291,14 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
         >
           <Text style={styles.ftuLabel}>BROWSE BY CATEGORY</Text>
           <View style={styles.chipWrap}>
-            {homeCache.categories!.map(cat => (
+            {cachedCategories!.map(cat => (
               <TouchableOpacity
                 key={cat.CategoryId}
                 style={styles.chip}
-                onPress={() => commit(cat.CategoryName)}
+                onPress={() => navigation.navigate('Result', { categoryId: String(cat.CategoryId), categoryName: cat.CategoryName })}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`Search for ${cat.CategoryName}`}
+                accessibilityLabel={`Browse ${cat.CategoryName}`}
               >
                 <Text style={styles.chipText}>{cat.CategoryName}</Text>
               </TouchableOpacity>

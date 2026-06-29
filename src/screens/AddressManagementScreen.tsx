@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { EmptyState, FloatingLabelInput, ErrorBanner } from '../components/ui';
+import { EmptyState, FloatingLabelInput, ErrorBanner, ConfirmSheet } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -23,12 +23,14 @@ import {
   postUpdateDeliveryAddress,
   postDeleteDeliveryAddress,
 } from '../api/address';
+import { userFacingMessage } from '../api/apiError';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
+import { useAppToast } from '../hooks/useAppToast';
 import { DeliveryAddress } from './AddressScreen';
 
 type Props = {
@@ -129,6 +131,8 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
   const [submitting, setSubmitting]     = useState(false);
   const [formError, setFormError]       = useState<string | null>(null);
   const [editingCode, setEditingCode]   = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const toast = useAppToast();
 
   const fetchAddresses = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -242,14 +246,23 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  const handleDelete = async (code: number) => {
+  const requestDelete = (code: number) => setDeleteTarget(code);
+
+  const confirmDelete = async () => {
+    const code = deleteTarget;
+    if (code === null) return;
+    setDeleteTarget(null);
     try {
       const response = await postDeleteDeliveryAddress(code);
       if (response.statusCode === 1) {
         run(async () => response.result as DeliveryAddress[]);
         if (editingCode === code) cancelEdit();
+      } else {
+        toast.error({ title: 'Could not delete address', description: response.userMessage || undefined });
       }
-    } catch {}
+    } catch (err) {
+      toast.error({ title: 'Could not delete address', description: userFacingMessage(err) });
+    }
   };
 
   const addressList = addresses ?? [];
@@ -394,7 +407,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
               <AddressRow
                 item={item}
                 onEdit={() => startEdit(item)}
-                onDelete={() => handleDelete(item.OrderDeliveryAddressCode)}
+                onDelete={() => requestDelete(item.OrderDeliveryAddressCode)}
                 isLast={index === addressList.length - 1}
                 delay={Math.min(index * 50, 200)}
               />
@@ -403,6 +416,17 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
           />
         )}
       </KeyboardAvoidingView>
+
+      {deleteTarget !== null && (
+        <ConfirmSheet
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          title="Delete address?"
+          body="This address will be removed from your saved addresses."
+          confirmLabel="Delete"
+          destructive
+        />
+      )}
     </View>
   );
 };

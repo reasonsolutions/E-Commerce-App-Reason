@@ -19,6 +19,7 @@ import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { getDeliveryAddresses, postCreateDeliveryAddress } from '../api/address';
+import { userFacingMessage } from '../api/apiError';
 import { placeOrder } from '../api/order';
 import { useCart } from '../context/CartContext';
 import { SavedCartItemInterface, PlaceOrderInterface } from '../api/interfaces';
@@ -384,8 +385,8 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
           image:        resolveImageUrl(item.Images),
         })),
       });
-    } catch (err: any) {
-      setOrderError(err?.response?.data?.userMessage ?? 'Something went wrong. Please try again.');
+    } catch (err) {
+      setOrderError(userFacingMessage(err));
     } finally {
       setOrderSubmitting(false);
     }

@@ -38,8 +38,7 @@ async function refreshAccessToken(): Promise<string | null> {
       securityLevel: Keychain.SECURITY_LEVEL.ANY,
     });
     return newToken;
-  } catch (e) {
-    console.log('[refresh] error:', e);
+  } catch {
     return null;
   }
 }

@@ -18,6 +18,7 @@ import { Type } from '../../theme/typography';
 import { FontFamily } from '../../theme/fonts';
 import { ErrorBanner } from './ErrorBanner';
 import { forgotPassword, verifyForgotPasswordOTP } from '../../api/auth';
+import { userFacingMessage } from '../../api/apiError';
 import { useHaptic } from '../../hooks/useHaptic';
 
 interface ForgotPasswordSheetProps {
@@ -75,8 +76,8 @@ export const ForgotPasswordSheet: React.FC<ForgotPasswordSheetProps> = ({
       setLoading(false);
       setStep('otp');
       setTimeout(() => otpRef.current?.focus(), 100);
-    } catch (err: any) {
-      setError(err?.message ?? 'Something went wrong.');
+    } catch (err) {
+      setError(userFacingMessage(err));
       setLoading(false);
     }
   }, [loading, email, haptic]);
@@ -101,8 +102,8 @@ export const ForgotPasswordSheet: React.FC<ForgotPasswordSheetProps> = ({
       haptic.success();
       setLoading(false);
       onSuccess();
-    } catch (err: any) {
-      setError(err?.message ?? 'Something went wrong.');
+    } catch (err) {
+      setError(userFacingMessage(err));
       setLoading(false);
     }
   }, [loading, email, otp, haptic, onSuccess]);

@@ -18,6 +18,7 @@ import { Type } from '../../theme/typography';
 import { FontFamily } from '../../theme/fonts';
 import { ErrorBanner } from './ErrorBanner';
 import { postUpdateCustomer } from '../../api/auth';
+import { userFacingMessage } from '../../api/apiError';
 import { STORAGE_KEYS } from '../../config/storageKeys';
 import { BRAND } from '../../config/brand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -242,8 +243,8 @@ export const EditProfileSheet: React.FC<EditProfileSheetProps> = ({
       haptic.success();
       setSaving(false);
       onSaved(updated);
-    } catch (err: any) {
-      setSaveError(err?.message ?? 'Something went wrong.');
+    } catch (err) {
+      setSaveError(userFacingMessage(err));
       setSaving(false);
     }
   }, [saving, isDirty, name, email, mobile, session, haptic, onSaved]);

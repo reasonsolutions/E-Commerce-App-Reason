@@ -378,7 +378,7 @@ const s = StyleSheet.create({
   savings: {
     fontFamily: FontFamily.sans,
     fontSize:   13,
-    color:      '#226B3C',
+    color:      Colors.success,
     fontWeight: '500',
     lineHeight: 18,
     marginTop:  Space[1],
@@ -392,10 +392,10 @@ const s = StyleSheet.create({
 
   // ── Cards — white, float above warm surface ────────────────────────────────
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius:    20,
     borderWidth:     1,
-    borderColor:     '#EFE9E4',
+    borderColor:     Colors.surfaceDeep,
     padding:         Space[5],
     gap:             Space[3],
   },
@@ -459,7 +459,7 @@ const s = StyleSheet.create({
   },
   primaryBtnText: {
     ...Type.bodyStrong,
-    color:         '#FFFFFF',
+    color:         Colors.accentInk,
     letterSpacing: 0.3,
   },
   secondaryBtn: {

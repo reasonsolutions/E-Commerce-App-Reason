@@ -7,12 +7,13 @@ import {
   FlatList,
   TouchableOpacity,
   StatusBar,
-  Platform,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 import { getCategories, getCategoryProductCount } from '../api/product';
 import type { CategoryInterface } from '../api/interfaces';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -36,13 +37,8 @@ const TONE_GRADS: string[] = [
   '#DCD7CF', '#E9DCD5', '#D9D8C6', '#D6DADD',
 ];
 
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-  goBack: () => void;
-};
-
 type CategoriesScreenProps = {
-  navigation: NavigationProp;
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 interface CategoryWithCount extends CategoryInterface {
@@ -169,7 +165,7 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Icon
-            name={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'}
+            name="chevron-back"
             size={22}
             color={Colors.ink1}
           />
@@ -242,7 +238,7 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
             <CategoryCard
               item={item}
               index={index}
-              onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
+              onPress={() => navigation.navigate('Result', { categoryId: String(item.CategoryId), categoryName: item.CategoryName })}
             />
           )}
         />

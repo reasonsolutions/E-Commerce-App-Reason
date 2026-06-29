@@ -52,6 +52,7 @@ import {
 } from './ResultScreen.styles';
 import { addToWishlist, getWishlist, removeFromWishlist } from '../api/wishlist';
 import { useProfileCode } from '../hooks/useProfileCode';
+import { isLoggedIn } from '../utils/auth';
 import type { WishlistItemInterface } from '../api/interfaces';
 
 type ResultScreenProps = {
@@ -99,8 +100,24 @@ const WishlistHeart: React.FC<{
   const haptic      = useHaptic();
   const profileCode = useProfileCode();
   const [wishlistCode, setWishlistCode] = useState<number | null>(initialWishlistCode);
+  const cancelledRef = useRef(false);
+
+  // Clean up any pending undo timer if the component unmounts mid-animation
+  useEffect(() => {
+    cancelledRef.current = false;
+    return () => { cancelledRef.current = true; };
+  }, []);
 
   const onPress = useCallback(async () => {
+    const loggedIn = await isLoggedIn();
+    if (!loggedIn) {
+      // Briefly show a filled heart then revert — subtle auth indicator
+      setWishlistCode(-1);
+      setTimeout(() => {
+        if (!cancelledRef.current) setWishlistCode(null);
+      }, Motion.duration.settle);
+      return;
+    }
     if (!profileCode) return;
     haptic.light();
     if (wishlistCode !== null) {
@@ -128,20 +145,25 @@ const WishlistHeart: React.FC<{
   }, [profileCode, inventoryId, haptic, wishlistCode]);
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    <View
       style={styles.heartBtn}
-      activeOpacity={0.7}
+      onStartShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
     >
-      <View style={styles.heartCircle}>
-        <Icon
-          name={wishlistCode !== null ? 'heart' : 'heart-outline'}
-          size={14}
-          color={wishlistCode !== null ? Colors.accent : Colors.ink3}
-        />
-      </View>
-    </TouchableOpacity>
+      <TouchableOpacity
+        onPress={onPress}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.heartCircle}>
+          <Icon
+            name={wishlistCode !== null ? 'heart' : 'heart-outline'}
+            size={14}
+            color={wishlistCode !== null ? Colors.accent : Colors.ink3}
+          />
+        </View>
+      </TouchableOpacity>
+    </View>
   );
 };
 
@@ -886,7 +908,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Icon name="arrow-back" size={22} color={Colors.ink1} />
+            <Icon name="chevron-back" size={22} color={Colors.ink1} />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>

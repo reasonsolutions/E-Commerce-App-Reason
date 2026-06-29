@@ -14,8 +14,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { postCnfOrderDetail, cancelOrder } from '../api/order';
+import { userFacingMessage } from '../api/apiError';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import {
@@ -58,7 +60,7 @@ type OrderDetailScreenRouteParams = {
 };
 
 type OrderDetailScreenProps = {
-  navigation: StackNavigationProp<any>;
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 // ── Flat detail row ────────────────────────────────────────────────────────────
@@ -429,8 +431,8 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
       haptic.success();
       cancelSheetRef.current?.close();
       setCancelSuccess(true);
-    } catch (err: any) {
-      setCancelError(err?.response?.data?.userMessage ?? 'Something went wrong. Please try again.');
+    } catch (err) {
+      setCancelError(userFacingMessage(err));
     } finally {
       setCancelLoading(false);
     }
@@ -602,7 +604,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         ) : null}
       </ScrollView>
 
-      <OrderActionBar onHelp={() => console.warn('Help not yet wired')} bottomInset={insets.bottom} />
+      <OrderActionBar onHelp={() => navigation.navigate('HelpCenter')} bottomInset={insets.bottom} />
 
       {/* ── Cancel success modal ── */}
       <Modal visible={cancelSuccess} transparent animationType="fade" statusBarTranslucent>

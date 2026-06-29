@@ -40,7 +40,7 @@ const APP_VERSION = '1.0.0';
 
 type ProfileScreenProps = {
   navigation: {
-    navigate: (screen: string) => void;
+    navigate: (screen: string, params?: Record<string, unknown>) => void;
     goBack: () => void;
     reset: (state: { index: number; routes: { name: string }[] }) => void;
   };
@@ -64,7 +64,7 @@ const avatarStyles = StyleSheet.create({
     width:           76,
     height:          76,
     borderRadius:    38,
-    backgroundColor: '#EDE9E4',
+    backgroundColor: Colors.surfaceDeep,
     alignItems:      'center',
     justifyContent:  'center',
   },
@@ -119,7 +119,7 @@ const StatRow: React.FC<{
 const statStyles = StyleSheet.create({
   row: {
     flexDirection:   'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius:    16,
     borderWidth:     StyleSheet.hairlineWidth,
     borderColor:     'rgba(0,0,0,0.07)',
@@ -135,7 +135,7 @@ const statStyles = StyleSheet.create({
     alignItems:      'center',
     paddingVertical: Space[4],
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#EEEAE5',
+    borderRightColor: Colors.surfaceDeep,
     gap:             3,
   },
   cellIcon: {
@@ -190,7 +190,7 @@ const rowStyles = StyleSheet.create({
   },
   border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#EEEAE5',
+    borderBottomColor: Colors.surfaceDeep,
   },
   iconWrap: {
     width:           34,
@@ -309,7 +309,7 @@ const loggedOutStyles = StyleSheet.create({
   divider: {
     width:           '100%',
     height:          StyleSheet.hairlineWidth,
-    backgroundColor: '#EEEAE5',
+    backgroundColor: Colors.surfaceDeep,
     marginTop:       Space[6],
     marginBottom:    Space[5],
   },
@@ -424,7 +424,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   if (sessionError) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
         <View style={[styles.simpleHeader, { paddingTop: insets.top + Space[2] }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Icon name="chevron-back" size={24} color={Colors.ink1} />
@@ -448,7 +448,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   if (!sessionLoading && !session) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
         <View style={[styles.simpleHeader, { paddingTop: insets.top + Space[2] }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Icon name="chevron-back" size={24} color={Colors.ink1} />
@@ -473,7 +473,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
       {session && (
         <EditProfileSheet
@@ -604,7 +604,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <MenuRow
               icon="mail-outline"
               label="Contact Us"
-              onPress={() => {}}
+              onPress={() => { haptic.light(); toast.info({ title: 'Coming soon' }); }}
+            />
+            <MenuRow
+              icon="document-text-outline"
+              label="Privacy Policy"
+              onPress={() => { haptic.light(); navigation.navigate('Legal', { type: 'privacy' }); }}
+            />
+            <MenuRow
+              icon="reader-outline"
+              label="Terms of Service"
+              onPress={() => { haptic.light(); navigation.navigate('Legal', { type: 'terms' }); }}
               showDivider={false}
             />
           </View>
@@ -635,12 +645,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   root: {
     flex:            1,
-    backgroundColor: '#F8F5F2',
+    backgroundColor: Colors.surface,
   },
   simpleHeader: {
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[3],
-    backgroundColor:   '#F8F5F2',
+    backgroundColor:   Colors.surface,
   },
   scroll: {
     flex: 1,
@@ -650,10 +660,10 @@ const styles = StyleSheet.create({
   heroNav: {
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[2],
-    backgroundColor:   '#F8F5F2',
+    backgroundColor:   Colors.surface,
   },
   heroBody: {
-    backgroundColor:   '#F8F5F2',
+    backgroundColor:   Colors.surface,
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[8],
   },
@@ -724,10 +734,10 @@ const styles = StyleSheet.create({
 
   // ── Menu card ─────────────────────────────────────────────────────────────
   menuCard: {
-    backgroundColor:   '#FFFFFF',
+    backgroundColor:   Colors.surface,
     borderRadius:      16,
     borderWidth:       StyleSheet.hairlineWidth,
-    borderColor:       '#EEEAE5',
+    borderColor:       Colors.surfaceDeep,
     paddingHorizontal: Space[4],
     paddingTop:        Space[3],
     paddingBottom:     Space[1],

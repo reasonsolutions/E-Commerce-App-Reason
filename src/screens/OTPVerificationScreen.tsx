@@ -13,23 +13,15 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { postConfirmCustomer, postCreateCustomer } from '../api/auth';
+import { userFacingMessage } from '../api/apiError';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { useHaptic } from '../hooks/useHaptic';
 import Icon from 'react-native-vector-icons/Ionicons';
-
-type RootStackParamList = {
-  Login: { skipEntrance?: boolean };
-  OTPVerification: {
-    CustomerName: string;
-    EmailID: string;
-    MobileNumber: string;
-    CountryCode: number;
-    Password: string;
-  };
-};
+import { getPendingPassword, setPendingPassword } from '../utils/registrationState';
+import type { RootStackParamList } from '../navigation/types';
 
 const OTP_LENGTH = 6;
 
@@ -39,7 +31,7 @@ const OTPVerificationScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
 
-  const { CustomerName, EmailID, MobileNumber, CountryCode, Password } = route.params;
+  const { CustomerName, EmailID, MobileNumber, CountryCode } = route.params;
 
   const [otp, setOtp]             = useState('');
   const [loading, setLoading]     = useState(false);
@@ -73,7 +65,8 @@ const OTPVerificationScreen: React.FC = () => {
     setError(null);
     setOtp('');
     try {
-      await postCreateCustomer({ CustomerName, EmailID, MobileNumber: Number(MobileNumber), CountryCode, Password });
+      const password = getPendingPassword() ?? '';
+      await postCreateCustomer({ CustomerName, EmailID, MobileNumber: Number(MobileNumber), CountryCode, Password: password });
       setCountdown(30);
       haptic.success();
     } catch {
@@ -81,7 +74,7 @@ const OTPVerificationScreen: React.FC = () => {
     } finally {
       setResending(false);
     }
-  }, [countdown, resending, CustomerName, EmailID, MobileNumber, CountryCode, Password, haptic]);
+  }, [countdown, resending, CustomerName, EmailID, MobileNumber, CountryCode, haptic]);
 
   const shake = useCallback(() => {
     haptic.warning();
@@ -99,13 +92,14 @@ const OTPVerificationScreen: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
+      const password = getPendingPassword() ?? '';
       const res = await postConfirmCustomer({
         OTP:          code,
         CustomerName,
         EmailID,
         MobileNumber: Number(MobileNumber),
         CountryCode,
-        Password,
+        Password:     password,
       });
 
       if (res.statusCode !== 1) {
@@ -115,6 +109,7 @@ const OTPVerificationScreen: React.FC = () => {
         return;
       }
 
+      setPendingPassword(null);
       haptic.success();
       Keyboard.dismiss();
       // Wait for the keyboard-dismiss animation to finish before mounting Login —
@@ -123,12 +118,12 @@ const OTPVerificationScreen: React.FC = () => {
       setTimeout(() => {
         navigation.reset({ index: 0, routes: [{ name: 'Login', params: { skipEntrance: true } }] });
       }, 250);
-    } catch (err: any) {
+    } catch (err) {
       setLoading(false);
-      setError(err?.message ?? 'Something went wrong. Please try again.');
+      setError(userFacingMessage(err));
       shake();
     }
-  }, [loading, CustomerName, EmailID, MobileNumber, CountryCode, Password, navigation, shake, haptic]);
+  }, [loading, CustomerName, EmailID, MobileNumber, CountryCode, navigation, shake, haptic]);
 
   const handleOtpChange = useCallback((val: string) => {
     const cleaned = val.replace(/\D/g, '').slice(0, OTP_LENGTH);

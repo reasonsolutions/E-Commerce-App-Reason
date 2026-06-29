@@ -24,6 +24,8 @@ import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import { homeCache } from '../utils/homeCache';
 import { useFocusEffect } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { BRAND } from '../config/brand';
@@ -34,6 +36,7 @@ import {
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space } from '../theme';
+import { Motion } from '../theme/motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -73,7 +76,7 @@ const BannerCard: React.FC<{ spot: Spotlight; height: number; onPress: () => voi
 }) => {
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+    Animated.timing(imgOpacity, { toValue: 1, duration: Motion.duration.settle, useNativeDriver: true }).start();
   }, [imgOpacity]);
 
   const isEditorial = spot.theme === 'split';
@@ -183,10 +186,7 @@ const BannerSlot: React.FC<{
 };
 
 // ── Back-press / logout logic ─────────────────────────────────────────────────
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-  getState?: () => { routes: Array<{ name: string }> };
-};
+type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 function useCustomBackHandler(navigation: NavigationProp) {
   useFocusEffect(
@@ -503,9 +503,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   const handleBannerPress = useCallback((spot: Spotlight) => {
     if (spot.kind === 'product' && spot.itemId) {
-      navigation.navigate('Product', { product: spot.itemId });
+      navigation.navigate('Product', { product: String(spot.itemId) });
     } else if (spot.kind === 'category' && spot.categoryId) {
-      navigation.navigate('Result', { categoryId: spot.categoryId, categoryName: spot.title });
+      navigation.navigate('Result', { categoryId: String(spot.categoryId), categoryName: spot.title });
     }
   }, [navigation]);
 
@@ -638,7 +638,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     imageUri={item.CategoryImage}
                     index={index}
                     width={categoryTileW}
-                    onPress={() => navigation.navigate('Result', { categoryId: item.CategoryId, categoryName: item.CategoryName })}
+                    onPress={() => navigation.navigate('Result', { categoryId: String(item.CategoryId), categoryName: item.CategoryName })}
                   />
                 )}
               />
@@ -665,7 +665,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               cardWidth={148}
               actionLabel="See all"
               onSeeAll={() => navigation.navigate('Result', { categoryName: 'New Arrivals' })}
-              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+              onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
             />
           </View>
         )}
@@ -678,7 +678,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               title="Best deals"
               items={smartBuys}
               onSeeAll={() => navigation.navigate('Result', { categoryName: 'Deals' })}
-              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+              onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
             />
           </View>
         )}
@@ -731,7 +731,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               cardWidth={148}
               actionLabel="See all"
               onSeeAll={() => navigation.navigate('Result', { categoryName: featuredCategoryName ?? 'All Products' })}
-              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+              onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
             />
           </View>
         )}
@@ -748,7 +748,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               onSeeAll={() => navigation.navigate('Result', { categoryName: 'Recently Viewed', itemIds: recentlyViewed.map(p => p.ItemID) })}
               secondaryAction="Clear"
               onSecondaryAction={clearRecentlyViewed}
-              onPress={(itemId) => navigation.navigate('Product', { product: itemId })}
+              onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
             />
           </View>
         )}

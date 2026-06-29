@@ -15,11 +15,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { postOrderHistory } from '../api/order';
 import { postSaveCartItems } from '../api/cart';
+import { userFacingMessage } from '../api/apiError';
 import { toastEmitter } from '../utils/toastEmitter';
 import type { OrderHistoryFilters } from '../api/order';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useFocusEffect } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 import {
   StatusBadge,
   BottomNavBar,
@@ -39,16 +42,11 @@ import { useCart } from '../context/CartContext';
 import { formatDate } from '../utils/formatDate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { orderStatusLabel } from '../utils/orderStatus';
-import { OrderStatusCode, type OrderHistoryItemInterface } from '../api/interfaces';
+import { OrderStatusCode, type OrderHistoryItemInterface, type OrderDetailItemExtendedInterface } from '../api/interfaces';
 import { LoginPromptSheet } from '../components/ui';
 
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-  goBack: () => void;
-};
-
 type OrderHistoryScreenProps = {
-  navigation: NavigationProp;
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 interface OrderGroup {
@@ -190,20 +188,18 @@ const OrderCard: React.FC<{
 
         {/* Actions */}
         <View style={cardStyles.actions}>
-          <TouchableOpacity
-            style={cardStyles.primaryBtn}
-            activeOpacity={0.8}
-            onPress={() => { haptic.light(); onPress(group); }}
+          <View
+            onStartShouldSetResponder={() => true}
+            onResponderTerminationRequest={() => false}
           >
-            <Text style={cardStyles.primaryBtnText}>View Order</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={cardStyles.reorderLink}
-            activeOpacity={0.7}
-            onPress={(e) => { e.stopPropagation(); haptic.light(); onReorder(group); }}
-          >
-            <Text style={cardStyles.reorderLinkText}>Reorder</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={cardStyles.reorderLink}
+              activeOpacity={0.7}
+              onPress={() => { haptic.light(); onReorder(group); }}
+            >
+              <Text style={cardStyles.reorderLinkText}>Reorder</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -215,7 +211,7 @@ const cardStyles = StyleSheet.create({
     marginBottom: Space[4],
   },
   card: {
-    backgroundColor:   '#FFFFFF',
+    backgroundColor:   Colors.surface,
     borderRadius:      20,
     paddingHorizontal: Space[4],
     paddingVertical:   Space[4],
@@ -288,21 +284,6 @@ const cardStyles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.rule,
   },
-  primaryBtn: {
-    flex:            1,
-    height:          38,
-    backgroundColor: Colors.ink1,
-    borderRadius:    Radius.pill,
-    alignItems:      'center',
-    justifyContent:  'center',
-  },
-  primaryBtnText: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      13,
-    fontWeight:    '600',
-    color:         '#FFFFFF',
-    letterSpacing: 0.1,
-  },
   reorderLink: {
     paddingVertical: Space[2],
   },
@@ -365,8 +346,8 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
       setHasMore(more);
       if (replace) setFetchError(null);
       else setLoadMoreError(null);
-    } catch (e: any) {
-      const msg = e?.message ?? 'Something went wrong.';
+    } catch (e) {
+      const msg = userFacingMessage(e);
       if (replace) setFetchError(msg);
       else setLoadMoreError(msg);
     } finally {
@@ -439,8 +420,8 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         haptic.success();
         setCartCount((prev: number) => prev + group.items.length);
         toastEmitter.emit('success', 'Added to bag');
-      } catch (e: any) {
-        setReorderError(e?.message ?? 'Could not add items to cart.');
+      } catch (e) {
+        setReorderError(userFacingMessage(e));
       }
     });
   }, [guard, haptic, setCartCount]);
@@ -466,7 +447,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
   const groupCount = groups.length;
 
   const handlePressGroup = useCallback((group: OrderGroup) => {
-    navigation.navigate('OrderDetails', { orderItem: group.items[0], orderNumber: group.orderNumber });
+    navigation.navigate('OrderDetails', { orderItem: group.items[0] as OrderDetailItemExtendedInterface, orderNumber: group.orderNumber });
   }, [navigation]);
 
   const renderItem = ({ item, index }: ListRenderItemInfo<OrderGroup>) => (
@@ -682,7 +663,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Icon name="arrow-back" size={22} color={Colors.ink1} />
+          <Icon name="chevron-back" size={22} color={Colors.ink1} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
@@ -803,7 +784,7 @@ const styles = StyleSheet.create({
     gap: Space[3],
   },
   skeletonCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.rule,
@@ -882,7 +863,7 @@ const styles = StyleSheet.create({
   },
   emptyCTAText: {
     ...Type.bodyStrong,
-    color: '#FFFFFF',
+    color: Colors.accentInk,
   },
   emptySecondary: {
     alignItems:      'center',

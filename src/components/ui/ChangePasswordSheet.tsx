@@ -18,6 +18,7 @@ import { Type } from '../../theme/typography';
 import { FontFamily } from '../../theme/fonts';
 import { ErrorBanner } from './ErrorBanner';
 import { changePassword } from '../../api/auth';
+import { userFacingMessage } from '../../api/apiError';
 import { useHaptic } from '../../hooks/useHaptic';
 
 interface ChangePasswordSheetProps {
@@ -166,8 +167,8 @@ export const ChangePasswordSheet: React.FC<ChangePasswordSheetProps> = ({
       haptic.success();
       setSaving(false);
       onSaved();
-    } catch (err: any) {
-      setSaveError(err?.message ?? 'Something went wrong.');
+    } catch (err) {
+      setSaveError(userFacingMessage(err));
       setSaving(false);
     }
   }, [saving, oldPassword, newPassword, confirmPassword, customerProfileCode, haptic, onSaved]);

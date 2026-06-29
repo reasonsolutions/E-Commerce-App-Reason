@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { loginCustomer } from '../api/auth';
+import { userFacingMessage } from '../api/apiError';
 import {
   getSavedCartItems,
   postSaveCartItems,
@@ -36,12 +37,7 @@ import { ForgotPasswordSheet } from '../components/ui';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAppToast } from '../hooks/useAppToast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-type RootStackParamList = {
-  Home: undefined;
-  Register: undefined;
-  Login: { skipEntrance?: boolean } | undefined;
-};
+import type { RootStackParamList } from '../navigation/types';
 
 const Login: React.FC = () => {
   const navigation =
@@ -107,13 +103,13 @@ const Login: React.FC = () => {
           Animated.delay(delay),
           Animated.timing(val, {
             toValue: 1,
-            duration: 300,
+            duration: Motion.duration.settle,
             easing: Motion.easing.out,
             useNativeDriver: true,
           }),
           Animated.timing(val, {
             toValue: 0.3,
-            duration: 300,
+            duration: Motion.duration.settle,
             easing: Motion.easing.out,
             useNativeDriver: true,
           }),
@@ -188,18 +184,27 @@ const Login: React.FC = () => {
         return;
       }
       const { AccessToken, RefreshToken, ...userData } = result.result;
-      const keychainOpts = { securityLevel: Keychain.SECURITY_LEVEL.ANY };
+      const storeRefreshToken = async () => {
+        if (!RefreshToken) return;
+        try {
+          await Keychain.setGenericPassword('token', RefreshToken, {
+            service:       STORAGE_KEYS.refreshToken,
+            securityLevel: Keychain.SECURITY_LEVEL.SECURE_HARDWARE,
+          });
+        } catch {
+          // Fall back to ANY if hardware-backed storage is unavailable on this device
+          await Keychain.setGenericPassword('token', RefreshToken, {
+            service:       STORAGE_KEYS.refreshToken,
+            securityLevel: Keychain.SECURITY_LEVEL.ANY,
+          });
+        }
+      };
       await Promise.all([
         Keychain.setGenericPassword('token', AccessToken, {
-          service: STORAGE_KEYS.authToken,
-          ...keychainOpts,
+          service:       STORAGE_KEYS.authToken,
+          securityLevel: Keychain.SECURITY_LEVEL.ANY,
         }),
-        RefreshToken
-          ? Keychain.setGenericPassword('token', RefreshToken, {
-              service: STORAGE_KEYS.refreshToken,
-              ...keychainOpts,
-            })
-          : Promise.resolve(),
+        storeRefreshToken(),
         AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(userData)),
       ]);
       setTokenCache(AccessToken);
@@ -249,18 +254,16 @@ const Login: React.FC = () => {
       }
       setLoading(false);
       navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
-    } catch (error: any) {
+    } catch (error) {
       setLoading(false);
-      setFieldError(
-        error?.message ?? 'Something went wrong. Please try again.',
-      );
+      setFieldError(userFacingMessage(error));
       shake();
     }
   }, [loading, username, password, navigation, shake, setCartCount]);
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8F5F2" />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
       <ForgotPasswordSheet
         isOpen={forgotVisible}
         onClose={() => setForgotVisible(false)}
@@ -390,7 +393,7 @@ const Login: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#F8F5F2',
+    backgroundColor: Colors.surface,
   },
   flex: {
     flex: 1,
@@ -442,7 +445,7 @@ const styles = StyleSheet.create({
   ctaButton: {
     width: '100%',
     height: 48,
-    backgroundColor: '#111111',
+    backgroundColor: Colors.ink1,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -452,7 +455,7 @@ const styles = StyleSheet.create({
   },
   ctaLabel: {
     ...Type.bodyStrong,
-    color: '#FFFFFF',
+    color: Colors.accentInk,
     letterSpacing: 0.4,
   },
   dotsRow: {
@@ -464,7 +467,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.accentInk,
   },
   registerLink: {
     marginTop: Space[4],

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 import {
   View,
   Text,
@@ -8,7 +10,6 @@ import {
   StatusBar,
   ScrollView,
   Animated,
-  Alert,
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,14 +33,10 @@ import { useTactile } from '../hooks/useTactile';
 import { useAppToast } from '../hooks/useAppToast';
 import { useAuthGuard } from '../hooks/useAuthGuard';
 import { LoginPromptSheet } from '../components/ui/LoginPromptSheet';
-
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-  goBack: () => void;
-};
+import { ConfirmSheet } from '../components/ui';
 
 type CartScreenProps = {
-  navigation: NavigationProp;
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 // ── Cart row ──────────────────────────────────────────────────────────────────
@@ -278,6 +275,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const [optimistic, setOptimistic] = useState<SavedCartItemInterface[] | null>(null);
   const [guestItems, setGuestItems] = useState<GuestCartItem[]>([]);
   const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -414,9 +412,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
         setGuestItems([]);
         setCartCount(0);
       } else {
-        for (const item of cartItems) {
-          await postDeleteCartItem(item.CartDetailsCode);
-        }
+        await Promise.all(cartItems.map(item => postDeleteCartItem(item.CartDetailsCode)));
         setOptimistic([]);
         setCartCount(0);
       }
@@ -627,7 +623,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Icon name="arrow-back" size={22} color={Colors.ink1} />
+            <Icon name="chevron-back" size={22} color={Colors.ink1} />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
@@ -638,16 +634,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 
           {(isGuest ? guestItems.length : cartItems.length) > 0 ? (
             <TouchableOpacity
-              onPress={() => {
-                Alert.alert(
-                  'Clear bag',
-                  'Remove all items from your bag?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Clear', style: 'destructive', onPress: clearCart },
-                  ],
-                );
-              }}
+              onPress={() => setShowClearConfirm(true)}
               disabled={clearing}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
@@ -667,6 +654,17 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           onClose={dismissLoginPrompt}
           onSignIn={() => { dismissLoginPrompt(); navigation.navigate('Login'); }}
           onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
+        />
+      )}
+
+      {showClearConfirm && (
+        <ConfirmSheet
+          onClose={() => setShowClearConfirm(false)}
+          onConfirm={() => { setShowClearConfirm(false); clearCart(); }}
+          title="Clear bag"
+          body="Remove all items from your bag?"
+          confirmLabel="Clear"
+          destructive
         />
       )}
     </View>
