@@ -22,10 +22,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
 import {
   StatusBadge,
-  BottomNavBar,
   FadeImage,
   Skeleton,
   OrderFilterSheet,
@@ -44,9 +44,11 @@ import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { orderStatusLabel } from '../utils/orderStatus';
 import { OrderStatusCode, type OrderHistoryItemInterface, type OrderDetailItemExtendedInterface } from '../api/interfaces';
 import { LoginPromptSheet } from '../components/ui';
+import { Motion } from '../theme/motion';
 
 type OrderHistoryScreenProps = {
   navigation: StackNavigationProp<RootStackParamList>;
+  route:      RouteProp<RootStackParamList, 'Orders'>;
 };
 
 interface OrderGroup {
@@ -150,6 +152,7 @@ const OrderCard: React.FC<{
                 height={THUMB_SIZE}
                 borderRadius={Radius.sm}
                 resizeMode="contain"
+                showSkeleton
               />
             </View>
           ))}
@@ -304,7 +307,7 @@ const getProfileCode = async (): Promise<number | null> => {
 };
 
 // ── Screen ────────────────────────────────────────────────────────────────────
-const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) => {
+const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
@@ -367,12 +370,13 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
   useFocusEffect(
     useCallback(() => {
-      if (!hasFetchedOnce.current) {
-        hasFetchedOnce.current = true;
-      }
+      const forceRefresh = route.params?.refresh;
+      if (hasFetchedOnce.current && !forceRefresh) return;
+      hasFetchedOnce.current = true;
+      if (forceRefresh) navigation.setParams({ refresh: undefined });
       reload(filtersRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
+    }, [route.params?.refresh]),
   );
 
   const onRefresh = async () => {
@@ -455,7 +459,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
       group={item}
       onPress={handlePressGroup}
       onReorder={handleReorder}
-      delay={Math.min(index * 60, 300)}
+      delay={Motion.stagger.delay(index)}
     />
   );
 
@@ -658,14 +662,6 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
 
       {/* Inline light header */}
       <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Icon name="chevron-back" size={22} color={Colors.ink1} />
-        </TouchableOpacity>
-
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>My Orders</Text>
           {groupCount > 0 ? (
@@ -705,11 +701,6 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation }) =
         />
       )}
 
-      <BottomNavBar
-        activeTab="Orders"
-        onNavigate={(route) => navigation.navigate(route)}
-        onNavigateToAuth={(screen) => navigation.navigate(screen)}
-      />
     </View>
   );
 };

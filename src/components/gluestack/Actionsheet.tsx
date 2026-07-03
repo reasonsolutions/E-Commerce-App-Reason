@@ -16,7 +16,7 @@ import BottomSheet, {
   BottomSheetBackdrop,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { Colors, Radius, Space } from '../../theme';
+import { Colors, Radius, Space, Motion } from '../../theme';
 import { Shadow } from '../../theme/tokens';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -123,6 +123,7 @@ export const Actionsheet: React.FC<ActionsheetProps> = ({
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBackground}
       handleIndicatorStyle={styles.handleIndicator}
+      animationConfigs={{ damping: Motion.spring.settle.damping, stiffness: Motion.spring.settle.stiffness, mass: Motion.spring.settle.mass }}
     >
       <BottomSheetView style={styles.sheetInner}>
         {children}

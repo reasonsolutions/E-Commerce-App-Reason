@@ -7,7 +7,7 @@ import BottomSheet, {
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Colors, Space, Radius } from '../../theme';
+import { Colors, Space, Radius, Motion } from '../../theme';
 import { Type } from '../../theme/typography';
 import { FontFamily } from '../../theme/fonts';
 import { Shadow } from '../../theme/tokens';
@@ -94,6 +94,7 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
           backdropComponent={renderBackdrop}
           backgroundStyle={styles.sheetBackground}
           handleIndicatorStyle={styles.handleIndicator}
+          animationConfigs={{ damping: Motion.spring.settle.damping, stiffness: Motion.spring.settle.stiffness, mass: Motion.spring.settle.mass }}
         >
           <BottomSheetView style={styles.inner}>
 

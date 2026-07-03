@@ -32,6 +32,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { useAppToast } from '../hooks/useAppToast';
 import { DeliveryAddress } from './AddressScreen';
+import { Motion } from '../theme/motion';
 
 type Props = {
   navigation: {
@@ -409,7 +410,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
                 onEdit={() => startEdit(item)}
                 onDelete={() => requestDelete(item.OrderDeliveryAddressCode)}
                 isLast={index === addressList.length - 1}
-                delay={Math.min(index * 50, 200)}
+                delay={Motion.stagger.delay(index)}
               />
             )}
             ListFooterComponent={FormSection}

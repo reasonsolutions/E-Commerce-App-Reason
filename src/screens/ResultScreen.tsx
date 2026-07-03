@@ -23,7 +23,6 @@ import { useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { getCategories, getBrands } from '../api/product';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
-import { SortBy } from '../config/enum_files/SortBy';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
 import {
@@ -54,43 +53,12 @@ import { addToWishlist, getWishlist, removeFromWishlist } from '../api/wishlist'
 import { useProfileCode } from '../hooks/useProfileCode';
 import { isLoggedIn } from '../utils/auth';
 import type { WishlistItemInterface } from '../api/interfaces';
+import { deduplicateProducts, isFeaturedSpan, toServerSortBy, applySort } from '../utils/resultHelpers';
+import { wishlistCache } from '../utils/wishlistCache';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
 };
-
-function deduplicateProducts(
-  products: ProductByCategoryProductDetails[],
-): ProductByCategoryProductDetails[] {
-  const seen = new Set<number>();
-  return products.filter(p => {
-    if (seen.has(p.Item_Id)) return false;
-    seen.add(p.Item_Id);
-    return true;
-  });
-}
-
-function isFeaturedSpan(indexInGrid: number): boolean {
-  return indexInGrid > 0 && indexInGrid % 5 === 0;
-}
-
-function toServerSortBy(sortKey: SortKey): SortBy | null {
-  if (sortKey === 'price_asc')  return SortBy.LowToHigh;
-  if (sortKey === 'price_desc') return SortBy.HighToLow;
-  return null;
-}
-
-function applySort(
-  products: ProductByCategoryProductDetails[],
-  sortKey: SortKey,
-): ProductByCategoryProductDetails[] {
-  if (sortKey === 'newest') {
-    return [...products].sort((a, b) =>
-      new Date(b.Date_Created).getTime() - new Date(a.Date_Created).getTime(),
-    );
-  }
-  return products;
-}
 
 // ── Wishlist heart — white circle container ───────────────────────────────────
 const WishlistHeart: React.FC<{
@@ -125,6 +93,7 @@ const WishlistHeart: React.FC<{
       setWishlistCode(null);
       try {
         await removeFromWishlist(profileCode, prev);
+        wishlistCache.invalidate();
       } catch {
         setWishlistCode(prev);
       }
@@ -132,6 +101,7 @@ const WishlistHeart: React.FC<{
       try {
         const res = await addToWishlist(profileCode, inventoryId);
         if (res?.statusCode === 1) {
+          wishlistCache.invalidate();
           const wRes = await getWishlist(profileCode);
           if (wRes?.statusCode === 1) {
             const match = (wRes.result as WishlistItemInterface[]).find(
@@ -176,7 +146,7 @@ const FeaturedCard: React.FC<{
   initialWishlistCode: number | null;
 }> = React.memo(({ product, onNavigate, delay, initialWishlistCode }) => {
   const haptic = useHaptic();
-  const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, 12) };
+  const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, Motion.list.initialY) };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
@@ -241,7 +211,7 @@ const GridTile: React.FC<{
   const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
   const { animatedStyle: entranceStyle } = {
-    animatedStyle: useEntrance(delay, false, 12),
+    animatedStyle: useEntrance(delay, false, Motion.list.initialY),
   };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
@@ -312,7 +282,7 @@ const SpanCard: React.FC<{
 }> = React.memo(({ product, onNavigate, delay, initialWishlistCode }) => {
   const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
-  const entranceStyle = useEntrance(delay, false, 12);
+  const entranceStyle = useEntrance(delay, false, Motion.list.initialY);
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
@@ -999,7 +969,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                 key={product.Item_Id}
                 product={product}
                 onNavigate={navigateToProduct}
-                delay={Math.min(80 + idx * 80, 320)}
+                delay={Motion.stagger.delay(idx)}
                 initialWishlistCode={wishlistMap.get(product.Inventory_Id) ?? null}
               />
             ))}
@@ -1008,20 +978,19 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           <>
             {rows.map((row, rowIndex) => {
               if (row.type === 'span') {
-                const delay = Math.min(180 + rowIndex * 40, 420);
                 return (
                   <SpanCard
                     key={`span-${row.idx}`}
                     product={row.product}
                     onNavigate={navigateToProduct}
-                    delay={delay}
+                    delay={Motion.stagger.delay(rowIndex)}
                     initialWishlistCode={wishlistMap.get(row.product.Inventory_Id) ?? null}
                   />
                 );
               }
 
-              const leftDelay = Math.min(180 + rowIndex * 35, 400);
-              const rightDelay = Math.min(180 + rowIndex * 35 + 55, 440);
+              const leftDelay  = Motion.stagger.delay(rowIndex * 2);
+              const rightDelay = Motion.stagger.delay(rowIndex * 2 + 1);
 
               const isOrphan = !row.right;
               return (

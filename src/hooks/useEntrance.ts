@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { Animated } from 'react-native';
+import { Motion } from '../theme/motion';
 
 type EntranceStyle = {
   opacity: Animated.Value;
@@ -24,10 +25,10 @@ export function useEntrance(delay = 0, withScale = false, initialY = 10): Entran
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: withScale ? 560 : 320, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 320, delay, useNativeDriver: true }),
+      Animated.timing(opacity,    { toValue: 1, duration: withScale ? Motion.duration.carry : Motion.duration.settle, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: Motion.duration.settle, delay, useNativeDriver: true }),
       ...(withScale
-        ? [Animated.timing(scale, { toValue: 1, duration: 560, delay, useNativeDriver: true })]
+        ? [Animated.timing(scale, { toValue: 1, duration: Motion.duration.carry, delay, useNativeDriver: true })]
         : []),
     ]).start();
   }, [opacity, translateY, scale, delay, withScale]);

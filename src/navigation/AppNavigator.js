@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { navigationRef } from '../utils/navigationService';
 import HomeScreen from '../screens/HomeScreen';
 import ProductScreen from '../screens/ProductScreen';
@@ -20,14 +21,27 @@ import AddressManagementScreen from '../screens/AddressManagementScreen';
 import SearchScreen from '../screens/SearchScreen';
 import { getInitialRoute } from '../utils/auth';
 import { Colors } from '../theme';
-import { CardStyleInterpolators } from '@react-navigation/stack';
 import EcomPaymentScreen from '../screens/PaymentScreen';
 import HelpCenterScreen from '../screens/HelpCenterScreen';
 import BrandsScreen from '../screens/BrandsScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
 import LegalScreen from '../screens/LegalScreen';
+import { TabBar } from '../components/ui';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
+const Tab   = createBottomTabNavigator();
+
+const MainTabs = () => (
+  <Tab.Navigator
+    tabBar={(props) => <TabBar {...props} />}
+    screenOptions={{ headerShown: false }}
+  >
+    <Tab.Screen name="Home"     component={HomeScreen} />
+    <Tab.Screen name="Orders"   component={OrderHistoryScreen} />
+    <Tab.Screen name="Wishlist" component={WishlistScreen} />
+    <Tab.Screen name="Profile"  component={ProfileScreen} />
+  </Tab.Navigator>
+);
 
 const AppNavigator = () => {
   const [initialRoute, setInitialRoute] = useState(null);
@@ -50,33 +64,26 @@ const AppNavigator = () => {
         initialRouteName={initialRoute}
         screenOptions={{
           headerShown: false,
-          cardStyle: { backgroundColor: Colors.surface },
-          detachPreviousScreen: true,
-          cardOverlayEnabled: true,
-          freezeOnBlur: true,
+          contentStyle: { backgroundColor: Colors.surface },
+          animation: 'simple_push',
+          gestureEnabled: true,
         }}>
         <Stack.Screen
           name="Login"
           component={Login}
-          options={{
-            cardStyleInterpolator: CardStyleInterpolators.forNoAnimation,
-            cardStyle: { backgroundColor: Colors.ink1 },
-          }}
+          options={{ animation: 'none', contentStyle: { backgroundColor: Colors.ink1 } }}
         />
-        <Stack.Screen name="Register" component={RegisterScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
-        <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} options={{ cardStyleInterpolator: CardStyleInterpolators.forNoAnimation }} />
-        <Stack.Screen name="Home" component={HomeScreen} options={{ detachPreviousScreen: false, freezeOnBlur: false }} />
+        <Stack.Screen name="Register" component={RegisterScreen} options={{ animation: 'none' }} />
+        <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} options={{ animation: 'none' }} />
+        <Stack.Screen name="MainTabs" component={MainTabs} options={{ animation: 'none' }} />
         <Stack.Screen name="Product" component={ProductScreen} />
-        <Stack.Screen name="Cart" component={CartScreen} options={{ cardStyle: { backgroundColor: '#FFFFFF' } }} />
+        <Stack.Screen name="Cart" component={CartScreen} options={{ contentStyle: { backgroundColor: '#FFFFFF' } }} />
         <Stack.Screen name="Result" component={ResultScreen} />
         <Stack.Screen name="Address" component={AddressScreen} />
         <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} />
-        <Stack.Screen name="Orders" component={OrderHistoryScreen} />
         <Stack.Screen name="OrderDetails" component={OrderDetailScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
-        <Stack.Screen name="Wishlist" component={WishlistScreen} />
         <Stack.Screen name="AddressManagement" component={AddressManagementScreen} />
-        <Stack.Screen name="Search" component={SearchScreen} />
+        <Stack.Screen name="Search" component={SearchScreen} options={{ animation: 'fade' }} />
         <Stack.Screen name="EcomPayment" component={EcomPaymentScreen} />
         <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
         <Stack.Screen name="Brands" component={BrandsScreen} />

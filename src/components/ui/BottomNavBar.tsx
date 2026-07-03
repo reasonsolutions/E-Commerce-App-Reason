@@ -1,12 +1,14 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, Radius } from '../../theme';
+import { Motion } from '../../theme/motion';
 import { FontFamily } from '../../theme/fonts';
 import { useHaptic } from '../../hooks/useHaptic';
 import { isLoggedIn } from '../../utils/auth';
 import { LoginPromptSheet, type LoginPromptContext } from './LoginPromptSheet';
+import { useCart } from '../../context/CartContext';
 
 export type NavTab = 'Home' | 'Orders' | 'Wishlist' | 'Cart' | 'Profile';
 
@@ -42,6 +44,18 @@ const NavItem: React.FC<{
 }> = ({ tab, isActive, onPress, cartCount }) => {
   const haptic = useHaptic();
   const iconColor = isActive ? Colors.accent : Colors.ink4;
+  const badgeScale = useRef(new Animated.Value(1)).current;
+  const prevCount = useRef(cartCount);
+
+  useEffect(() => {
+    if (tab.route === 'Cart' && cartCount != null && cartCount > (prevCount.current ?? 0)) {
+      Animated.sequence([
+        Animated.spring(badgeScale, { toValue: Motion.badgePopScale, ...Motion.spring.snap }),
+        Animated.spring(badgeScale, { toValue: 1,                    ...Motion.spring.settle }),
+      ]).start();
+    }
+    prevCount.current = cartCount;
+  }, [cartCount, badgeScale, tab.route]);
 
   return (
     <TouchableOpacity
@@ -56,9 +70,9 @@ const NavItem: React.FC<{
       <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
         <Icon name={isActive ? tab.activeIcon : tab.inactiveIcon} size={20} color={iconColor} />
         {tab.route === 'Cart' && cartCount != null && cartCount > 0 && (
-          <View style={styles.badge}>
+          <Animated.View style={[styles.badge, { transform: [{ scale: badgeScale }] }]}>
             <Text style={styles.badgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
-          </View>
+          </Animated.View>
         )}
       </View>
 
@@ -125,6 +139,29 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   );
 };
 
+// ── Tab Navigator adapter ─────────────────────────────────────────────────────
+// Used as the `tabBar` prop on the BottomTabNavigator in AppNavigator.
+// Reads activeTab from navigator state and cart count from context — screens
+// no longer need to pass these as props.
+
+interface TabBarAdapterProps {
+  state: { index: number; routes: { name: string }[] };
+  navigation: { navigate: (name: string) => void };
+}
+
+export const TabBar: React.FC<TabBarAdapterProps> = ({ state, navigation }) => {
+  const { cartCount } = useCart();
+  const activeTab = state.routes[state.index].name as NavTab;
+
+  return (
+    <BottomNavBar
+      activeTab={activeTab}
+      onNavigate={(route) => navigation.navigate(route)}
+      cartCount={cartCount > 0 ? cartCount : undefined}
+    />
+  );
+};
+
 const styles = StyleSheet.create({
   container: {
     flexDirection:     'row',
@@ -174,7 +211,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily:    FontFamily.mono,
-    fontSize:      9,
+    fontSize:      11,
     fontWeight:    '400',
     color:         Colors.ink4,
     letterSpacing: 0.8,

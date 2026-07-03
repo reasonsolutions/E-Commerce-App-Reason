@@ -4,25 +4,32 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors } from '../../theme';
 import { Motion } from '../../theme/motion';
 import { useAuthGuard } from '../../hooks/useAuthGuard';
-import { addToWishlist } from '../../api/wishlist';
+import { addToWishlist, removeFromWishlist, getWishlist } from '../../api/wishlist';
+import { wishlistCache } from '../../utils/wishlistCache';
+import { toastEmitter } from '../../utils/toastEmitter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../../config/storageKeys';
 import { LoginPromptSheet } from './LoginPromptSheet';
+import type { WishlistItemInterface } from '../../api/interfaces';
 
 interface WishlistHeartProps {
-  inventoryId: number;
-  initialSaved?: boolean;
+  inventoryId:         number;
+  initialWishlistCode?: number | null;
 }
 
-export const WishlistHeart: React.FC<WishlistHeartProps> = ({ inventoryId, initialSaved = false }) => {
-  const [saved, setSaved] = useState(initialSaved);
+export const WishlistHeart: React.FC<WishlistHeartProps> = ({
+  inventoryId,
+  initialWishlistCode = null,
+}) => {
+  // wishlistCode: null = not wishlisted, number = wishlisted (is the WishlistCode needed for remove)
+  const [wishlistCode, setWishlistCode] = useState<number | null>(initialWishlistCode);
   const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
   const scale = useRef(new Animated.Value(1)).current;
 
   const bounce = useCallback(() => {
     Animated.sequence([
-      Animated.timing(scale, { toValue: 1.4, duration: Motion.duration.tap,    useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 1.0, duration: Motion.duration.tap,    useNativeDriver: true }),
+      Animated.spring(scale, { toValue: Motion.badgePopScale, ...Motion.spring.snap }),
+      Animated.spring(scale, { toValue: 1.0,                  ...Motion.spring.settle }),
     ]).start();
   }, [scale]);
 
@@ -32,15 +39,48 @@ export const WishlistHeart: React.FC<WishlistHeartProps> = ({ inventoryId, initi
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
       const profileCode = raw ? JSON.parse(raw).CustomerProfileCode : null;
       if (!profileCode) return;
-      if (saved) {
-        setSaved(false);
-        // removeFromWishlist requires WishlistCode — optimistic only
+
+      if (wishlistCode !== null) {
+        // Remove — optimistic
+        const prev = wishlistCode;
+        setWishlistCode(null);
+        try {
+          const res = await removeFromWishlist(profileCode, prev);
+          if (res?.statusCode === 1) {
+            wishlistCache.invalidate();
+          } else {
+            setWishlistCode(prev);
+            toastEmitter.emit('error', "Couldn't remove from wishlist", res?.userMessage);
+          }
+        } catch {
+          setWishlistCode(prev);
+          toastEmitter.emit('error', "Couldn't remove from wishlist");
+        }
       } else {
-        setSaved(true);
-        addToWishlist(profileCode, inventoryId).catch(() => setSaved(false));
+        // Add — optimistic, then fetch WishlistCode for future remove
+        setWishlistCode(-1); // -1 = pending (shows filled heart while API resolves)
+        try {
+          const res = await addToWishlist(profileCode, inventoryId);
+          if (res?.statusCode === 1) {
+            wishlistCache.invalidate();
+            const wRes = await getWishlist(profileCode);
+            if (wRes?.statusCode === 1) {
+              const match = (wRes.result as WishlistItemInterface[]).find(
+                w => w.InventoryID === inventoryId,
+              );
+              setWishlistCode(match?.WishlistCode ?? -1);
+            }
+          } else {
+            setWishlistCode(null);
+            toastEmitter.emit('error', "Couldn't save to wishlist", res?.userMessage);
+          }
+        } catch {
+          setWishlistCode(null);
+          toastEmitter.emit('error', "Couldn't save to wishlist");
+        }
       }
     });
-  }, [guard, bounce, saved, inventoryId]);
+  }, [guard, bounce, wishlistCode, inventoryId]);
 
   return (
     <>
@@ -52,9 +92,9 @@ export const WishlistHeart: React.FC<WishlistHeartProps> = ({ inventoryId, initi
       >
         <Animated.View style={{ transform: [{ scale }] }}>
           <Icon
-            name={saved ? 'heart' : 'heart-outline'}
+            name={wishlistCode !== null ? 'heart' : 'heart-outline'}
             size={16}
-            color={saved ? Colors.accent : Colors.ink1}
+            color={wishlistCode !== null ? Colors.accent : Colors.ink1}
           />
         </Animated.View>
       </TouchableOpacity>

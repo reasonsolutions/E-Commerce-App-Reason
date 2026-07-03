@@ -3,6 +3,7 @@ import { View, StyleSheet, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppToast } from './Toast';
 import { toastEmitter, ToastEvent } from '../../utils/toastEmitter';
+import { Motion } from '../../theme/motion';
 
 const DURATION = 3500;
 
@@ -18,7 +19,7 @@ export const ToastOverlay: React.FC = () => {
       const anim = new Animated.Value(0);
       setToasts(prev => [...prev, { ...event, anim }]);
 
-      Animated.spring(anim, { toValue: 1, useNativeDriver: true, damping: 18, stiffness: 180 }).start();
+      Animated.spring(anim, { toValue: 1, ...Motion.spring.snap }).start();
 
       timers.current[event.id] = setTimeout(() => dismiss(event.id), DURATION);
     });

@@ -20,9 +20,12 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
 import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interfaces';
 import { getProductsByCategory, getCategories, getBrands } from '../api/product';
+import { getWishlist } from '../api/wishlist';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import { homeCache } from '../utils/homeCache';
+import { wishlistCache } from '../utils/wishlistCache';
+import type { WishlistItemInterface } from '../api/interfaces';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -31,7 +34,7 @@ import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { BRAND } from '../config/brand';
 import { useAsyncState } from '../hooks/useAsyncState';
 import {
-  SearchBar, Skeleton, BottomNavBar,
+  SearchBar, Skeleton,
   SectionHead, BrandTile, CategoryTile, ProductRail, ProductGrid, TrustStrip,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
@@ -174,10 +177,19 @@ const BannerSlot: React.FC<{
       {spots.length > 1 && (
         <View style={styles.bannerDots}>
           {spots.map((_, i) => (
-            <View
+            <TouchableOpacity
               key={i}
-              style={[styles.bannerDot, i === active && styles.bannerDotActive]}
-            />
+              onPress={() => {
+                setActive(i);
+                listRef.current?.scrollToOffset({ offset: i * (CARD_W + Space[4]), animated: true });
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Go to slide ${i + 1}`}
+            >
+              <View style={[styles.bannerDot, i === active && styles.bannerDotActive]} />
+            </TouchableOpacity>
           ))}
         </View>
       )}
@@ -238,6 +250,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { cartCount } = useCart();
 
+  // ── Wishlist map — inventoryId → wishlistCode, loaded for logged-in users ────
+  const [wishlistMap, setWishlistMap] = useState<Map<number, number>>(new Map());
+  const wishlistFetchTime = useRef(0);
+
   // ── Recently viewed ───────────────────────────────────────────────────────────
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
 
@@ -296,6 +312,30 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           try { setRecentlyViewed(JSON.parse(raw)); } catch {}
         }
       }).catch(() => {});
+
+      // Refresh wishlist map when cache is stale (invalidated by any mutation)
+      const isWishlistStale = wishlistCache.lastFetchTime === 0
+        || wishlistCache.lastFetchTime > wishlistFetchTime.current;
+      if (isWishlistStale) {
+        AsyncStorage.getItem(STORAGE_KEYS.userData).then(async (userRaw) => {
+          const profileCode: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
+          if (!profileCode) { setWishlistMap(new Map()); return; }
+          try {
+            const res = await getWishlist(profileCode);
+            if (cancelled.current) return;
+            if (res?.statusCode === 1 && Array.isArray(res.result)) {
+              const map = new Map<number, number>();
+              for (const item of res.result as WishlistItemInterface[]) {
+                if (item.InventoryID != null && item.WishlistCode != null) {
+                  map.set(item.InventoryID, item.WishlistCode);
+                }
+              }
+              setWishlistMap(map);
+              wishlistFetchTime.current = Date.now();
+            }
+          } catch {}
+        }).catch(() => {});
+      }
 
       // Skip if already fetching or if all data is cached — prevents re-firing on
       // focus events and prevents the dep-change loop (completed fetch changes state
@@ -666,6 +706,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               actionLabel="See all"
               onSeeAll={() => navigation.navigate('Result', { categoryName: 'New Arrivals' })}
               onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
+              wishlistMap={wishlistMap}
             />
           </View>
         )}
@@ -679,6 +720,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               items={smartBuys}
               onSeeAll={() => navigation.navigate('Result', { categoryName: 'Deals' })}
               onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
+              wishlistMap={wishlistMap}
             />
           </View>
         )}
@@ -732,12 +774,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               actionLabel="See all"
               onSeeAll={() => navigation.navigate('Result', { categoryName: featuredCategoryName ?? 'All Products' })}
               onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
+              wishlistMap={wishlistMap}
             />
           </View>
         )}
 
         {/* 8. Recently viewed — surfaceSoft, only when there's enough history */}
-        {recentlyViewed.length >= 4 && (
+        {recentlyViewed.length >= 2 && (
           <View style={styles.sectionSoft}>
             <ProductRail
               eyebrow="RECENTLY VIEWED"
@@ -749,6 +792,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               secondaryAction="Clear"
               onSecondaryAction={clearRecentlyViewed}
               onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
+              wishlistMap={wishlistMap}
             />
           </View>
         )}
@@ -768,12 +812,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </TouchableOpacity>
       </Animated.View>
 
-      <BottomNavBar
-        activeTab="Home"
-        onNavigate={(route) => navigation.navigate(route)}
-        onNavigateToAuth={(screen) => navigation.navigate(screen)}
-        cartCount={cartCount > 0 ? cartCount : undefined}
-      />
     </SafeAreaView>
   );
 };

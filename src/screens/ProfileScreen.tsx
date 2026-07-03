@@ -15,7 +15,6 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { clearSession } from '../utils/auth';
 import { useCart } from '../context/CartContext';
 import {
-  BottomNavBar,
   Skeleton,
   ConfirmSheet,
   EditProfileSheet,
@@ -35,15 +34,13 @@ import { FontFamily } from '../theme/fonts';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAppToast } from '../hooks/useAppToast';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../navigation/types';
 
 const APP_VERSION = '1.0.0';
 
 type ProfileScreenProps = {
-  navigation: {
-    navigate: (screen: string, params?: Record<string, unknown>) => void;
-    goBack: () => void;
-    reset: (state: { index: number; routes: { name: string }[] }) => void;
-  };
+  navigation: StackNavigationProp<RootStackParamList>;
 };
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
@@ -107,7 +104,9 @@ const StatRow: React.FC<{
           {loading ? (
             <Skeleton height={18} width={32} radius={Radius.xs} />
           ) : (
-            <Text style={statStyles.cellValue}>{item.count !== null ? item.count : '0'}</Text>
+            <Text style={statStyles.cellValue}>
+              {item.count === null ? '0' : item.count < 0 ? `${Math.abs(item.count)}+` : item.count}
+            </Text>
           )}
           <Text style={statStyles.cellLabel} numberOfLines={1}>{item.label}</Text>
         </TouchableOpacity>
@@ -384,7 +383,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         postOrderHistory(code, 1, {})
           .then(res => {
             if (cancelled) return;
-            setOrderCount(res.items.length);
+            // hasMore means there are additional pages — show count as "N+" so
+            // the stat isn't misleadingly low for users with many orders.
+            setOrderCount(res.hasMore ? -(res.items.length) : res.items.length);
           })
           .catch(() => {});
 
@@ -417,28 +418,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     setLogoutVisible(false);
     await clearSession();
     setCartCount(0);
-    navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
   };
 
   // ── Error ───────────────────────────────────────────────────────────────────
   if (sessionError) {
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
         <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
-        <View style={[styles.simpleHeader, { paddingTop: insets.top + Space[2] }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Icon name="chevron-back" size={24} color={Colors.ink1} />
-          </TouchableOpacity>
-        </View>
         <ErrorState
           title="Couldn't load your profile"
           message="Check your connection and try again."
           onRetry={loadProfile}
-        />
-        <BottomNavBar
-          activeTab="Profile"
-          onNavigate={(route) => navigation.navigate(route)}
-          onNavigateToAuth={(screen) => navigation.navigate(screen)}
         />
       </View>
     );
@@ -447,21 +438,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   // ── Logged out ──────────────────────────────────────────────────────────────
   if (!sessionLoading && !session) {
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
         <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
-        <View style={[styles.simpleHeader, { paddingTop: insets.top + Space[2] }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Icon name="chevron-back" size={24} color={Colors.ink1} />
-          </TouchableOpacity>
-        </View>
         <LoggedOutView
           onSignIn={() => navigation.navigate('Login')}
           onRegister={() => navigation.navigate('Register')}
-        />
-        <BottomNavBar
-          activeTab="Profile"
-          onNavigate={(route) => navigation.navigate(route)}
-          onNavigateToAuth={(screen) => navigation.navigate(screen)}
         />
       </View>
     );
@@ -512,14 +493,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       >
         {/* ── Hero ─────────────────────────────────────────────────────────── */}
         <Animated.View style={heroAnim}>
-          <View style={[styles.heroNav, { paddingTop: insets.top + Space[2] }]}>
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Icon name="chevron-back" size={24} color={Colors.ink1} />
-            </TouchableOpacity>
-          </View>
+          <View style={[styles.heroNav, { paddingTop: insets.top + Space[2] }]} />
 
           <View style={styles.heroBody}>
             {/* Avatar + edit row */}
@@ -633,11 +607,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         </Animated.View>
       </ScrollView>
 
-      <BottomNavBar
-        activeTab="Profile"
-        onNavigate={(route) => navigation.navigate(route)}
-        onNavigateToAuth={(screen) => navigation.navigate(screen)}
-      />
     </View>
   );
 };

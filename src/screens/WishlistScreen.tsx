@@ -21,7 +21,7 @@ import { useProfileCode } from '../hooks/useProfileCode';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
 import { postSaveCartItems } from '../api/cart';
 import type { WishlistItemInterface } from '../api/interfaces';
-import { BottomNavBar, Price, SkeletonGrid, TrustLine } from '../components/ui';
+import { Price, SkeletonGrid, TrustLine } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { scopedKey } from '../config/storageKeys';
 import { Colors, Space, Radius } from '../theme';
@@ -35,6 +35,7 @@ import { useTactile } from '../hooks/useTactile';
 import { useCart } from '../context/CartContext';
 import { toastEmitter } from '../utils/toastEmitter';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { wishlistCache } from '../utils/wishlistCache';
 
 // ── Grid dimensions — mirrors ResultScreen.styles.ts ─────────────────────────
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -125,6 +126,8 @@ const WishlistCard: React.FC<{
               onPress={() => { haptic.light(); onRemove(item.WishlistCode); }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.6}
+              accessibilityLabel="Remove from wishlist"
+              accessibilityRole="button"
             >
               <Text style={styles.removeGlyph}>×</Text>
             </TouchableOpacity>
@@ -152,6 +155,8 @@ const WishlistCard: React.FC<{
               onPress={() => { haptic.light(); onAddToBag(item); }}
               activeOpacity={0.85}
               disabled={addingToBag}
+              accessibilityLabel="Move to bag"
+              accessibilityRole="button"
             >
               <Text style={styles.bagBtnText}>
                 {addingToBag ? 'Adding…' : 'Move to Bag'}
@@ -162,6 +167,8 @@ const WishlistCard: React.FC<{
               style={styles.notifyBtn}
               activeOpacity={0.82}
               onPress={() => toastEmitter.emit('info', "We'll notify you when this is back in stock")}
+              accessibilityLabel="Notify me when back in stock"
+              accessibilityRole="button"
             >
               <Text style={styles.notifyBtnText}>Notify Me</Text>
             </TouchableOpacity>
@@ -187,7 +194,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const [addingIds, setAddingIds] = useState<Set<number>>(new Set());
   const [isFTU, setIsFTU]         = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const hasFetched = useRef(false);
+  const STALE_MS = 30_000;
 
   const fetchWishlist = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -195,7 +202,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         if (!profileCode) return [];
         const response = await getWishlist(profileCode);
         const result = response.statusCode === 1 ? (response.result || []) : [];
-        hasFetched.current = true;
+        wishlistCache.markFresh();
         // FTU detection: empty result + wishlistSeen not yet set
         if (result.length === 0) {
           const seen = await AsyncStorage.getItem(scopedKey('wishlistSeen', profileCode));
@@ -215,6 +222,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    wishlistCache.invalidate();
     await fetchWishlist();
     setRefreshing(false);
   }, [fetchWishlist]);
@@ -226,6 +234,8 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
   useFocusEffect(
     useCallback(() => {
+      const stale = Date.now() - wishlistCache.lastFetchTime > STALE_MS;
+      if (!stale) return;
       const cancelled = { current: false };
       fetchWishlist(cancelled);
       return () => { cancelled.current = true; };
@@ -237,7 +247,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     setItems(prev => prev.filter(i => i.WishlistCode !== wishlistCode));
     await removeFromWishlist(profileCode, wishlistCode);
     const res = await getWishlist(profileCode);
-    if (res.statusCode === 1) setItems(res.result);
+    if (res.statusCode === 1) { setItems(res.result); wishlistCache.markFresh(); }
   }, [profileCode]);
 
   const handleAddToBag = useCallback(async (item: WishlistItemInterface) => {
@@ -252,7 +262,15 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       });
       haptic.success();
       setCartCount((prev: number) => prev + 1);
-      toastEmitter.emit('success', 'Added to bag');
+      toastEmitter.emit('success', 'Moved to bag');
+      // Remove from wishlist atomically after successful cart add
+      try {
+        await removeFromWishlist(profileCode, item.WishlistCode);
+        setItems(prev => prev.filter(w => w.WishlistCode !== item.WishlistCode));
+        wishlistCache.invalidate();
+      } catch {
+        // Cart add succeeded — don't block the user, wishlist will sync on next focus
+      }
     } catch {
       toastEmitter.emit('error', 'Could not add to bag');
     } finally {
@@ -276,7 +294,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       onAddToBag={handleAddToBag}
       addingToBag={addingIds.has(item.WishlistCode)}
       onPress={handlePressItem}
-      delay={Math.min(index * 40, 280)}
+      delay={Motion.stagger.delay(index)}
     />
   );
 
@@ -350,7 +368,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       );
     }
 
-    if (!hasFetched.current) return renderSkeleton();
+    if (!wishlistCache.lastFetchTime) return renderSkeleton();
 
     return (
       <FlatList
@@ -365,7 +383,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        ListEmptyComponent={hasFetched.current && !loading ? renderEmpty : null}
+        ListEmptyComponent={wishlistCache.lastFetchTime && !loading ? renderEmpty : null}
         style={styles.list}
         initialNumToRender={8}
         maxToRenderPerBatch={8}
@@ -384,14 +402,6 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
       {/* ── Light header — Tira-style ─────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          activeOpacity={0.6}
-        >
-          <Icon name="chevron-back" size={22} color={Colors.ink1} />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>
           My Wishlist
           {itemCount > 0 ? (
@@ -404,11 +414,6 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
 
       {renderBody()}
 
-      <BottomNavBar
-        activeTab="Wishlist"
-        onNavigate={(route) => navigation.navigate(route)}
-        onNavigateToAuth={(screen) => navigation.navigate(screen)}
-      />
     </View>
   );
 };

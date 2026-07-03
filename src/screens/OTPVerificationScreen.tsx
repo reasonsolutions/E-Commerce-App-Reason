@@ -20,7 +20,7 @@ import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { useHaptic } from '../hooks/useHaptic';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { getPendingPassword, setPendingPassword } from '../utils/registrationState';
+import { getPendingPassword, setPendingPassword, clearPendingPassword } from '../utils/registrationState';
 import type { RootStackParamList } from '../navigation/types';
 
 const OTP_LENGTH = 6;
@@ -119,6 +119,7 @@ const OTPVerificationScreen: React.FC = () => {
         navigation.reset({ index: 0, routes: [{ name: 'Login', params: { skipEntrance: true } }] });
       }, 250);
     } catch (err) {
+      clearPendingPassword();
       setLoading(false);
       setError(userFacingMessage(err));
       shake();
@@ -171,7 +172,7 @@ const OTPVerificationScreen: React.FC = () => {
       <Animated.View style={[styles.content, entranceStyle]}>
         <Text style={styles.title}>Verify your email</Text>
         <Text style={styles.subtitle}>
-          Enter the 6-digit code sent to{'\n'}
+          We sent a 6-digit code via email to{'\n'}
           <Text style={styles.emailHighlight}>{EmailID}</Text>
         </Text>
 

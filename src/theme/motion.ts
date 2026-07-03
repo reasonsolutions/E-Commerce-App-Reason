@@ -14,6 +14,9 @@
 
 import { Easing } from 'react-native';
 
+const STAGGER_STEP = 40;
+const STAGGER_CAP  = 280;
+
 export const Motion = {
   // ── Durations (ms) ──────────────────────────────────────────────────────────
   duration: {
@@ -54,4 +57,23 @@ export const Motion = {
   // ── Badge pop ───────────────────────────────────────────────────────────────
   // Scale sequence: 1.0 → 1.15 → 1.0 on Settle spring.
   badgePopScale: 1.15,
+
+  // ── Stagger ─────────────────────────────────────────────────────────────────
+  // Per-item delay for list entrances. Usage:
+  //   delay={Motion.stagger.delay(index)}
+  // Cap prevents items far down the list from waiting too long.
+  stagger: {
+    step: STAGGER_STEP,
+    cap:  STAGGER_CAP,
+    delay: (index: number) => Math.min(index * STAGGER_STEP, STAGGER_CAP),
+  },
+
+  // ── List entrance ───────────────────────────────────────────────────────────
+  // Standard config for useEntrance() on product cards and list rows.
+  // Pass delay from Motion.stagger.delay(index).
+  list: {
+    initialOpacity: 0,
+    initialY:       12,
+    initialScale:   1,   // set to 0.97 for a subtle scale-in on hero cards
+  },
 } as const;

@@ -37,6 +37,7 @@ export type RootStackParamList = {
     MobileNumber:   string;
     CountryCode:    number;
   };
+  MainTabs:           undefined;
   Home:               undefined;
   Product:            { product?: string };
   Cart:               undefined;
@@ -61,7 +62,7 @@ export type RootStackParamList = {
     deliveryAddress?:          OrderSuccessDeliveryAddress | null;
     cartItems?:                OrderSuccessCartItem[];
   };
-  Orders:             undefined;
+  Orders:             { refresh?: true } | undefined;
   OrderDetails: {
     orderItem:    OrderDetailItemExtendedInterface;
     orderNumber:  string;

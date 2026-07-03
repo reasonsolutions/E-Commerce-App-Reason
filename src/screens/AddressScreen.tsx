@@ -32,6 +32,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { PaymentModes } from '../config/enum_files/PaymentModes';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { Motion } from '../theme/motion';
 
 export interface DeliveryAddress {
   OrderDeliveryAddressCode: number;
@@ -285,6 +286,10 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     const selectedAddr = (addresses ?? []).find(
       a => a.OrderDeliveryAddressCode === selectedAddressCode,
     );
+    if (!selectedAddr) {
+      setOrderError('Selected address could not be found. Please choose again.');
+      return;
+    }
 
     setOrderSubmitting(true);
 
@@ -295,7 +300,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       navigation.navigate('EcomPayment', {
         profileCode,
         cartItems: items,
-        selectedAddress: selectedAddr!,
+        selectedAddress: selectedAddr,
         orderTotal: total,
       });
       return;
@@ -571,7 +576,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
               isSelected={selectedAddressCode === item.OrderDeliveryAddressCode}
               onPress={() => setSelectedAddressCode(item.OrderDeliveryAddressCode)}
               isLast={index === addressList.length - 1}
-              delay={Math.min(index * 50, 200)}
+              delay={Motion.stagger.delay(index)}
             />
           )}
           ListFooterComponent={ListFooter}

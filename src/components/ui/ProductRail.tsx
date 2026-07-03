@@ -16,6 +16,7 @@ interface ProductRailProps {
   secondaryAction?: string;
   onSecondaryAction?: () => void;
   onPress: (itemId: number) => void;
+  wishlistMap?: Map<number, number>;
 }
 
 export const ProductRail: React.FC<ProductRailProps> = ({
@@ -28,6 +29,7 @@ export const ProductRail: React.FC<ProductRailProps> = ({
   secondaryAction,
   onSecondaryAction,
   onPress,
+  wishlistMap,
 }) => {
   const renderItem = useCallback(
     ({ item }: { item: ProductInterface }) => (
@@ -35,9 +37,10 @@ export const ProductRail: React.FC<ProductRailProps> = ({
         product={item}
         cardWidth={cardWidth}
         onPress={() => onPress(item.ItemID)}
+        wishlistCode={item.Inventory_Id != null ? (wishlistMap?.get(item.Inventory_Id) ?? null) : null}
       />
     ),
-    [cardWidth, onPress],
+    [cardWidth, onPress, wishlistMap],
   );
 
   return (

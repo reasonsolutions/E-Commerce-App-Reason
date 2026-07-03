@@ -30,7 +30,7 @@ import {
   FadeImage,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { Colors, Space, Radius, Shadow } from '../theme';
+import { Colors, Space, Radius, Shadow, Motion } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -201,6 +201,7 @@ const ItemCard: React.FC<{
           height={THUMB_H}
           borderRadius={Radius.sm}
           resizeMode="contain"
+          showSkeleton
         />
         <View style={itemCardStyles.meta}>
           {item.Brand_Name ? (
@@ -617,7 +618,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             <TouchableOpacity
               style={styles.modalCta}
               activeOpacity={0.8}
-              onPress={() => { setCancelSuccess(false); navigation.goBack(); }}
+              onPress={() => { setCancelSuccess(false); navigation.navigate('Orders', { refresh: true }); }}
             >
               <Text style={styles.modalCtaText}>Done</Text>
             </TouchableOpacity>
@@ -633,6 +634,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         enablePanDownToClose
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.sheetHandle}
+        animationConfigs={{ damping: Motion.spring.settle.damping, stiffness: Motion.spring.settle.stiffness, mass: Motion.spring.settle.mass }}
       >
         <BottomSheetScrollView
           contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + Space[6] }]}

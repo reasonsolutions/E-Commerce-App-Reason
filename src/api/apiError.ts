@@ -117,9 +117,6 @@ export function classifyError(err: unknown): ApiError {
  * Wraps an application-level failure: HTTP 200 but statusCode !== 1 in the
  * API envelope. Screens can use this when they check `response.statusCode`.
  *
- * TODO: Once screens migrate to the interceptor layer, the response interceptor
- * can raise this automatically for every envelope failure, eliminating the
- * per-screen statusCode check.
  */
 export function applicationError(responseData: unknown, fallback?: string): ApiError {
   const msg =
@@ -153,9 +150,6 @@ export function userFacingMessage(err: unknown): string {
  * traces and URLs never reach the console (or log aggregators via RN's
  * console bridge).
  *
- * TODO: Replace the __DEV__ branch with a structured logger (Sentry, Datadog)
- * once an error-tracking SDK is integrated. Example:
- *   Sentry.captureException(err, { extra: { context } });
  */
 export function apiLog(context: string, err: unknown): void {
   if (!MOCK_MODE && !__DEV__) return;

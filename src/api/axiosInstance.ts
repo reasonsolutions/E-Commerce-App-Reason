@@ -88,8 +88,7 @@ axiosInstance.interceptors.response.use(
     // Successful HTTP response — return data as-is so all existing callers
     // that read response.data continue to work without changes.
     //
-    // TODO: When screens migrate to centralized error handling, uncomment the
-    // block below to auto-raise application-level failures (statusCode !== 1)
+    // Uncomment to auto-raise application-level failures (statusCode !== 1)
     // before the response reaches the screen:
     //
     //   import { applicationError } from './apiError';

@@ -216,6 +216,7 @@ const Login: React.FC = () => {
         const existingItems: any[] =
           existingCartRes?.statusCode === 1 ? existingCartRes.result ?? [] : [];
         if (guestItems.length > 0) {
+          let mergeFailures = 0;
           await Promise.all(
             guestItems.map((item: GuestCartItem) => {
               const existing = existingItems.find(
@@ -226,16 +227,22 @@ const Login: React.FC = () => {
                     existing.CartDetailsCode,
                     item.inventoryId,
                     existing.Quantity + item.quantity,
-                  ).catch(() => {})
+                  ).catch(() => { mergeFailures++; })
                 : postSaveCartItems({
                     CustomerProfileCode: userData.CustomerProfileCode,
                     InventoryId: item.inventoryId,
                     Quantity: item.quantity,
                     IsPurchased: false,
-                  }).catch(() => {});
+                  }).catch(() => { mergeFailures++; });
             }),
           );
           await clearGuestCart();
+          if (mergeFailures > 0) {
+            toast.error({
+              title: 'Some cart items not synced',
+              description: `${mergeFailures} item${mergeFailures > 1 ? 's' : ''} couldn't be added to your cart.`,
+            });
+          }
         }
         const cartRes =
           guestItems.length > 0
@@ -253,7 +260,7 @@ const Login: React.FC = () => {
         }
       }
       setLoading(false);
-      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (error) {
       setLoading(false);
       setFieldError(userFacingMessage(error));
@@ -300,7 +307,7 @@ const Login: React.FC = () => {
           <Animated.View style={slideIn(formAnim)}>
             <View style={styles.fieldsBlock}>
               <FloatingLabelInput
-                label="Email"
+                label="Email or mobile"
                 value={username}
                 onChangeText={setUsername}
                 placeholder="email or mobile number"
@@ -375,7 +382,7 @@ const Login: React.FC = () => {
 
               <TouchableOpacity
                 onPress={() =>
-                  navigation.reset({ index: 0, routes: [{ name: 'Home' }] })
+                  navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })
                 }
                 activeOpacity={0.7}
                 style={styles.guestLink}

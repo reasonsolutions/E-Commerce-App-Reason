@@ -8,7 +8,6 @@ import {
   StatusBar,
   StyleSheet,
   TouchableOpacity,
-  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
@@ -45,6 +44,22 @@ import {
 } from '../components/ui';
 
 import { Colors, Space, Shadow, Radius } from '../theme';
+
+const HeroImage: React.FC<{ uri: string; width: number; height: number; onError: () => void }> = ({ uri, width, height, onError }) => {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const onLoad = useCallback(() => {
+    Animated.timing(opacity, { toValue: 1, duration: Motion.duration.settle, easing: Motion.easing.out, useNativeDriver: true }).start();
+  }, [opacity]);
+  return (
+    <Animated.Image
+      source={{ uri }}
+      style={{ width, height, opacity }}
+      resizeMode="contain"
+      onLoad={onLoad}
+      onError={onError}
+    />
+  );
+};
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
@@ -56,6 +71,7 @@ import { useAppToast } from '../hooks/useAppToast';
 import { useAuthGuard } from '../hooks/useAuthGuard';
 import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { wishlistCache } from '../utils/wishlistCache';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const HERO_H = SCREEN_W; // 1:1 — matches product photo aspect ratio
@@ -396,6 +412,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       if (wishlisted && wishlistItemCode !== null) {
         await removeFromWishlist(profileCode, wishlistItemCode).catch(() => {});
         setWishlisted(false); setWishlistItemCode(null);
+        wishlistCache.invalidate();
       } else {
         const res = await addToWishlist(profileCode, inventoryId).catch(() => null);
         if (res?.statusCode !== 1) {
@@ -404,6 +421,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           return;
         }
         if (res?.statusCode === 1) {
+          wishlistCache.invalidate();
           getWishlist(profileCode).then(wRes => {
             if (wRes.statusCode === 1) {
               const match = (wRes.result || []).find((w: WishlistItemInterface) => w.InventoryID === inventoryId);
@@ -507,21 +525,21 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                 failedImages.has(url) ? (
                   <View key={i} style={[styles.heroPlaceholder, { width: SCREEN_W, height: HERO_H }]} />
                 ) : (
-                  <Image
+                  <HeroImage
                     key={i}
-                    source={{ uri: url }}
-                    style={{ width: SCREEN_W, height: HERO_H }}
-                    resizeMode="contain"
+                    uri={url}
+                    width={SCREEN_W}
+                    height={HERO_H}
                     onError={() => setFailedImages(prev => new Set(prev).add(url))}
                   />
                 )
               ))}
             </ScrollView>
           ) : imageUrls.length === 1 && !failedImages.has(imageUrls[0]) ? (
-            <Image
-              source={{ uri: imageUrls[0] }}
-              style={{ width: SCREEN_W, height: HERO_H }}
-              resizeMode="contain"
+            <HeroImage
+              uri={imageUrls[0]}
+              width={SCREEN_W}
+              height={HERO_H}
               onError={() => setFailedImages(prev => new Set(prev).add(imageUrls[0]))}
             />
           ) : (

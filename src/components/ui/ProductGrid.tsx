@@ -15,6 +15,7 @@ interface ProductGridProps {
   actionLabel?: string;
   onPress: (itemId: number) => void;
   maxItems?: number;
+  wishlistMap?: Map<number, number>;
 }
 
 // Large/small card widths — same total row width as two equal COL_W cards,
@@ -58,6 +59,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
   actionLabel = 'See all',
   onPress,
   maxItems = 6,
+  wishlistMap,
 }) => {
   const handlePress = useCallback((itemId: number) => onPress(itemId), [onPress]);
   const visible = items ? items.slice(0, maxItems) : null;
@@ -93,6 +95,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     cardWidth={LARGE_W}
                     showDelivery={false}
                     onPress={() => handlePress(row.large.ItemID)}
+                    wishlistCode={row.large.Inventory_Id != null ? (wishlistMap?.get(row.large.Inventory_Id) ?? null) : null}
                   />
                 </View>
                 {row.small && (
@@ -102,6 +105,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                       cardWidth={SMALL_W}
                       showDelivery={false}
                       onPress={() => handlePress(row.small!.ItemID)}
+                      wishlistCode={row.small.Inventory_Id != null ? (wishlistMap?.get(row.small.Inventory_Id) ?? null) : null}
                     />
                   </View>
                 )}
@@ -114,6 +118,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     cardWidth={COL_W}
                     showDelivery={false}
                     onPress={() => handlePress(row.left.ItemID)}
+                    wishlistCode={row.left.Inventory_Id != null ? (wishlistMap?.get(row.left.Inventory_Id) ?? null) : null}
                   />
                 </View>
                 {row.right && (
@@ -123,6 +128,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                       cardWidth={COL_W}
                       showDelivery={false}
                       onPress={() => handlePress(row.right!.ItemID)}
+                      wishlistCode={row.right.Inventory_Id != null ? (wishlistMap?.get(row.right.Inventory_Id) ?? null) : null}
                     />
                   </View>
                 )}

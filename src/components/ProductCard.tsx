@@ -22,6 +22,7 @@ interface ProductCardProps {
   cardWidth?: number;
   showHeart?: boolean;
   showDelivery?: boolean;
+  wishlistCode?: number | null;
 }
 
 
@@ -31,6 +32,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   cardWidth = 158,
   showHeart = true,
   showDelivery = true,
+  wishlistCode = null,
 }) => {
   const imgOpacity = useRef(new Animated.Value(0)).current;
   const imgUri = resolveImageUrl(product.Images);
@@ -93,7 +95,10 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
 
 
         {showHeart && product.Inventory_Id ? (
-          <WishlistHeart inventoryId={product.Inventory_Id} />
+          <WishlistHeart
+            inventoryId={product.Inventory_Id}
+            initialWishlistCode={wishlistCode}
+          />
         ) : null}
       </View>
 

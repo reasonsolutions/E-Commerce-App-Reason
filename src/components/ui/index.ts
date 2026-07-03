@@ -1,5 +1,6 @@
 export { ScreenHeader, SCREEN_HEADER_HEIGHT } from './ScreenHeader';
-export { BottomNavBar } from './BottomNavBar';
+export { CartRow, GuestCartRow, GuestCartRowWrapper } from './CartRow';
+export { BottomNavBar, TabBar } from './BottomNavBar';
 export type { NavTab } from './BottomNavBar';
 export { Button } from './Button';
 export { QuantityStepper } from './QuantityStepper';
