@@ -42,5 +42,16 @@ target 'EcommerceApp' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Xcode 26's Clang enforces C++20 consteval rules that RN 0.81's pinned
+    # fmt version doesn't satisfy (facebook/react-native#55601). Force these
+    # pods to compile under C++17 so fmt falls back to its runtime path.
+    installer.pods_project.targets.each do |target|
+      if ['fmt', 'RCT-Folly', 'glog'].include?(target.name)
+        target.build_configurations.each do |config|
+          config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+        end
+      end
+    end
   end
 end

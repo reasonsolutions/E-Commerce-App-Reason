@@ -267,7 +267,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       try {
         await removeFromWishlist(profileCode, item.WishlistCode);
         setItems(prev => prev.filter(w => w.WishlistCode !== item.WishlistCode));
-        wishlistCache.invalidate();
+        wishlistCache.markFresh();
       } catch {
         // Cart add succeeded — don't block the user, wishlist will sync on next focus
       }

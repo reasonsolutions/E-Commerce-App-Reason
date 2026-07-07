@@ -67,7 +67,7 @@ export const CartRow = React.memo<{
         <Animated.Image
           source={{ uri: resolveImageUrl(item.Images) }}
           style={[styles.cartImg, { opacity: imgOpacity }]}
-          resizeMode="cover"
+          resizeMode="contain"
           onLoad={onLoad}
         />
       </View>
@@ -178,7 +178,7 @@ export const GuestCartRow = React.memo<{
           <Animated.Image
             source={{ uri: imgUri }}
             style={[styles.cartImg, { opacity: imgOpacity }]}
-            resizeMode="cover"
+            resizeMode="contain"
             onLoad={onLoad}
             onError={onError}
           />
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     height:           100,
     borderRadius:     Radius.sm,
     overflow:         'hidden',
-    backgroundColor:  Colors.surfaceDeep,
+    backgroundColor:  Colors.surface,
     flexShrink:       0,
   },
   cartImg: {

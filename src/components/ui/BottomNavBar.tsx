@@ -146,7 +146,10 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
 
 interface TabBarAdapterProps {
   state: { index: number; routes: { name: string }[] };
-  navigation: { navigate: (name: string) => void };
+  navigation: {
+    navigate: (name: string) => void;
+    getParent: () => { navigate: (name: string) => void } | undefined;
+  };
 }
 
 export const TabBar: React.FC<TabBarAdapterProps> = ({ state, navigation }) => {
@@ -157,6 +160,7 @@ export const TabBar: React.FC<TabBarAdapterProps> = ({ state, navigation }) => {
     <BottomNavBar
       activeTab={activeTab}
       onNavigate={(route) => navigation.navigate(route)}
+      onNavigateToAuth={(screen) => navigation.getParent()?.navigate(screen)}
       cartCount={cartCount > 0 ? cartCount : undefined}
     />
   );

@@ -916,7 +916,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '600',
     color: INK,
-    lineHeight: 28,
+    lineHeight: 28 * 1.1,
   },
   comparePrice: {
     fontFamily:         FontFamily.sans,

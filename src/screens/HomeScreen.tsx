@@ -557,7 +557,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   }, []);
 
   return (
-    <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
+    <SafeAreaView style={styles.root} edges={['left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
       {/* ── TopBar ────────────────────────────────────────────────────────────── */}
