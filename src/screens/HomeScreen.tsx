@@ -648,7 +648,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         {/* 1. Hero banners */}
         {!feedError && (
-          <View style={{ marginTop: Space[5] }}>
+          <View style={{ marginTop: Space[5], marginBottom: Space[6] }}>
             <BannerSlot spots={spotlights} onPress={handleBannerPress} />
           </View>
         )}

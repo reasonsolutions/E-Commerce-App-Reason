@@ -1,8 +1,6 @@
 import * as real from './productApi';
-import * as mock from './mockProductApi';
 
-// Product domain uses real API — other domains remain on mock via global MOCK_MODE
-const product = false ? mock : real;
+const product = real;
 
 export const getAllProducts            = product.getAllProducts;
 export const getBrands                = product.getBrands;

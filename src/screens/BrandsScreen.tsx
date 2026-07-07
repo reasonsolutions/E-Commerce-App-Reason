@@ -273,10 +273,6 @@ const styles = StyleSheet.create({
   },
   card: {
     flex:              1,
-    backgroundColor:   Colors.surfaceSoft,
-    borderRadius:      14,
-    borderWidth:       StyleSheet.hairlineWidth,
-    borderColor:       Colors.rule,
     alignItems:        'center',
     paddingVertical:   Space[4],
     paddingHorizontal: Space[2],
