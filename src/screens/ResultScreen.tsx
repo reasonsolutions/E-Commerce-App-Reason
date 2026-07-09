@@ -10,7 +10,7 @@ import {
   Text,
   Image,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   Animated,
   StatusBar,
@@ -387,6 +387,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const [pageNumber, setPageNumber] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const PAGE_SIZE = 20;
 
   // ScrollView's ref never resolves on some devices in this build (confirmed
@@ -440,28 +441,53 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   useEffect(() => {
     let active = true;
     if (!_cachedCategories.length) {
-      getCategories()
-        .then(res => {
+      (async () => {
+        const CATEGORY_PAGE_SIZE = 50;
+        const first = await getCategories(1, CATEGORY_PAGE_SIZE);
+        if (!active) return;
+        if (first?.statusCode !== 1) return;
+        const total: number = first.result?.TotalRecords ?? 0;
+        let list: CategoryInterface[] = Array.isArray(first.result?.Categories) ? first.result.Categories : [];
+
+        let page = 1;
+        while (list.length < total && active) {
+          page += 1;
+          const res = await getCategories(page, CATEGORY_PAGE_SIZE);
           if (!active) return;
-          if (res?.statusCode === 1 && Array.isArray(res.result)) {
-            _cachedCategories = res.result as CategoryInterface[];
-            setSheetCategories(_cachedCategories);
-          }
-        })
-        .catch(() => {});
+          const next: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result?.Categories)) ? res.result.Categories : [];
+          if (next.length === 0) break;
+          list = list.concat(next);
+        }
+
+        _cachedCategories = list;
+        setSheetCategories(_cachedCategories);
+      })().catch(() => {});
     }
     if (!_cachedBrands.length) {
-      getBrands()
-        .then(res => {
+      (async () => {
+        const BRAND_PAGE_SIZE = 50;
+        const first = await getBrands(1, BRAND_PAGE_SIZE);
+        if (!active) return;
+        if (first?.statusCode !== 1) return;
+        const total: number = first.result?.TotalRecords ?? 0;
+        let list: GetBrandItem[] = Array.isArray(first.result?.Brands) ? first.result.Brands : [];
+
+        let page = 1;
+        while (list.length < total && active) {
+          page += 1;
+          const res = await getBrands(page, BRAND_PAGE_SIZE);
           if (!active) return;
-          const list = res?.result ?? [];
-          _cachedBrands = list.map((b: GetBrandItem) => ({
-            id: Number(b.BrandId),
-            name: b.BrandName,
-          }));
-          setSheetBrands(_cachedBrands);
-        })
-        .catch(() => {});
+          const next: GetBrandItem[] = (res?.statusCode === 1 && Array.isArray(res.result?.Brands)) ? res.result.Brands : [];
+          if (next.length === 0) break;
+          list = list.concat(next);
+        }
+
+        _cachedBrands = list.map((b: GetBrandItem) => ({
+          id: Number(b.BrandId),
+          name: b.BrandName,
+        }));
+        setSheetBrands(_cachedBrands);
+      })().catch(() => {});
     }
     return () => {
       active = false;
@@ -602,6 +628,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       setPageNumber(1);
       setHasMore(true);
       setAllProducts([]);
+      setTotalCount(null);
       return run(async () => {
         const payload = buildPayload(1, opts);
         const response = await axiosInstance.post(
@@ -611,6 +638,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         const page = deduplicateProducts(
           mapProducts(response.data?.result?.Products ?? []),
         );
+        setTotalCount(response.data?.result?.TotalRecords ?? null);
         if (page.length < PAGE_SIZE) setHasMore(false);
         setAllProducts(page);
         return page;
@@ -633,6 +661,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       const page = deduplicateProducts(
         mapProducts(response.data?.result?.Products ?? []),
       );
+      setTotalCount(response.data?.result?.TotalRecords ?? null);
       if (page.length < PAGE_SIZE) setHasMore(false);
       if (page.length > 0) {
         setAllProducts(prev => deduplicateProducts([...prev, ...page]));
@@ -862,7 +891,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
             <Text style={styles.headerTitle} numberOfLines={1}>{categoryName}</Text>
             {!loading && deduplicated.length > 0 && (
               <Text style={styles.headerCount}>
-                {deduplicated.length} {deduplicated.length === 1 ? 'product' : 'products'}
+                {totalCount ?? deduplicated.length} {(totalCount ?? deduplicated.length) === 1 ? 'product' : 'products'}
               </Text>
             )}
           </View>
@@ -872,146 +901,161 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         <View style={styles.headerDivider} />
       </Animated.View>
 
-      <ScrollView
-        key={scrollGen}
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + Space[10] },
-        ]}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        {loading ? (
+      {loading ? (
+        <View style={[styles.scroll, styles.scrollContent]}>
           <ResultSkeleton />
-        ) : isError ? (
-          <View style={styles.stateWrap}>
-            <ErrorState
-              title="Products didn't load."
-              message={error ?? 'Check your connection and try again.'}
-              onRetry={() => fetchProducts()}
-              retryLoading={loading}
-            />
-            <View style={styles.stateSecondaryAction}>
-              <TextLinkButton
-                label="Go back"
-                onPress={() => navigation.goBack()}
-              />
-            </View>
-          </View>
-        ) : deduplicated.length === 0 && activeFilterCount > 0 ? (
-          <View style={styles.stateWrap}>
-            <EmptyState
-              icon={<Icon name="options-outline" size={22} color={Colors.ink4} />}
-              title="No matches found."
-              body="Remove a filter to see more products."
-              action={
-                <TouchableOpacity
-                  style={styles.emptyPrimaryBtn}
-                  onPress={clearFilters}
-                  activeOpacity={0.88}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.emptyPrimaryBtnText}>Clear All Filters</Text>
-                </TouchableOpacity>
-              }
-            />
-          </View>
-        ) : deduplicated.length === 0 ? (
-          <View style={styles.stateWrap}>
-            <EmptyState
-              icon={<Icon name="grid-outline" size={22} color={Colors.ink4} />}
-              title="Nothing here yet."
-              body="This collection is still being built. Explore other categories."
-              action={
-                <TouchableOpacity
-                  style={styles.emptyPrimaryBtn}
-                  onPress={() => navigation.navigate('Result', {
-                    categoryName: 'All Products',
-                    searchQuery: '%',
-                  })}
-                  activeOpacity={0.88}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.emptyPrimaryBtnText}>Browse All Products</Text>
-                </TouchableOpacity>
-              }
-            />
-          </View>
-        ) : deduplicated.length <= 3 ? (
-          <>
-            {deduplicated.map((product, idx) => (
-              <FeaturedCard
-                key={product.Item_Id}
-                product={product}
-                onNavigate={navigateToProduct}
-                delay={Motion.stagger.delay(idx)}
-                initialWishlistCode={wishlistMap.get(product.Inventory_Id) ?? null}
-              />
-            ))}
-          </>
-        ) : (
-          <>
-            {rows.map((row, rowIndex) => {
-              if (row.type === 'span') {
-                return (
-                  <SpanCard
-                    key={`span-${row.idx}`}
-                    product={row.product}
-                    onNavigate={navigateToProduct}
-                    delay={Motion.stagger.delay(rowIndex)}
-                    initialWishlistCode={wishlistMap.get(row.product.Inventory_Id) ?? null}
-                  />
-                );
-              }
-
-              const leftDelay  = Motion.stagger.delay(rowIndex * 2);
-              const rightDelay = Motion.stagger.delay(rowIndex * 2 + 1);
-
-              const isOrphan = !row.right;
-              return (
-                <View
-                  key={`pair-${row.leftIdx}`}
-                  style={[styles.gridRow, isOrphan && styles.gridRowCentered]}
-                >
-                  <GridTile
-                    product={row.left}
-                    onNavigate={navigateToProduct}
-                    delay={leftDelay}
-                    centered={isOrphan}
-                    initialWishlistCode={wishlistMap.get(row.left.Inventory_Id) ?? null}
-                  />
-                  {row.right && (
-                    <GridTile
-                      product={row.right}
-                      onNavigate={navigateToProduct}
-                      delay={rightDelay}
-                      initialWishlistCode={wishlistMap.get(row.right.Inventory_Id) ?? null}
-                    />
-                  )}
-                </View>
-              );
-            })}
-          </>
-        )}
-
-        {loadingMore && (
-          <ActivityIndicator
-            size="small"
-            color={Colors.ink3}
-            style={{ marginVertical: Space[6] }}
+        </View>
+      ) : isError ? (
+        <View style={[styles.scroll, styles.scrollContent, styles.stateWrap]}>
+          <ErrorState
+            title="Products didn't load."
+            message={error ?? 'Check your connection and try again.'}
+            onRetry={() => fetchProducts()}
+            retryLoading={loading}
           />
-        )}
-
-        {!hasMore && allProducts.length > 3 && !loading && (
-          <View style={styles.endOfResultsRow}>
-            <View style={styles.endOfResultsLine} />
-            <Text style={styles.endOfResults}>End of results</Text>
-            <View style={styles.endOfResultsLine} />
+          <View style={styles.stateSecondaryAction}>
+            <TextLinkButton
+              label="Go back"
+              onPress={() => navigation.goBack()}
+            />
           </View>
-        )}
-      </ScrollView>
+        </View>
+      ) : deduplicated.length === 0 && activeFilterCount > 0 ? (
+        <View style={[styles.scroll, styles.scrollContent, styles.stateWrap]}>
+          <EmptyState
+            icon={<Icon name="options-outline" size={22} color={Colors.ink4} />}
+            title="No matches found."
+            body="Remove a filter to see more products."
+            action={
+              <TouchableOpacity
+                style={styles.emptyPrimaryBtn}
+                onPress={clearFilters}
+                activeOpacity={0.88}
+                accessibilityRole="button"
+              >
+                <Text style={styles.emptyPrimaryBtnText}>Clear All Filters</Text>
+              </TouchableOpacity>
+            }
+          />
+        </View>
+      ) : deduplicated.length === 0 ? (
+        <View style={[styles.scroll, styles.scrollContent, styles.stateWrap]}>
+          <EmptyState
+            icon={<Icon name="grid-outline" size={22} color={Colors.ink4} />}
+            title="Nothing here yet."
+            body="This collection is still being built. Explore other categories."
+            action={
+              <TouchableOpacity
+                style={styles.emptyPrimaryBtn}
+                onPress={() => navigation.navigate('Result', {
+                  categoryName: 'All Products',
+                  searchQuery: '%',
+                })}
+                activeOpacity={0.88}
+                accessibilityRole="button"
+              >
+                <Text style={styles.emptyPrimaryBtnText}>Browse All Products</Text>
+              </TouchableOpacity>
+            }
+          />
+        </View>
+      ) : deduplicated.length <= 3 ? (
+        <FlatList
+          key={scrollGen}
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + Space[10] },
+          ]}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          data={deduplicated}
+          keyExtractor={(product) => String(product.Item_Id)}
+          renderItem={({ item: product, index: idx }) => (
+            <FeaturedCard
+              product={product}
+              onNavigate={navigateToProduct}
+              delay={Motion.stagger.delay(idx)}
+              initialWishlistCode={wishlistMap.get(product.Inventory_Id) ?? null}
+            />
+          )}
+          ListFooterComponent={loadingMore ? (
+            <ActivityIndicator size="small" color={Colors.ink3} style={{ marginVertical: Space[6] }} />
+          ) : null}
+        />
+      ) : (
+        <FlatList
+          key={scrollGen}
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + Space[10] },
+          ]}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          data={rows}
+          keyExtractor={(row) => row.type === 'span' ? `span-${row.idx}` : `pair-${row.leftIdx}`}
+          removeClippedSubviews
+          initialNumToRender={6}
+          windowSize={7}
+          renderItem={({ item: row, index: rowIndex }) => {
+            if (row.type === 'span') {
+              return (
+                <SpanCard
+                  product={row.product}
+                  onNavigate={navigateToProduct}
+                  delay={Motion.stagger.delay(rowIndex)}
+                  initialWishlistCode={wishlistMap.get(row.product.Inventory_Id) ?? null}
+                />
+              );
+            }
+
+            const leftDelay  = Motion.stagger.delay(rowIndex * 2);
+            const rightDelay = Motion.stagger.delay(rowIndex * 2 + 1);
+
+            const isOrphan = !row.right;
+            return (
+              <View style={[styles.gridRow, isOrphan && styles.gridRowCentered]}>
+                <GridTile
+                  product={row.left}
+                  onNavigate={navigateToProduct}
+                  delay={leftDelay}
+                  centered={isOrphan}
+                  initialWishlistCode={wishlistMap.get(row.left.Inventory_Id) ?? null}
+                />
+                {row.right && (
+                  <GridTile
+                    product={row.right}
+                    onNavigate={navigateToProduct}
+                    delay={rightDelay}
+                    initialWishlistCode={wishlistMap.get(row.right.Inventory_Id) ?? null}
+                  />
+                )}
+              </View>
+            );
+          }}
+          ListFooterComponent={
+            <>
+              {loadingMore && (
+                <ActivityIndicator
+                  size="small"
+                  color={Colors.ink3}
+                  style={{ marginVertical: Space[6] }}
+                />
+              )}
+              {!hasMore && allProducts.length > 3 && !loading && (
+                <View style={styles.endOfResultsRow}>
+                  <View style={styles.endOfResultsLine} />
+                  <Text style={styles.endOfResults}>End of results</Text>
+                  <View style={styles.endOfResultsLine} />
+                </View>
+              )}
+            </>
+          }
+        />
+      )}
 
       <Animated.View
         style={[styles.scrollTopBtn, { opacity: scrollTopOpacity }]}

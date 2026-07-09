@@ -353,7 +353,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       runCategories(async () => {
         const res = await categoriesPromise;
-        const result: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result)) ? res.result : [];
+        const result: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result?.Categories)) ? res.result.Categories : [];
         _cachedCategories = result;
         homeCache.categories = result;
         return result;
@@ -361,7 +361,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       runProducts(async () => {
         const catRes = await categoriesPromise;
-        const cats: CategoryInterface[] = (catRes?.statusCode === 1 && Array.isArray(catRes.result)) ? catRes.result : [];
+        const cats: CategoryInterface[] = (catRes?.statusCode === 1 && Array.isArray(catRes.result?.Categories)) ? catRes.result.Categories : [];
         if (!cats.length) return [];
         const ids = cats.slice(0, 4).map((c) => c.CategoryId);
         const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
@@ -380,7 +380,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       runBrands(async () => {
         const res = await getBrands();
-        const list: GetBrandItem[] = (Array.isArray(res?.result)) ? res.result : [];
+        const list: GetBrandItem[] = (Array.isArray(res?.result?.Brands)) ? res.result.Brands : [];
         const result = list.slice(0, 8);
         _cachedBrands = result;
         homeCache.brands = result;
@@ -403,14 +403,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     const categoriesPromise = getCategories();
     runCategories(async () => {
       const res = await categoriesPromise;
-      const result: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result)) ? res.result : [];
+      const result: CategoryInterface[] = (res?.statusCode === 1 && Array.isArray(res.result?.Categories)) ? res.result.Categories : [];
       _cachedCategories = result;
       homeCache.categories = result;
       return result;
     }, cancelled);
     runProducts(async () => {
       const catRes = await categoriesPromise;
-      const cats: CategoryInterface[] = (catRes?.statusCode === 1 && Array.isArray(catRes.result)) ? catRes.result : [];
+      const cats: CategoryInterface[] = (catRes?.statusCode === 1 && Array.isArray(catRes.result?.Categories)) ? catRes.result.Categories : [];
       if (!cats.length) return [];
       const ids = cats.slice(0, 4).map((c) => c.CategoryId);
       const results = await Promise.all(ids.map((id) => getProductsByCategory(id, 1, 10).catch(() => [])));
@@ -425,7 +425,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }, cancelled);
     runBrands(async () => {
       const res = await getBrands();
-      const list: GetBrandItem[] = Array.isArray(res?.result) ? res.result : [];
+      const list: GetBrandItem[] = Array.isArray(res?.result?.Brands) ? res.result.Brands : [];
       const result = list.slice(0, 8);
       _cachedBrands = result;
       homeCache.brands = result;

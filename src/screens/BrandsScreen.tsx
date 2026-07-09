@@ -67,8 +67,22 @@ const BrandsScreen: React.FC<BrandsScreenProps> = ({ navigation }) => {
 
   const fetchBrands = useCallback((cancelled: { current: boolean }) => {
     run(async () => {
-      const res = await getBrands();
-      return Array.isArray(res?.result) ? (res.result as GetBrandItem[]) : [];
+      const PAGE_SIZE = 50;
+      const first = await getBrands(1, PAGE_SIZE);
+      if (first?.statusCode !== 1) return [];
+      const total: number = first.result?.TotalRecords ?? 0;
+      let list: GetBrandItem[] = Array.isArray(first.result?.Brands) ? first.result.Brands : [];
+
+      let page = 1;
+      while (list.length < total && !cancelled.current) {
+        page += 1;
+        const res = await getBrands(page, PAGE_SIZE);
+        const next: GetBrandItem[] = (res?.statusCode === 1 && Array.isArray(res.result?.Brands)) ? res.result.Brands : [];
+        if (next.length === 0) break;
+        list = list.concat(next);
+      }
+
+      return list;
     }, cancelled);
   }, [run]);
 

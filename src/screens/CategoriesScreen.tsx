@@ -85,9 +85,22 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
 
   const fetchCategories = useCallback((cancelled: { current: boolean }) => {
     run(async () => {
-      const res = await getCategories();
-      const list: CategoryInterface[] =
-        (res?.statusCode === 1 && Array.isArray(res.result)) ? (res.result as CategoryInterface[]) : [];
+      const PAGE_SIZE = 50;
+      const first = await getCategories(1, PAGE_SIZE);
+      const total: number = first?.statusCode === 1 ? (first.result?.TotalRecords ?? 0) : 0;
+      let list: CategoryInterface[] =
+        (first?.statusCode === 1 && Array.isArray(first.result?.Categories)) ? first.result.Categories : [];
+
+      // Fetch remaining pages if the category count exceeds one page
+      let page = 1;
+      while (list.length < total && !cancelled.current) {
+        page += 1;
+        const res = await getCategories(page, PAGE_SIZE);
+        const next: CategoryInterface[] =
+          (res?.statusCode === 1 && Array.isArray(res.result?.Categories)) ? res.result.Categories : [];
+        if (next.length === 0) break;
+        list = list.concat(next);
+      }
 
       // Fire all count fetches in parallel — lightweight pageSize:1 calls
       Promise.all(

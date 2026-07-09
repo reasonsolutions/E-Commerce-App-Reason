@@ -34,21 +34,23 @@ export const getAllProducts = async (sortBy?: SortBy) => {
   return products;
 };
 
-export const getBrands = async () => {
-  const response = await axiosInstance.get(productEndpoints.getBrands);
-  return response.data;
-};
-
-export const getCategories = async () => {
+export const getBrands = async (pageNumber = 1, pageSize = 50) => {
   const response = await axiosInstance.get(
-    `${productEndpoints.getCategory}?pageNumber=1&pageSize=50`,
+    `${productEndpoints.getBrands}?pageNumber=${pageNumber}&pageSize=${pageSize}`,
   );
   return response.data;
 };
 
-export const getSubCategories = async (categoryCode: string) => {
+export const getCategories = async (pageNumber = 1, pageSize = 50) => {
   const response = await axiosInstance.get(
-    `${productEndpoints.getSubCategoryByCategory}?CategoryId=${categoryCode}`,
+    `${productEndpoints.getCategory}?pageNumber=${pageNumber}&pageSize=${pageSize}`,
+  );
+  return response.data;
+};
+
+export const getSubCategories = async (categoryCode: string, pageNumber = 1, pageSize = 50) => {
+  const response = await axiosInstance.get(
+    `${productEndpoints.getSubCategoryByCategory}?CategoryId=${categoryCode}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
   );
   return response.data;
 };
