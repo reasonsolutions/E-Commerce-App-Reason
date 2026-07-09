@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
   Animated,
@@ -33,14 +34,6 @@ export const CartRow = React.memo<{
     ]).start();
   }, [animOpacity, animTranslateY, delay]);
   const anim      = { opacity: animOpacity, transform: [{ translateY: animTranslateY }] };
-  const imgOpacity = useRef(new Animated.Value(0)).current;
-
-  const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, {
-      toValue: 1, duration: Motion.duration.settle,
-      easing: Motion.easing.out, useNativeDriver: true,
-    }).start();
-  }, [imgOpacity]);
 
   const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
   const lineTotal    = item.Price * item.Quantity;
@@ -64,11 +57,10 @@ export const CartRow = React.memo<{
   return (
     <Animated.View style={[styles.cartRow, anim]}>
       <View style={styles.cartImgWrap}>
-        <Animated.Image
+        <Image
           source={{ uri: resolveImageUrl(item.Images) }}
-          style={[styles.cartImg, { opacity: imgOpacity }]}
+          style={styles.cartImg}
           resizeMode="contain"
-          onLoad={onLoad}
         />
       </View>
 
@@ -145,13 +137,9 @@ export const GuestCartRow = React.memo<{
     ]).start();
   }, [animOpacity, animTranslateY, delay]);
   const anim       = { opacity: animOpacity, transform: [{ translateY: animTranslateY }] };
-  const imgOpacity  = useRef(new Animated.Value(0)).current;
   const [imgFailed, setImgFailed] = useState(false);
   const imgUri = resolveImageUrl(item.image);
 
-  const onLoad  = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: Motion.duration.settle, easing: Motion.easing.out, useNativeDriver: true }).start();
-  }, [imgOpacity]);
   const onError = useCallback(() => setImgFailed(true), []);
 
   const hasDiscount = item.comparePrice > item.price;
@@ -175,11 +163,10 @@ export const GuestCartRow = React.memo<{
     <Animated.View style={[styles.cartRow, anim]}>
       <View style={styles.cartImgWrap}>
         {imgUri && !imgFailed ? (
-          <Animated.Image
+          <Image
             source={{ uri: imgUri }}
-            style={[styles.cartImg, { opacity: imgOpacity }]}
+            style={styles.cartImg}
             resizeMode="contain"
-            onLoad={onLoad}
             onError={onError}
           />
         ) : (

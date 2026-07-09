@@ -1,20 +1,18 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
-  Animated,
   GestureResponderEvent,
 } from 'react-native';
 import { ProductInterface } from '../api/interfaces';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
-import { Skeleton } from './ui';
 import { WishlistHeart } from './ui/WishlistHeart';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { Motion } from '../theme/motion';
 
 interface ProductCardProps {
   product: ProductInterface;
@@ -34,20 +32,10 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   showDelivery = true,
   wishlistCode = null,
 }) => {
-  const imgOpacity = useRef(new Animated.Value(0)).current;
   const imgUri = resolveImageUrl(product.Images);
-  const [imgLoaded, setImgLoaded] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);
 
-  const onLoad = useCallback(() => {
-    setImgLoaded(true);
-    Animated.timing(imgOpacity, {
-      toValue: 1, duration: Motion.duration.settle, useNativeDriver: true,
-    }).start();
-  }, [imgOpacity]);
-
   const onError = useCallback(() => {
-    setImgLoaded(true);
     setImgFailed(true);
   }, []);
 
@@ -73,16 +61,12 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
     >
       <View style={[styles.imgWrap, { height: imgH, backgroundColor: Colors.surfaceDeep }]}>
         {imgUri && !imgFailed ? (
-          <>
-            {!imgLoaded && <Skeleton height={imgH} radius={Radius.md} style={StyleSheet.absoluteFillObject} />}
-            <Animated.Image
-              source={{ uri: imgUri }}
-              style={[styles.img, { opacity: imgOpacity }]}
-              resizeMode="cover"
-              onLoad={onLoad}
-              onError={onError}
-            />
-          </>
+          <Image
+            source={{ uri: imgUri }}
+            style={styles.img}
+            resizeMode="cover"
+            onError={onError}
+          />
         ) : (
           <Text style={styles.initial}>{(product.Name || '?').charAt(0)}</Text>
         )}

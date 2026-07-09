@@ -33,6 +33,7 @@ type PaymentScreenProps = {
   navigation: {
     goBack: () => void;
     navigate: (screen: string, params?: Record<string, any>) => void;
+    replace: (screen: string, params?: Record<string, any>) => void;
   };
   route: {
     params: {
@@ -434,7 +435,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
       setCartCount(0);
       successRef.current = true;
 
-      navigation.navigate('OrderSuccess', {
+      navigation.replace('OrderSuccess', {
         orderNumber:    response.result?.OrderNumber ?? '',
         itemCount:      cartItems.length,
         orderTotal,

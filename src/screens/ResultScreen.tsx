@@ -8,6 +8,7 @@ import React, {
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -148,15 +149,7 @@ const FeaturedCard: React.FC<{
   const haptic = useHaptic();
   const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, Motion.list.initialY) };
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const imgOpacity = useRef(new Animated.Value(0)).current;
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
-
-  const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, {
-      toValue: 1, duration: Motion.duration.settle,
-      easing: Motion.easing.out, useNativeDriver: true,
-    }).start();
-  }, [imgOpacity]);
 
   const hasDiscount = (product.DiscountPct ?? 0) > 0;
   const discountPct = Math.round(product.DiscountPct ?? 0);
@@ -171,11 +164,10 @@ const FeaturedCard: React.FC<{
         >
           <View style={styles.featuredImgWrap}>
             {firstImage ? (
-              <Animated.Image
+              <Image
                 source={{ uri: firstImage }}
-                style={[styles.gridImg, { opacity: imgOpacity }]}
+                style={styles.gridImg}
                 resizeMode="cover"
-                onLoad={onLoad}
               />
             ) : null}
             <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
@@ -214,17 +206,7 @@ const GridTile: React.FC<{
     animatedStyle: useEntrance(delay, false, Motion.list.initialY),
   };
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const imgOpacity = useRef(new Animated.Value(0)).current;
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
-
-  const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, {
-      toValue: 1,
-      duration: Motion.duration.settle,
-      easing: Motion.easing.out,
-      useNativeDriver: true,
-    }).start();
-  }, [imgOpacity]);
 
   const hasDiscount = (product.DiscountPct ?? 0) > 0;
   const discountPct = Math.round(product.DiscountPct ?? 0);
@@ -242,11 +224,10 @@ const GridTile: React.FC<{
         >
           <View style={styles.gridImgWrap}>
             {firstImage ? (
-              <Animated.Image
+              <Image
                 source={{ uri: firstImage }}
-                style={[styles.gridImg, { opacity: imgOpacity }]}
+                style={styles.gridImg}
                 resizeMode="cover"
-                onLoad={onLoad}
               />
             ) : null}
             <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
@@ -284,17 +265,7 @@ const SpanCard: React.FC<{
   const haptic = useHaptic();
   const entranceStyle = useEntrance(delay, false, Motion.list.initialY);
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const imgOpacity = useRef(new Animated.Value(0)).current;
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
-
-  const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, {
-      toValue: 1,
-      duration: Motion.duration.carry,
-      easing: Motion.easing.inOut,
-      useNativeDriver: true,
-    }).start();
-  }, [imgOpacity]);
 
   const hasDiscount = (product.DiscountPct ?? 0) > 0;
   const discountPct = Math.round(product.DiscountPct ?? 0);
@@ -313,11 +284,10 @@ const SpanCard: React.FC<{
         >
           <View style={styles.spanImgWrap}>
             {firstImage ? (
-              <Animated.Image
+              <Image
                 source={{ uri: firstImage }}
-                style={[StyleSheet.absoluteFillObject, { opacity: imgOpacity }]}
+                style={StyleSheet.absoluteFillObject}
                 resizeMode="contain"
-                onLoad={onLoad}
               />
             ) : null}
             <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
@@ -419,12 +389,19 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 20;
 
-  const scrollRef         = useRef<ScrollView>(null);
+  // ScrollView's ref never resolves on some devices in this build (confirmed
+  // on HomeScreen: even a callback ref never fires on the ScrollView itself,
+  // while it fires normally on a plain View) — scrollRef.current?.scrollTo()
+  // is a guaranteed no-op there. Remounting via `key` instead: a fresh
+  // ScrollView always starts at offset 0, sidestepping the ref entirely.
+  const [scrollGen, setScrollGen] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollTopOpacity  = useRef(new Animated.Value(0)).current;
   const scrollToTop = useCallback(() => {
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, []);
+    setShowScrollTop(false);
+    Animated.timing(scrollTopOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    setScrollGen(g => g + 1);
+  }, [scrollTopOpacity]);
 
   const headerAnim = useEntrance(40, false, 12);
 
@@ -896,7 +873,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       </Animated.View>
 
       <ScrollView
-        ref={scrollRef}
+        key={scrollGen}
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[

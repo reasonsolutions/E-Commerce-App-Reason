@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/types';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { postCnfOrderDetail, cancelOrder } from '../api/order';
 import { userFacingMessage } from '../api/apiError';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,13 +23,13 @@ import {
   Skeleton,
   SkeletonRow,
   DarkHeader,
-  PrimaryButton,
   StatusBadge,
   OrderProgressBar,
   FadeImage,
+  CancelOrderSheet,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { Colors, Space, Radius, Shadow, Motion } from '../theme';
+import { Colors, Space, Radius, Shadow } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -46,7 +45,7 @@ import type {
   OrderEventInterface,
 } from '../api/interfaces';
 import { CustomerCancellationReason, CancellationReasonLabel } from '../config/enum_files/CustomerCancellationReason';
-import { RefundMode, RefundModeLabel } from '../config/enum_files/RefundMode';
+import { RefundMode } from '../config/enum_files/RefundMode';
 import { CustomerPlatform } from '../config/enum_files/CustomerPlatform';
 
 const THUMB_W = 72;
@@ -360,7 +359,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const { data: orderDetails, loading, isError, error, run } =
     useAsyncState<OrderDetailResponseInterface>(null);
 
-  const cancelSheetRef = useRef<BottomSheet>(null);
+  const [showCancelSheet, setShowCancelSheet]       = useState(false);
   const [cancelTarget, setCancelTarget]             = useState<OrderDetailItemExtendedInterface | null>(null);
   const [selectedReason, setSelectedReason]         = useState<CustomerCancellationReason | null>(null);
   const [selectedRefundMode, setSelectedRefundMode] = useState<RefundMode | null>(null);
@@ -399,7 +398,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     setSelectedReason(null);
     setSelectedRefundMode(null);
     haptic.light();
-    cancelSheetRef.current?.expand();
+    setShowCancelSheet(true);
   };
 
   const handleConfirmCancel = async () => {
@@ -430,7 +429,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         return;
       }
       haptic.success();
-      cancelSheetRef.current?.close();
+      setShowCancelSheet(false);
       setCancelSuccess(true);
     } catch (err) {
       setCancelError(userFacingMessage(err));
@@ -618,7 +617,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             <TouchableOpacity
               style={styles.modalCta}
               activeOpacity={0.8}
-              onPress={() => { setCancelSuccess(false); navigation.navigate('Orders', { refresh: true }); }}
+              onPress={() => { setCancelSuccess(false); (navigation.navigate as (screen: string, params?: Record<string, unknown>) => void)('MainTabs', { screen: 'Orders', params: { refresh: true } }); }}
             >
               <Text style={styles.modalCtaText}>Done</Text>
             </TouchableOpacity>
@@ -626,65 +625,29 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         </View>
       </Modal>
 
-      {/* ── Cancel order bottom sheet ── */}
-      <BottomSheet
-        ref={cancelSheetRef}
-        index={-1}
-        snapPoints={['75%']}
-        enablePanDownToClose
-        backgroundStyle={styles.sheetBg}
-        handleIndicatorStyle={styles.sheetHandle}
-        animationConfigs={{ damping: Motion.spring.settle.damping, stiffness: Motion.spring.settle.stiffness, mass: Motion.spring.settle.mass }}
-      >
-        <BottomSheetScrollView
-          contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + Space[6] }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.sheetTitle}>Cancel Item</Text>
-          {cancelTarget ? (
-            <Text style={styles.sheetSubtitle}>{cancelTarget.Name}</Text>
-          ) : null}
-
-          <Text style={styles.sheetSectionLabel}>REASON FOR CANCELLATION</Text>
-          {(Object.values(CustomerCancellationReason).filter(v => typeof v === 'number') as CustomerCancellationReason[]).map(reason => (
-            <TouchableOpacity
-              key={reason}
-              onPress={() => { haptic.light(); setSelectedReason(reason); }}
-              style={[styles.optionRow, selectedReason === reason && styles.optionRowSelected]}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.optionRadio, selectedReason === reason && styles.optionRadioSelected]} />
-              <Text style={[styles.optionLabel, selectedReason === reason && styles.optionLabelSelected]}>
-                {CancellationReasonLabel[reason]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-
-          <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>REFUND METHOD</Text>
-          {(Object.values(RefundMode).filter(v => typeof v === 'number') as RefundMode[]).map(mode => (
-            <TouchableOpacity
-              key={mode}
-              onPress={() => { haptic.light(); setSelectedRefundMode(mode); }}
-              style={[styles.optionRow, selectedRefundMode === mode && styles.optionRowSelected]}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.optionRadio, selectedRefundMode === mode && styles.optionRadioSelected]} />
-              <Text style={[styles.optionLabel, selectedRefundMode === mode && styles.optionLabelSelected]}>
-                {RefundModeLabel[mode]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-
-          {cancelError ? <Text style={styles.sheetError}>{cancelError}</Text> : null}
-
-          <PrimaryButton
-            label="Confirm Cancellation"
-            onPress={handleConfirmCancel}
-            loading={cancelLoading}
-            style={styles.sheetCta}
-          />
-        </BottomSheetScrollView>
-      </BottomSheet>
+      {/* ── Cancel order sheet ──
+          Rendered as its own Modal-wrapped overlay (see CancelOrderSheet),
+          mirroring LoginPromptSheet's structure, instead of an inline
+          <BottomSheet> mounted in this screen's own view tree — which
+          crashed with "[Reanimated] Cannot find host instance for this
+          component" during the navigation transition into this screen.
+          Root cause of a second crash (same error, triggered by opening the
+          sheet itself): CancelOrderSheet used BottomSheetScrollView instead
+          of BottomSheetView — swapped to BottomSheetView to match
+          LoginPromptSheet, which resolved it. */}
+      {showCancelSheet && (
+        <CancelOrderSheet
+          itemName={cancelTarget?.Name}
+          selectedReason={selectedReason}
+          selectedRefundMode={selectedRefundMode}
+          cancelError={cancelError}
+          cancelLoading={cancelLoading}
+          onSelectReason={(reason) => { haptic.light(); setSelectedReason(reason); }}
+          onSelectRefundMode={(mode) => { haptic.light(); setSelectedRefundMode(mode); }}
+          onConfirm={handleConfirmCancel}
+          onClose={() => setShowCancelSheet(false)}
+        />
+      )}
     </View>
   );
 };
@@ -768,65 +731,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     marginTop:     2,
   },
-
-  // ── Cancel sheet ───────────────────────────────────────────────────────────────
-  sheetBg:     { backgroundColor: Colors.surface },
-  sheetHandle: { backgroundColor: Colors.rule },
-  sheetContent: {
-    paddingHorizontal: Space.screenH,
-    paddingTop:        Space[4],
-  },
-  sheetTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
-    color:         Colors.ink1,
-    letterSpacing: -0.3,
-  },
-  sheetSubtitle: {
-    ...Type.caption,
-    color:        Colors.ink3,
-    marginTop:    Space[1],
-    marginBottom: Space[5],
-  },
-  sheetSectionLabel: {
-    ...Type.label,
-    color:        Colors.ink4,
-    marginBottom: Space[3],
-  },
-  optionRow: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               Space[3],
-    paddingVertical:   Space[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.rule,
-  },
-  optionRowSelected: {},
-  optionRadio: {
-    width:        16,
-    height:       16,
-    borderRadius: 8,
-    borderWidth:  1.5,
-    borderColor:  Colors.ink4,
-    flexShrink:   0,
-  },
-  optionRadioSelected: {
-    borderColor:     Colors.ink1,
-    backgroundColor: Colors.ink1,
-  },
-  optionLabel: {
-    ...Type.body,
-    color: Colors.ink3,
-    flex:  1,
-  },
-  optionLabelSelected: { color: Colors.ink1 },
-  sheetError: {
-    ...Type.caption,
-    color:     Colors.danger,
-    marginTop: Space[4],
-    textAlign: 'center',
-  },
-  sheetCta: { marginTop: Space[6] },
 
   // ── Cancel success modal ────────────────────────────────────────────────────────
   modalOverlay: {

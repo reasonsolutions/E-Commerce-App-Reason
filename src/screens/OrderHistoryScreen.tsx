@@ -634,7 +634,6 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
         maxToRenderPerBatch={6}
         updateCellsBatchingPeriod={50}
         windowSize={7}
-        removeClippedSubviews
         ListHeaderComponent={
           reorderError ? (
             <ErrorBanner

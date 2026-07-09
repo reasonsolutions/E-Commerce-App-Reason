@@ -81,7 +81,7 @@ const AppNavigator = () => {
         <Stack.Screen name="Result" component={ResultScreen} />
         <Stack.Screen name="Address" component={AddressScreen} />
         <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} />
-        <Stack.Screen name="OrderDetails" component={OrderDetailScreen} />
+        <Stack.Screen name="OrderDetails" component={OrderDetailScreen} options={{ animation: 'none' }} />
         <Stack.Screen name="AddressManagement" component={AddressManagementScreen} />
         <Stack.Screen name="Search" component={SearchScreen} options={{ animation: 'fade' }} />
         <Stack.Screen name="EcomPayment" component={EcomPaymentScreen} />

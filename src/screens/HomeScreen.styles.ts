@@ -114,7 +114,6 @@ const styles = StyleSheet.create({
   scrollTopBtn: {
     position: 'absolute',
     right:    Space[4],
-    bottom:   72,
     zIndex:   20,
   },
   scrollTopInner: {

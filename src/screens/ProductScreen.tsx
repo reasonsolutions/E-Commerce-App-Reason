@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
+  Image,
   ScrollView,
   Animated,
   Dimensions,
@@ -46,16 +47,11 @@ import {
 import { Colors, Space, Shadow, Radius } from '../theme';
 
 const HeroImage: React.FC<{ uri: string; width: number; height: number; onError: () => void }> = ({ uri, width, height, onError }) => {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const onLoad = useCallback(() => {
-    Animated.timing(opacity, { toValue: 1, duration: Motion.duration.settle, easing: Motion.easing.out, useNativeDriver: true }).start();
-  }, [opacity]);
   return (
-    <Animated.Image
+    <Image
       source={{ uri }}
-      style={{ width, height, opacity }}
+      style={{ width, height }}
       resizeMode="contain"
-      onLoad={onLoad}
       onError={onError}
     />
   );

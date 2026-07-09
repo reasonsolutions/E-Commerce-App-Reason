@@ -1,14 +1,14 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  Animated,
+  Image,
   ImageResizeMode,
   StyleProp,
   ViewStyle,
   ImageStyle,
   StyleSheet,
+  View,
   Text,
 } from 'react-native';
-import { Motion } from '../../theme/motion';
 import { Colors } from '../../theme';
 import { FontFamily } from '../../theme/fonts';
 import { Skeleton } from './Skeleton';
@@ -36,19 +36,12 @@ export const FadeImage: React.FC<FadeImageProps> = ({
   showSkeleton = false,
   fallbackText,
 }) => {
-  const opacity = useRef(new Animated.Value(0)).current;
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   const onLoad = useCallback(() => {
     setLoaded(true);
-    Animated.timing(opacity, {
-      toValue:         1,
-      duration:        Motion.duration.settle,
-      easing:          Motion.easing.out,
-      useNativeDriver: true,
-    }).start();
-  }, [opacity]);
+  }, []);
 
   const onError = useCallback(() => {
     setFailed(true);
@@ -57,7 +50,7 @@ export const FadeImage: React.FC<FadeImageProps> = ({
   const showFallback = failed || !uri;
 
   return (
-    <Animated.View
+    <View
       style={[
         styles.wrap,
         { width, height, borderRadius },
@@ -70,15 +63,15 @@ export const FadeImage: React.FC<FadeImageProps> = ({
       {showFallback ? (
         <Text style={styles.fallbackText}>{(fallbackText || '?').charAt(0).toUpperCase()}</Text>
       ) : (
-        <Animated.Image
+        <Image
           source={{ uri }}
-          style={[styles.img, { opacity }, imageStyle]}
+          style={[styles.img, imageStyle]}
           resizeMode={resizeMode}
           onLoad={onLoad}
           onError={onError}
         />
       )}
-    </Animated.View>
+    </View>
   );
 };
 

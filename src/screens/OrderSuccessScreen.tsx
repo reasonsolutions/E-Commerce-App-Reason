@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -125,6 +125,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
   // ── Animations ────────────────────────────────────────────────────────────
   const strokeOffset = useRef(new Animated.Value(CIRCUMFERENCE)).current;
   const markOpacity = useRef(new Animated.Value(0)).current;
+  const [showMark, setShowMark] = useState(false);
   const heroAnim = useRef(new Animated.Value(0)).current;
   const orderAnim = useRef(new Animated.Value(0)).current;
   const addressAnim = useRef(new Animated.Value(0)).current;
@@ -153,6 +154,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
         easing: Motion.easing.out,
         useNativeDriver: true,
       }).start();
+      setShowMark(true);
       haptic.success();
     });
     Animated.parallel([
@@ -161,6 +163,18 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
       settle(addressAnim, DELAY.address),
       settle(ctasAnim, DELAY.ctas),
     ]).start();
+
+    // Safety net: strokeDashoffset isn't a standard native-driver property,
+    // so its animation can finish on the JS side (firing this callback and
+    // the haptic) without the native paint ever landing — leaving the
+    // checkmark stranded. Mutating markOpacity directly has the same failure
+    // mode (no guaranteed repaint), so force a real React re-render instead,
+    // which is guaranteed to commit.
+    const markTimer = setTimeout(() => {
+      markOpacity.setValue(1);
+      setShowMark(true);
+    }, DELAY.mark + Motion.duration.carry + Motion.duration.tap);
+    return () => clearTimeout(markTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -177,7 +191,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
   });
 
   const handleTrackOrder = useCallback(
-    () => navigation.navigate('Orders', { refresh: true }),
+    () => navigation.navigate('MainTabs', { screen: 'Orders', params: { refresh: true } }),
     [navigation],
   );
   const handleContinueShopping = useCallback(
@@ -217,9 +231,11 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
                 transform={`rotate(-90, ${RING_CX}, ${RING_CX})`}
               />
             </Svg>
-            <Animated.Text style={[s.markChar, { opacity: markOpacity }]}>
-              ✓
-            </Animated.Text>
+            {showMark ? (
+              <Animated.View style={{ opacity: markOpacity }}>
+                <Icon name="checkmark" size={26} color={Colors.accent} />
+              </Animated.View>
+            ) : null}
           </View>
 
           {/* Confirmation text */}
@@ -350,13 +366,6 @@ const s = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderRadius: Radius.pill,
     backgroundColor: Colors.accentTint,
-  },
-  markChar: {
-    fontFamily: FontFamily.serifItalic,
-    fontSize: 26,
-    color: Colors.accent,
-    lineHeight: 32,
-    marginTop: 2,
   },
   headline: {
     fontFamily: FontFamily.serif,

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -39,7 +40,6 @@ import {
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space } from '../theme';
-import { Motion } from '../theme/motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -77,22 +77,16 @@ const BannerCard: React.FC<{ spot: Spotlight; height: number; onPress: () => voi
   height,
   onPress,
 }) => {
-  const imgOpacity = useRef(new Animated.Value(0)).current;
-  const onLoad = useCallback(() => {
-    Animated.timing(imgOpacity, { toValue: 1, duration: Motion.duration.settle, useNativeDriver: true }).start();
-  }, [imgOpacity]);
-
   const isEditorial = spot.theme === 'split';
 
   return (
     <TouchableOpacity style={[styles.bannerCard, { height }]} activeOpacity={0.92} onPress={onPress}>
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Colors.ink1 }]} />
       {spot.imageUri ? (
-        <Animated.Image
+        <Image
           source={{ uri: spot.imageUri }}
-          style={[StyleSheet.absoluteFillObject, styles.bannerImg, { opacity: imgOpacity }]}
+          style={[StyleSheet.absoluteFillObject, styles.bannerImg]}
           resizeMode="cover"
-          onLoad={onLoad}
         />
       ) : null}
       {/* Bottom scrim — text legibility on any image */}
@@ -258,7 +252,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
 
   // ── Scroll to top ─────────────────────────────────────────────────────────────
-  const scrollRef        = useRef<ScrollView>(null);
+  // ScrollView's ref never resolves on some devices in this build (confirmed:
+  // even a callback ref never fires on the ScrollView itself, while it fires
+  // normally on a plain View) — scrollRef.current?.scrollTo() is a guaranteed
+  // no-op there. Remounting via `key` instead: a fresh ScrollView always
+  // starts at offset 0, sidestepping the ref entirely.
+  const [scrollGen, setScrollGen] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const scrollTopOpacity = useRef(new Animated.Value(0)).current;
@@ -279,8 +278,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   }, [scrollTopOpacity]);
 
   const scrollToTop = useCallback(() => {
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, []);
+    setShowScrollTop(false);
+    Animated.timing(scrollTopOpacity, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    setScrollGen(g => g + 1);
+  }, [scrollTopOpacity]);
 
   // ── Resume cart cue ───────────────────────────────────────────────────────────
   const [showResumeCue, setShowResumeCue] = useState(false);
@@ -628,7 +629,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       {/* ── Scrollable content ────────────────────────────────────────────────── */}
       <ScrollView
-        ref={scrollRef}
+        key={scrollGen}
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -799,8 +800,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       </ScrollView>
 
       {/* ── Scroll to top button ─────────────────────────────────────────────── */}
+      {/* bottom offset clears the bottom tab bar (rendered by the navigator,
+          outside this screen) — a fixed offset left it sitting underneath
+          the tab bar's view, silently eating taps despite being visible. */}
       <Animated.View
-        style={[styles.scrollTopBtn, { opacity: scrollTopOpacity }]}
+        style={[styles.scrollTopBtn, { bottom: insets.bottom + 72, opacity: scrollTopOpacity }]}
         pointerEvents={showScrollTop ? 'box-none' : 'none'}
       >
         <TouchableOpacity

@@ -56,6 +56,10 @@ type AddressScreenProps = {
       (screen: string): void;
       (screen: string, params: Record<string, any>): void;
     };
+    replace: {
+      (screen: string): void;
+      (screen: string, params: Record<string, any>): void;
+    };
   };
   route: {
     params?: {
@@ -369,7 +373,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       setCartCount(0);
       const result = response.result;
       const firstStatus = result?.SubOrders?.[0]?.ItemDetails?.[0]?.OrderStatus ?? 1;
-      navigation.navigate('OrderSuccess', {
+      navigation.replace('OrderSuccess', {
         orderNumber:              result?.OrderNumber ?? '',
         itemCount:                items.length,
         orderTotal:               result?.TotalAmountAfterDiscount ?? total,

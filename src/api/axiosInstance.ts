@@ -2,7 +2,12 @@ import axios from 'axios';
 import { API_BASE_URL } from '@env';
 import * as Keychain from 'react-native-keychain';
 import { classifyError, apiLog } from './apiError';
-import { logRequest, logResponse, logError, TimedAxiosRequestConfig } from './apiLogger';
+import {
+  logRequest,
+  logResponse,
+  logError,
+  TimedAxiosRequestConfig,
+} from './apiLogger';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { clearSession } from '../utils/auth';
 import { resetToLogin } from '../utils/navigationService';
@@ -24,11 +29,16 @@ export function clearTokenCache(): void {
 
 async function refreshAccessToken(): Promise<string | null> {
   try {
-    const creds = await Keychain.getGenericPassword({ service: STORAGE_KEYS.refreshToken });
-    if (!creds) return null;
-    const response = await axios.get(`${API_BASE_URL}${authEndpoints.getEcommAccessToken}`, {
-      headers: { Authorization: `Bearer ${creds.password}` },
+    const creds = await Keychain.getGenericPassword({
+      service: STORAGE_KEYS.refreshToken,
     });
+    if (!creds) return null;
+    const response = await axios.get(
+      `${API_BASE_URL}${authEndpoints.getEcommAccessToken}`,
+      {
+        headers: { Authorization: `Bearer ${creds.password}` },
+      },
+    );
     const data = response.data;
     if (data?.statusCode !== 1 || !data?.result?.AccessToken) return null;
     const newToken: string = data.result.AccessToken;
@@ -57,14 +67,17 @@ axiosInstance.interceptors.request.use(
   async config => {
     (config as TimedAxiosRequestConfig)._startTime = Date.now();
     logRequest(config as TimedAxiosRequestConfig);
-    const isAuthEndpoint = config.url?.startsWith('token/') ||
+    const isAuthEndpoint =
+      config.url?.startsWith('token/') ||
       config.url?.includes('postCreateCustomer') ||
       config.url?.includes('postConfirmCustomer');
     if (!isAuthEndpoint) {
       if (_cachedToken) {
         config.headers.Authorization = `Bearer ${_cachedToken}`;
       } else {
-        const credentials = await Keychain.getGenericPassword({ service: STORAGE_KEYS.authToken });
+        const credentials = await Keychain.getGenericPassword({
+          service: STORAGE_KEYS.authToken,
+        });
         if (credentials) {
           _cachedToken = credentials.password;
           config.headers.Authorization = `Bearer ${credentials.password}`;
@@ -108,7 +121,9 @@ axiosInstance.interceptors.response.use(
     if (is401 && !isRefreshEndpoint && !config?._retried) {
       config._retried = true;
       if (!_refreshPromise) {
-        _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
+        _refreshPromise = refreshAccessToken().finally(() => {
+          _refreshPromise = null;
+        });
       }
       const newToken = await _refreshPromise;
       if (newToken) {
