@@ -329,7 +329,6 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
   const fetchingRef      = useRef(false);
   const pageRef          = useRef(1);
   const filtersRef       = useRef<OrderHistoryFilters>({});
-  const hasFetchedOnce   = useRef(false);
   filtersRef.current     = filters;
 
   const fetchPage = useCallback(async (
@@ -371,8 +370,6 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
   useFocusEffect(
     useCallback(() => {
       const forceRefresh = route.params?.refresh;
-      if (hasFetchedOnce.current && !forceRefresh) return;
-      hasFetchedOnce.current = true;
       if (forceRefresh) navigation.setParams({ refresh: undefined });
       reload(filtersRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps

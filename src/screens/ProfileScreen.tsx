@@ -383,9 +383,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         postOrderHistory(code, 1, {})
           .then(res => {
             if (cancelled) return;
+            // Count distinct orders, not line items — matches OrderHistoryScreen's
+            // groupOrders logic so the two screens agree.
+            const distinctOrders = new Set(res.items.map(item => item.OrderNumber)).size;
             // hasMore means there are additional pages — show count as "N+" so
             // the stat isn't misleadingly low for users with many orders.
-            setOrderCount(res.hasMore ? -(res.items.length) : res.items.length);
+            setOrderCount(res.hasMore ? -distinctOrders : distinctOrders);
           })
           .catch(() => {});
 

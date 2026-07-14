@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Animated,
   StatusBar,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { EmptyState, FloatingLabelInput, ErrorBanner, ConfirmSheet } from '../components/ui';
@@ -148,11 +149,13 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
     [run],
   );
 
-  useEffect(() => {
-    const cancelled = { current: false };
-    fetchAddresses(cancelled);
-    return () => { cancelled.current = true; };
-  }, [fetchAddresses]);
+  useFocusEffect(
+    useCallback(() => {
+      const cancelled = { current: false };
+      fetchAddresses(cancelled);
+      return () => { cancelled.current = true; };
+    }, [fetchAddresses]),
+  );
 
   const handleChange = (name: string, value: string) => {
     setForm(prev => ({ ...prev, [name]: value }));

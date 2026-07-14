@@ -5,27 +5,30 @@ import type {
   OrderHistoryRequest,
   OrderDetailRequest,
   CancelOrderInterface,
+  OrderHistoryApiResponse,
 } from '../interfaces';
 
 interface RawOrderHistoryItem {
-  InventoryID:  number;
-  ItemID:       number;
-  BrandID:      number;
-  BrandName:    string;
-  SubOrder?:    { Code: number; Number: string };
-  Price:        number;
-  Quantity:     number;
-  Name:         string;
-  Variant:      string;
-  Images:       string;
-  OrderStatus:  number;
+  InventoryID:     number;
+  ItemID:          number;
+  BrandID:         number;
+  BrandName:       string;
+  SubOrderNumber?: string;
+  Price:           number;
+  ComparePrice?:   number;
+  Quantity:        number;
+  Name:            string;
+  Variant:         string;
+  Images:          string;
+  OrderStatus:     number;
   [key: string]: unknown;
 }
 
 interface RawOrderHistoryGroup {
-  OrderNumber: string;
-  OrderedDate: string;
-  Items:       RawOrderHistoryItem[];
+  OrderMasterCode: number;
+  OrderNumber:     string;
+  OrderedDate:     string;
+  Items:           RawOrderHistoryItem[];
 }
 
 export interface OrderHistoryFilters {
@@ -57,32 +60,34 @@ export const postOrderHistory = async (
     DateTo:              filters.dateTo ?? null,
   };
   const response = await axiosInstance.post(orderEndpoints.getOrderHistory, payload);
-  const raw = response.data;
+  const raw: { result?: OrderHistoryApiResponse } = response.data;
+  const orders = raw.result?.Orders as unknown as RawOrderHistoryGroup[] | undefined;
 
-  if (!Array.isArray(raw?.result) || raw.result.length === 0) {
+  if (!Array.isArray(orders) || orders.length === 0) {
     return { items: [], hasMore: false };
   }
 
-
   const PAGE_SIZE = payload.PageSize ?? 10;
 
-  const items = raw.result.flatMap((order: RawOrderHistoryGroup) =>
+  const items = orders.flatMap((order: RawOrderHistoryGroup) =>
     (order.Items ?? []).map((item: RawOrderHistoryItem) => ({
       ...item,
-      OrderNumber:  order.OrderNumber,
-      OrderedDate:  order.OrderedDate,
-      Inventory_Id: item.InventoryID,
-      Item_Id:      item.ItemID,
-      SubOrder:     item.SubOrder ?? { Code: 0, Number: '' },
-      Brand_Id:     item.BrandID,
-      Brand_Name:   item.BrandName,
-      Amount:       item.Price ?? 0,
+      OrderNumber:     order.OrderNumber,
+      OrderedDate:     order.OrderedDate,
+      OrderMasterCode: order.OrderMasterCode,
+      Inventory_Id:    item.InventoryID,
+      Item_Id:         item.ItemID,
+      SubOrder:        { Code: 0, Number: item.SubOrderNumber ?? '' },
+      Brand_Id:        item.BrandID,
+      Brand_Name:      item.BrandName,
+      Amount:          item.Price ?? 0,
+      ComparePrice:    item.ComparePrice,
     })),
   );
 
-  // hasMore is true only if the server returned a full page of groups —
-  // a partial page means we've reached the end.
-  return { items, hasMore: raw.result.length >= PAGE_SIZE };
+  const totalRecords = raw.result?.TotalRecords ?? 0;
+  const pageNum = payload.PageNumber ?? 1;
+  return { items, hasMore: pageNum * PAGE_SIZE < totalRecords };
 };
 
 export const cancelOrder = async (data: CancelOrderInterface) => {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import { useProfileCode } from '../hooks/useProfileCode';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
 import { postSaveCartItems } from '../api/cart';
 import type { WishlistItemInterface } from '../api/interfaces';
-import { Price, SkeletonGrid, TrustLine } from '../components/ui';
+import { Price, SkeletonGrid, TrustLine, FadeImage } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { scopedKey } from '../config/storageKeys';
 import { Colors, Space, Radius } from '../theme';
@@ -59,22 +59,12 @@ const WishlistCard: React.FC<{
   const haptic    = useHaptic();
   const entrance  = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
-  const imgOpacity = useRef(new Animated.Value(0)).current;
 
   const price        = item.PriceDetails?.Price ?? 0;
   const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
   const hasDiscount  = comparePrice > price;
   const isOOS        = item.IsInStock === 0;
   const imageUri     = resolveImageUrl(Array.isArray(item.Images) ? item.Images[0] : item.Images);
-
-  const onImageLoad = useCallback(() => {
-    Animated.timing(imgOpacity, {
-      toValue:         1,
-      duration:        Motion.duration.settle,
-      easing:          Motion.easing.out,
-      useNativeDriver: true,
-    }).start();
-  }, [imgOpacity]);
 
   return (
     <Animated.View style={[styles.cardWrap, entrance]}>
@@ -87,20 +77,13 @@ const WishlistCard: React.FC<{
         >
           {/* ── Image ───────────────────────────────────────────────────── */}
           <View style={styles.imgWrap}>
-            {imageUri ? (
-              <Animated.Image
-                source={{ uri: imageUri }}
-                style={[styles.img, { opacity: imgOpacity }]}
-                resizeMode="contain"
-                onLoad={onImageLoad}
-              />
-            ) : (
-              <View style={styles.imgPlaceholder}>
-                <Text style={styles.imgPlaceholderLetter}>
-                  {(item.BrandName ?? item.Name ?? '?').charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
+            <FadeImage
+              uri={imageUri}
+              width={COL_W}
+              height={IMG_H}
+              resizeMode="contain"
+              fallbackText={item.BrandName || item.Name}
+            />
 
             {/* OOS overlay */}
             {isOOS ? (
@@ -497,21 +480,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     overflow:        'hidden',
     position:        'relative',
-  },
-  img: {
-    width:  '100%',
-    height: '100%',
-  },
-  imgPlaceholder: {
-    flex:           1,
-    alignItems:     'center',
-    justifyContent: 'center',
-  },
-  imgPlaceholderLetter: {
-    fontFamily: FontFamily.serifItalic,
-    fontSize:   36,
-    color:      Colors.ink4,
-    lineHeight: 40,
   },
 
   // ── OOS overlay ───────────────────────────────────────────────────────────────
