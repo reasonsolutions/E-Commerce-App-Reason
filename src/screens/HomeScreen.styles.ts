@@ -255,6 +255,11 @@ const styles = StyleSheet.create({
     paddingBottom:   Space[5],
     marginTop:       Space[4],
   },
+  // Leads the feed now that category sits above the hero banner — no
+  // preceding section, so no extra top margin.
+  discoveryBandLead: {
+    marginTop: 0,
+  },
 
   // ── Section background alternation ───────────────────────────────────────────────
   sectionSurface: {

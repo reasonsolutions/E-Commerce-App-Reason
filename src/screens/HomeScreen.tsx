@@ -19,14 +19,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useCart } from '../context/CartContext';
+import { useWishlist } from '../context/WishlistContext';
 import { CategoryInterface, ProductInterface, GetBrandItem } from '../api/interfaces';
 import { getProductsByCategory, getCategories, getBrands } from '../api/product';
-import { getWishlist } from '../api/wishlist';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import { homeCache } from '../utils/homeCache';
 import { wishlistCache } from '../utils/wishlistCache';
-import type { WishlistItemInterface } from '../api/interfaces';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -40,6 +39,7 @@ import {
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space } from '../theme';
+import { Motion } from '../theme/motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -243,9 +243,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   useCustomBackHandler(navigation);
   const insets = useSafeAreaInsets();
   const { cartCount } = useCart();
-
-  // ── Wishlist map — inventoryId → wishlistCode, loaded for logged-in users ────
-  const [wishlistMap, setWishlistMap] = useState<Map<number, number>>(new Map());
+  const { refresh: refreshWishlist } = useWishlist();
   const wishlistFetchTime = useRef(0);
 
   // ── Recently viewed ───────────────────────────────────────────────────────────
@@ -286,6 +284,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   // ── Resume cart cue ───────────────────────────────────────────────────────────
   const [showResumeCue, setShowResumeCue] = useState(false);
 
+  // ── Dynamic search reveal — icon toggles the search bar in/out ─────────────────
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleSearch = useCallback(() => {
+    const next = !searchOpen;
+    setSearchOpen(next);
+    Animated.timing(searchAnim, {
+      toValue:         next ? 1 : 0,
+      duration:        Motion.duration.settle,
+      easing:          Motion.easing.out,
+      useNativeDriver: false,
+    }).start();
+  }, [searchOpen, searchAnim]);
+
   // ── Data fetches — initialised from module-level cache so remounts show data instantly ──
   const { data: categories, run: runCategories, isError: categoriesError } = useAsyncState<CategoryInterface[]>(_cachedCategories);
   const { data: products,   run: runProducts,   isError: productsError   } = useAsyncState<ProductInterface[]>(_cachedProducts);
@@ -318,23 +331,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       const isWishlistStale = wishlistCache.lastFetchTime === 0
         || wishlistCache.lastFetchTime > wishlistFetchTime.current;
       if (isWishlistStale) {
-        AsyncStorage.getItem(STORAGE_KEYS.userData).then(async (userRaw) => {
-          const profileCode: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
-          if (!profileCode) { setWishlistMap(new Map()); return; }
-          try {
-            const res = await getWishlist(profileCode);
-            if (cancelled.current) return;
-            if (res?.statusCode === 1 && Array.isArray(res.result)) {
-              const map = new Map<number, number>();
-              for (const item of res.result as WishlistItemInterface[]) {
-                if (item.InventoryID != null && item.WishlistCode != null) {
-                  map.set(item.InventoryID, item.WishlistCode);
-                }
-              }
-              setWishlistMap(map);
-              wishlistFetchTime.current = Date.now();
-            }
-          } catch {}
+        refreshWishlist().then(() => {
+          if (!cancelled.current) wishlistFetchTime.current = Date.now();
         }).catch(() => {});
       }
 
@@ -388,7 +386,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       }, cancelled);
 
       return () => { cancelled.current = true; };
-    }, [runCategories, runProducts, runBrands]),
+    }, [runCategories, runProducts, runBrands, refreshWishlist]),
   );
 
   // ── Retry all fetches — clears module cache so useFocusEffect re-fires ──────────
@@ -570,6 +568,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <View style={styles.topBarIcons}>
             <TouchableOpacity
               style={styles.iconBtn}
+              onPress={toggleSearch}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name={searchOpen ? 'close-outline' : 'search-outline'} size={22} color={Colors.ink1} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconBtn}
               onPress={() => navigation.navigate('Wishlist')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
@@ -591,19 +596,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
-        {/* Search bar — tapping navigates to SearchScreen */}
-        <TouchableOpacity
-          style={styles.searchWrap}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('Search')}
-        >
-          <SearchBar
-            value=""
-            onChangeText={() => {}}
-            placeholder="Search products, brands…"
-            editable={false}
-          />
-        </TouchableOpacity>
+        {/* Search bar — dynamically revealed by the search icon, tapping navigates to SearchScreen */}
+        {searchOpen && (
+          <Animated.View
+            style={[
+              styles.searchWrap,
+              {
+                opacity: searchAnim,
+                transform: [{
+                  translateY: searchAnim.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }),
+                }],
+              },
+            ]}
+          >
+            <SearchBar
+              value=""
+              onChangeText={() => {}}
+              placeholder="Search products, brands…"
+              editable={false}
+              onPress={() => navigation.navigate('Search')}
+            />
+          </Animated.View>
+        )}
 
         {/* Resume cart cue */}
         {showResumeCue && cartCount > 0 && (
@@ -647,19 +661,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         ) : null}
 
-        {/* 1. Hero banners */}
+        {/* 1. Shop by category — leads the feed, above the hero banner */}
         {!feedError && (
-          <View style={{ marginTop: Space[5], marginBottom: Space[6] }}>
-            <BannerSlot spots={spotlights} onPress={handleBannerPress} />
-          </View>
-        )}
-
-        {/* 2. Trust signals — horizontal single-row strip */}
-        {!feedError && <TrustStrip />}
-
-        {/* 3. Shop by category — directly after trust, before any products */}
-        {!feedError && (
-          <View style={styles.discoveryBand}>
+          <View style={[styles.discoveryBand, styles.discoveryBandLead]}>
             <SectionHead
               eyebrow="SHOP BY"
               title="Category"
@@ -696,6 +700,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         )}
 
+        {/* 2. Hero banners */}
+        {!feedError && (
+          <View style={{ marginTop: Space[5], marginBottom: Space[6] }}>
+            <BannerSlot spots={spotlights} onPress={handleBannerPress} />
+          </View>
+        )}
+
+        {/* 3. Trust signals — horizontal single-row strip (disabled, no longer required) */}
+        {/* {!feedError && <TrustStrip />} */}
+
         {/* 4. New arrivals — surface (default), horizontal rail */}
         {(newArrivals === null || (newArrivals && newArrivals.length > 0)) && (
           <View style={styles.sectionSurface}>
@@ -707,7 +721,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               actionLabel="See all"
               onSeeAll={() => navigation.navigate('Result', { categoryName: 'New Arrivals' })}
               onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
-              wishlistMap={wishlistMap}
             />
           </View>
         )}
@@ -721,7 +734,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               items={smartBuys}
               onSeeAll={() => navigation.navigate('Result', { categoryName: 'Deals' })}
               onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
-              wishlistMap={wishlistMap}
             />
           </View>
         )}
@@ -775,7 +787,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               actionLabel="See all"
               onSeeAll={() => navigation.navigate('Result', { categoryName: featuredCategoryName ?? 'All Products' })}
               onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
-              wishlistMap={wishlistMap}
             />
           </View>
         )}
@@ -793,7 +804,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               secondaryAction="Clear"
               onSecondaryAction={clearRecentlyViewed}
               onPress={(itemId) => navigation.navigate('Product', { product: String(itemId) })}
-              wishlistMap={wishlistMap}
             />
           </View>
         )}

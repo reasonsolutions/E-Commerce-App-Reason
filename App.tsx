@@ -15,6 +15,7 @@ import { ToastOverlay } from './src/components/ui';
 import { GluestackUIProvider } from './src/lib/gluestack/provider';
 import { CartProvider, useCart } from './src/context/CartContext';
 import { SessionProvider } from './src/context/SessionContext';
+import { WishlistProvider } from './src/context/WishlistContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { getSavedCartItems } from './src/api/cart';
 import { STORAGE_KEYS } from './src/config/storageKeys';
@@ -57,10 +58,12 @@ function App(): React.JSX.Element {
         <GluestackUIProvider>
           <SessionProvider>
             <CartProvider>
-              <CartHydrator />
-              <StatusBar barStyle="dark-content" backgroundColor="#F5F2EE" />
-              <AppNavigator />
-              <ToastOverlay />
+              <WishlistProvider>
+                <CartHydrator />
+                <StatusBar barStyle="dark-content" backgroundColor="#F5F2EE" />
+                <AppNavigator />
+                <ToastOverlay />
+              </WishlistProvider>
             </CartProvider>
           </SessionProvider>
         </GluestackUIProvider>

@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { getCategories, getBrands } from '../api/product';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
@@ -36,6 +36,7 @@ import {
   EmptyState,
   FilterSheet,
   TextLinkButton,
+  WishlistHeart,
 } from '../components/ui';
 import type { SortKey } from '../components/ui';
 import { ErrorState } from '../components/system';
@@ -50,102 +51,20 @@ import {
   COL_W,
   GRID_IMG_H,
 } from './ResultScreen.styles';
-import { addToWishlist, getWishlist, removeFromWishlist } from '../api/wishlist';
-import { useProfileCode } from '../hooks/useProfileCode';
-import { isLoggedIn } from '../utils/auth';
-import type { WishlistItemInterface } from '../api/interfaces';
 import { deduplicateProducts, isFeaturedSpan, toServerSortBy, applySort } from '../utils/resultHelpers';
+import { useWishlist } from '../context/WishlistContext';
 import { wishlistCache } from '../utils/wishlistCache';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
 };
 
-// ── Wishlist heart — white circle container ───────────────────────────────────
-const WishlistHeart: React.FC<{
-  inventoryId:        number;
-  initialWishlistCode: number | null;
-}> = ({ inventoryId, initialWishlistCode }) => {
-  const haptic      = useHaptic();
-  const profileCode = useProfileCode();
-  const [wishlistCode, setWishlistCode] = useState<number | null>(initialWishlistCode);
-  const cancelledRef = useRef(false);
-
-  // Clean up any pending undo timer if the component unmounts mid-animation
-  useEffect(() => {
-    cancelledRef.current = false;
-    return () => { cancelledRef.current = true; };
-  }, []);
-
-  const onPress = useCallback(async () => {
-    const loggedIn = await isLoggedIn();
-    if (!loggedIn) {
-      // Briefly show a filled heart then revert — subtle auth indicator
-      setWishlistCode(-1);
-      setTimeout(() => {
-        if (!cancelledRef.current) setWishlistCode(null);
-      }, Motion.duration.settle);
-      return;
-    }
-    if (!profileCode) return;
-    haptic.light();
-    if (wishlistCode !== null) {
-      const prev = wishlistCode;
-      setWishlistCode(null);
-      try {
-        await removeFromWishlist(profileCode, prev);
-        wishlistCache.invalidate();
-      } catch {
-        setWishlistCode(prev);
-      }
-    } else {
-      try {
-        const res = await addToWishlist(profileCode, inventoryId);
-        if (res?.statusCode === 1) {
-          wishlistCache.invalidate();
-          const wRes = await getWishlist(profileCode);
-          if (wRes?.statusCode === 1) {
-            const match = (wRes.result as WishlistItemInterface[]).find(
-              w => w.InventoryID === inventoryId,
-            );
-            if (match) setWishlistCode(match.WishlistCode);
-          }
-        }
-      } catch {}
-    }
-  }, [profileCode, inventoryId, haptic, wishlistCode]);
-
-  return (
-    <View
-      style={styles.heartBtn}
-      onStartShouldSetResponder={() => true}
-      onResponderTerminationRequest={() => false}
-    >
-      <TouchableOpacity
-        onPress={onPress}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        activeOpacity={0.7}
-      >
-        <View style={styles.heartCircle}>
-          <Icon
-            name={wishlistCode !== null ? 'heart' : 'heart-outline'}
-            size={14}
-            color={wishlistCode !== null ? Colors.accent : Colors.ink3}
-          />
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-
 // ── Featured card — full-width, used when ≤3 results ─────────────────────────
 const FeaturedCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onNavigate: (itemId: number) => void;
   delay: number;
-  initialWishlistCode: number | null;
-}> = React.memo(({ product, onNavigate, delay, initialWishlistCode }) => {
+}> = React.memo(({ product, onNavigate, delay }) => {
   const haptic = useHaptic();
   const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, Motion.list.initialY) };
   const { animatedStyle: pressStyle, handlers } = useTactile();
@@ -170,7 +89,7 @@ const FeaturedCard: React.FC<{
                 resizeMode="cover"
               />
             ) : null}
-            <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
+            <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.featuredInfo}>
             {product.Brand_Name ? (
@@ -198,8 +117,7 @@ const GridTile: React.FC<{
   onNavigate: (itemId: number) => void;
   delay: number;
   centered?: boolean;
-  initialWishlistCode: number | null;
-}> = React.memo(({ product, onNavigate, delay, centered = false, initialWishlistCode }) => {
+}> = React.memo(({ product, onNavigate, delay, centered = false }) => {
   const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
   const { animatedStyle: entranceStyle } = {
@@ -230,7 +148,7 @@ const GridTile: React.FC<{
                 resizeMode="cover"
               />
             ) : null}
-            <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
+            <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.gridInfo}>
             {product.Brand_Name ? (
@@ -259,8 +177,7 @@ const SpanCard: React.FC<{
   product: ProductByCategoryProductDetails;
   onNavigate: (itemId: number) => void;
   delay: number;
-  initialWishlistCode: number | null;
-}> = React.memo(({ product, onNavigate, delay, initialWishlistCode }) => {
+}> = React.memo(({ product, onNavigate, delay }) => {
   const onPress = useCallback(() => onNavigate(product.Item_Id), [onNavigate, product.Item_Id]);
   const haptic = useHaptic();
   const entranceStyle = useEntrance(delay, false, Motion.list.initialY);
@@ -290,7 +207,7 @@ const SpanCard: React.FC<{
                 resizeMode="contain"
               />
             ) : null}
-            <WishlistHeart inventoryId={product.Inventory_Id} initialWishlistCode={initialWishlistCode} />
+            <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.spanFooter}>
             {product.Brand_Name ? (
@@ -352,18 +269,23 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const route = useRoute();
   const haptic = useHaptic();
-  const profileCode = useProfileCode();
-  const [wishlistMap, setWishlistMap] = useState<Map<number, number>>(new Map());
+  const { refresh: refreshWishlist } = useWishlist();
+  const wishlistFetchTime = useRef(0);
 
-  useEffect(() => {
-    if (!profileCode) return;
-    getWishlist(profileCode).then(res => {
-      if (res?.statusCode !== 1) return;
-      const map = new Map<number, number>();
-      (res.result as WishlistItemInterface[]).forEach(w => map.set(w.InventoryID, w.WishlistCode));
-      setWishlistMap(map);
-    }).catch(() => {});
-  }, [profileCode]);
+  useFocusEffect(
+    useCallback(() => {
+      const isWishlistStale = wishlistCache.lastFetchTime === 0
+        || wishlistCache.lastFetchTime > wishlistFetchTime.current;
+      if (isWishlistStale) {
+        let cancelled = false;
+        refreshWishlist().then(() => {
+          if (!cancelled) wishlistFetchTime.current = Date.now();
+        }).catch(() => {});
+        return () => { cancelled = true; };
+      }
+    }, [refreshWishlist]),
+  );
+
   const {
     categoryId,
     brandId,
@@ -977,7 +899,6 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
               product={product}
               onNavigate={navigateToProduct}
               delay={Motion.stagger.delay(idx)}
-              initialWishlistCode={wishlistMap.get(product.Inventory_Id) ?? null}
             />
           )}
           ListFooterComponent={loadingMore ? (
@@ -1007,7 +928,6 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                   product={row.product}
                   onNavigate={navigateToProduct}
                   delay={Motion.stagger.delay(rowIndex)}
-                  initialWishlistCode={wishlistMap.get(row.product.Inventory_Id) ?? null}
                 />
               );
             }
@@ -1023,14 +943,12 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
                   onNavigate={navigateToProduct}
                   delay={leftDelay}
                   centered={isOrphan}
-                  initialWishlistCode={wishlistMap.get(row.left.Inventory_Id) ?? null}
                 />
                 {row.right && (
                   <GridTile
                     product={row.right}
                     onNavigate={navigateToProduct}
                     delay={rightDelay}
-                    initialWishlistCode={wishlistMap.get(row.right.Inventory_Id) ?? null}
                   />
                 )}
               </View>

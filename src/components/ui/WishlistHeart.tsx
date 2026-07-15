@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useRef, useCallback } from 'react';
 import { TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors } from '../../theme';
@@ -10,19 +10,19 @@ import { toastEmitter } from '../../utils/toastEmitter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../../config/storageKeys';
 import { LoginPromptSheet } from './LoginPromptSheet';
+import { useWishlist } from '../../context/WishlistContext';
 import type { WishlistItemInterface } from '../../api/interfaces';
 
 interface WishlistHeartProps {
-  inventoryId:         number;
-  initialWishlistCode?: number | null;
+  inventoryId: number;
 }
 
 export const WishlistHeart: React.FC<WishlistHeartProps> = ({
   inventoryId,
-  initialWishlistCode = null,
 }) => {
   // wishlistCode: null = not wishlisted, number = wishlisted (is the WishlistCode needed for remove)
-  const [wishlistCode, setWishlistCode] = useState<number | null>(initialWishlistCode);
+  const { getWishlistCode, setWishlistCode } = useWishlist();
+  const wishlistCode = getWishlistCode(inventoryId);
   const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -43,22 +43,22 @@ export const WishlistHeart: React.FC<WishlistHeartProps> = ({
       if (wishlistCode !== null) {
         // Remove — optimistic
         const prev = wishlistCode;
-        setWishlistCode(null);
+        setWishlistCode(inventoryId, null);
         try {
           const res = await removeFromWishlist(profileCode, prev);
           if (res?.statusCode === 1) {
             wishlistCache.invalidate();
           } else {
-            setWishlistCode(prev);
+            setWishlistCode(inventoryId, prev);
             toastEmitter.emit('error', "Couldn't remove from wishlist", res?.userMessage);
           }
         } catch {
-          setWishlistCode(prev);
+          setWishlistCode(inventoryId, prev);
           toastEmitter.emit('error', "Couldn't remove from wishlist");
         }
       } else {
         // Add — optimistic, then fetch WishlistCode for future remove
-        setWishlistCode(-1); // -1 = pending (shows filled heart while API resolves)
+        setWishlistCode(inventoryId, -1); // -1 = pending (shows filled heart while API resolves)
         try {
           const res = await addToWishlist(profileCode, inventoryId);
           if (res?.statusCode === 1) {
@@ -68,19 +68,19 @@ export const WishlistHeart: React.FC<WishlistHeartProps> = ({
               const match = (wRes.result as WishlistItemInterface[]).find(
                 w => w.InventoryID === inventoryId,
               );
-              setWishlistCode(match?.WishlistCode ?? -1);
+              setWishlistCode(inventoryId, match?.WishlistCode ?? -1);
             }
           } else {
-            setWishlistCode(null);
+            setWishlistCode(inventoryId, null);
             toastEmitter.emit('error', "Couldn't save to wishlist", res?.userMessage);
           }
         } catch {
-          setWishlistCode(null);
+          setWishlistCode(inventoryId, null);
           toastEmitter.emit('error', "Couldn't save to wishlist");
         }
       }
     });
-  }, [guard, bounce, wishlistCode, inventoryId]);
+  }, [guard, bounce, wishlistCode, inventoryId, setWishlistCode]);
 
   return (
     <>
