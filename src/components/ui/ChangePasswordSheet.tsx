@@ -73,12 +73,10 @@ const fieldStyles = StyleSheet.create({
     marginBottom: Space[2],
   },
   label: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      10,
-    fontWeight:    '400',
     color:         Colors.ink4,
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
     marginBottom:  Space[2],
   },
   row: {

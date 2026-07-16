@@ -81,7 +81,7 @@ const WishlistCard: React.FC<{
               uri={imageUri}
               width={COL_W}
               height={IMG_H}
-              resizeMode="contain"
+              resizeMode="cover"
               fallbackText={item.BrandName || item.Name}
             />
 
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     borderRadius:      Radius.xs,
   },
   discountBadgeText: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      10,
     color:         '#FFFFFF',
     letterSpacing: 0.3,
@@ -549,9 +549,9 @@ const styles = StyleSheet.create({
     color: Colors.ink4,
   },
   name: {
-    fontFamily:    FontFamily.serif,
+    fontFamily:    FontFamily.sans,
     fontSize:      13,
-    fontWeight:    '400',
+    fontWeight:    '500',
     color:         Colors.ink1,
     letterSpacing: -0.1,
     lineHeight:    13 * 1.4,

@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, Radius } from '../../theme';
 import { Motion } from '../../theme/motion';
-import { FontFamily } from '../../theme/fonts';
+import { Type } from '../../theme/typography';
 import { useHaptic } from '../../hooks/useHaptic';
 import { isLoggedIn } from '../../utils/auth';
 import { LoginPromptSheet, type LoginPromptContext } from './LoginPromptSheet';
@@ -209,17 +209,14 @@ const styles = StyleSheet.create({
   badgeText: {
     color:      '#FFFFFF',
     fontSize:   8.5,
-    fontFamily: FontFamily.mono,
     fontWeight: '700',
     lineHeight: 11,
   },
   label: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      11,
-    fontWeight:    '400',
     color:         Colors.ink4,
     letterSpacing: 0.8,
-    textTransform: 'uppercase',
   },
   labelActive: {
     color: Colors.accent,

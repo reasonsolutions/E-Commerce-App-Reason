@@ -598,10 +598,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   navBadgeText: {
-    fontFamily:  FontFamily.mono,
     fontSize:    9,
     color:       '#FFFFFF',
-    fontWeight:  '400',
+    fontWeight:  '600',
   },
 
   // Right panel column

@@ -15,12 +15,11 @@
 //     Android: android/app/src/main/assets/fonts/
 //   After dropping files:  npx react-native run-ios  (rebuilds; Metro alone is not enough)
 //
-// JetBrains Mono (tabular mono — Type.label / micro-meta)
+// JetBrains Mono — DEPRECATED, no longer referenced by any Type.* preset.
+// Type.label moved to sans (uppercase + letter-spacing carries the role).
+// Kept here only for any remaining ad-hoc callers being migrated off mono;
+// do not add new usages.
 //   Source:  https://www.jetbrains.com/lp/mono/  (OFL license, free)
-//   Files needed:
-//     JetBrainsMono-Regular.ttf
-//     JetBrainsMono-Medium.ttf
-//   Same drop locations and Info.plist registration as above.
 //
 // ── Fallback behavior ────────────────────────────────────────────────────────
 // React Native silently falls back to the platform system font if a fontFamily

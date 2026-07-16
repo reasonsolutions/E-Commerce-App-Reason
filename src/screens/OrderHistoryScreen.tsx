@@ -239,16 +239,17 @@ const cardStyles = StyleSheet.create({
     justifyContent:  'center',
   },
   overflowText: {
-    fontFamily:    FontFamily.mono,
     fontSize:      12,
+    fontWeight:    '500',
     color:         Colors.ink3,
     letterSpacing: 0.2,
   },
   total: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
+    fontFamily:    FontFamily.sans,
+    fontSize:      18,
+    fontWeight:    '700',
     color:         Colors.ink1,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
     marginBottom:  Space[2],
   },
   statusRow: {
@@ -273,7 +274,7 @@ const cardStyles = StyleSheet.create({
     marginBottom: Space[3],
   },
   metaText: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      10,
     color:         Colors.ink5,
     letterSpacing: 0.2,

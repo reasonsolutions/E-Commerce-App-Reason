@@ -385,8 +385,8 @@ const styles = StyleSheet.create({
     gap:               Space[1],
   },
   countryPrefixText: {
-    fontFamily:    FontFamily.mono,
     fontSize:      14,
+    fontWeight:    '500',
     color:         Colors.ink2,
     letterSpacing: 0.4,
   },
@@ -430,8 +430,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceSoft,
   },
   pickerDialCode: {
-    fontFamily:    FontFamily.mono,
     fontSize:      14,
+    fontWeight:    '500',
     color:         Colors.ink1,
     letterSpacing: 0.4,
     width:         44,

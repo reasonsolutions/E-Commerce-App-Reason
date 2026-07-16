@@ -35,7 +35,8 @@ import { BRAND } from '../config/brand';
 import { useAsyncState } from '../hooks/useAsyncState';
 import {
   SearchBar, Skeleton,
-  SectionHead, BrandTile, CategoryTile, ProductRail, ProductGrid, TrustStrip,
+  SectionHead, BrandTile, CategoryTile, ProductRail, ProductGrid,
+  // TrustStrip, — disabled, no longer required (see commented usage below)
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space } from '../theme';

@@ -296,8 +296,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.danger,
   },
   otpChar: {
-    fontFamily:    FontFamily.mono,
     fontSize:      20,
+    fontWeight:    '600',
     color:         Colors.ink1,
     letterSpacing: 0,
   },

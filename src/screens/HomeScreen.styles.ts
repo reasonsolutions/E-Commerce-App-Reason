@@ -191,12 +191,11 @@ const styles = StyleSheet.create({
     lineHeight:  36,
   },
   bannerSub: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      10,
     color:         'rgba(255,255,255,0.60)',
     lineHeight:    14,
     letterSpacing: 1.4,
-    textTransform: 'uppercase',
   },
   bannerCtaWrap: {
     marginTop: Space[1],

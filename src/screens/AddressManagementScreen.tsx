@@ -519,8 +519,8 @@ const styles = StyleSheet.create({
     lineHeight: 13 * 1.5,
   },
   addressMobile: {
-    fontFamily:    FontFamily.mono,
     fontSize:      11,
+    fontWeight:    '500',
     color:         Colors.ink4,
     letterSpacing: 0.2,
     marginTop:     2,
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     paddingVertical:   2,
   },
   primaryBadgeText: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      9,
     color:         '#FFFFFF',
     letterSpacing: 0.4,

@@ -859,11 +859,9 @@ const styles = StyleSheet.create({
     marginBottom:  2,
   },
   eyebrowBrand: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      10,
-    fontWeight:    '400',
     letterSpacing: 1.1,
-    textTransform: 'uppercase',
     color:         Colors.ink3,
   },
   productName: {
@@ -905,14 +903,14 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     flexWrap: 'wrap',
     gap: Space[3],
-    marginTop: Space[1],
+    marginTop: Space[3],
   },
   price: {
-    fontFamily: FontFamily.serif,
-    fontSize: 28,
-    fontWeight: '600',
+    fontFamily: FontFamily.sans,
+    fontSize: 18,
+    fontWeight: '700',
     color: INK,
-    lineHeight: 28 * 1.1,
+    lineHeight: 18 * 1.15,
   },
   comparePrice: {
     fontFamily:         FontFamily.sans,

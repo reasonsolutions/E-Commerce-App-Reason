@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, FontSize, FontWeight } from '../../theme/tokens';
-import { Type } from '../../theme/typography';
 import { FontFamily } from '../../theme/fonts';
 
 type PriceSize = 'sm' | 'base' | 'lg' | 'xl' | 'large';
@@ -63,13 +62,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   main: {
-    fontFamily:    FontFamily.serif,
-    fontWeight:    FontWeight.regular,
-    letterSpacing: -0.4,
+    fontFamily:    FontFamily.sans,
+    fontWeight:    FontWeight.bold,
+    letterSpacing: -0.2,
     color:         Colors.ink1,
   },
   strike: {
-    fontFamily:         FontFamily.mono,
+    fontFamily:         FontFamily.sans,
     fontWeight:         FontWeight.regular,
     color:              Colors.ink4,
     textDecorationLine: 'line-through',

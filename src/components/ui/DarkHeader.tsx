@@ -84,9 +84,8 @@ const styles = StyleSheet.create({
     lineHeight:    26 * 1.1,
   },
   headerTitleMono: {
-    fontFamily:    FontFamily.mono,
     fontSize:      18,
-    fontWeight:    '400',
+    fontWeight:    '500',
     color:         '#FFFFFF',
     letterSpacing: 0.3,
     lineHeight:    18 * 1.2,

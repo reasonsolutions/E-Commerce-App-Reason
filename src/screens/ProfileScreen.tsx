@@ -654,11 +654,10 @@ const styles = StyleSheet.create({
     backgroundColor:   Colors.surfaceSoft,
   },
   manageBtnText: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      10,
     letterSpacing: 0.5,
     color:         Colors.ink3,
-    textTransform: 'uppercase',
   },
   heroIdentity: {
     gap: 4,
@@ -681,11 +680,10 @@ const styles = StyleSheet.create({
     marginBottom:      4,
   },
   memberBadgeText: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      8,
     letterSpacing: 1.0,
     color:         Colors.accent,
-    textTransform: 'uppercase',
   },
   heroContact: {
     ...Type.caption,
@@ -720,11 +718,10 @@ const styles = StyleSheet.create({
     elevation:         1,
   },
   menuLabel: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      9,
     letterSpacing: 1.4,
     color:         Colors.ink4,
-    textTransform: 'uppercase',
     marginBottom:  Space[1],
   },
 

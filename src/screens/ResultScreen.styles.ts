@@ -134,14 +134,14 @@ export const styles = StyleSheet.create({
     lineHeight:    16 * 1.2,
   },
   heroCardWas: {
-    fontFamily:         FontFamily.mono,
+    fontFamily:         FontFamily.serif,
     fontSize:           11,
     color:              Colors.ink4,
     textDecorationLine: 'line-through',
     lineHeight:         11 * 1.2,
   },
   heroDiscount: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      10,
     color:         Colors.ink3,
     letterSpacing: 0.2,
@@ -201,14 +201,14 @@ export const styles = StyleSheet.create({
   gridName: {
     fontFamily: FontFamily.sans,
     fontSize:   13,
-    fontWeight: '400',
-    color:      Colors.ink2,
+    fontWeight: '500',
+    color:      Colors.ink1,
     lineHeight: 13 * 1.45,
   },
   gridPrice: {
     fontFamily: FontFamily.sans,
     fontSize:   14,
-    fontWeight: '600',
+    fontWeight: '700',
     color:      Colors.ink1,
     lineHeight: 14 * 1.2,
   },
@@ -235,8 +235,8 @@ export const styles = StyleSheet.create({
   spanName: {
     fontFamily: FontFamily.sans,
     fontSize:   15,
-    fontWeight: '400',
-    color:      Colors.ink2,
+    fontWeight: '500',
+    color:      Colors.ink1,
     lineHeight: 15 * 1.45,
   },
 
@@ -371,14 +371,14 @@ export const styles = StyleSheet.create({
   featuredName: {
     fontFamily: FontFamily.sans,
     fontSize:   16,
-    fontWeight: '400',
-    color:      Colors.ink2,
+    fontWeight: '500',
+    color:      Colors.ink1,
     lineHeight: 16 * 1.4,
   },
   featuredPrice: {
     fontFamily: FontFamily.sans,
     fontSize:   15,
-    fontWeight: '600',
+    fontWeight: '700',
     color:      Colors.ink1,
     lineHeight: 15 * 1.2,
   },

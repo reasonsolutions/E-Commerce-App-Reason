@@ -298,13 +298,12 @@ const styles = StyleSheet.create({
     color: Colors.accent,
   },
 
-  // Section label — mono uppercase matching profile screen
+  // Section label — sans uppercase matching profile screen
   sectionLabel: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      9,
     letterSpacing: 1.4,
     color:         Colors.ink4,
-    textTransform: 'uppercase',
     marginBottom:  Space[1],
   },
 

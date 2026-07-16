@@ -722,8 +722,8 @@ const styles = StyleSheet.create({
     lineHeight: 13 * 1.5,
   },
   addressMobile: {
-    fontFamily:    FontFamily.mono,
     fontSize:      11,
+    fontWeight:    '500',
     color:         Colors.ink4,
     letterSpacing: 0.2,
   },

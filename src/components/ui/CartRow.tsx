@@ -42,7 +42,8 @@ export const CartRow = React.memo<{
   const handleDecrement = useCallback(() => {
     haptic.light();
     if (item.Quantity > 1) onUpdateQuantity(item, item.Quantity - 1);
-  }, [haptic, item, onUpdateQuantity]);
+    else onRemove(item);
+  }, [haptic, item, onUpdateQuantity, onRemove]);
 
   const handleIncrement = useCallback(() => {
     haptic.light();
@@ -60,7 +61,7 @@ export const CartRow = React.memo<{
         <Image
           source={{ uri: resolveImageUrl(item.Images) }}
           style={styles.cartImg}
-          resizeMode="contain"
+          resizeMode="cover"
         />
       </View>
 
@@ -84,13 +85,12 @@ export const CartRow = React.memo<{
           <View style={styles.qtyPill}>
             <TouchableOpacity
               onPress={handleDecrement}
-              disabled={item.Quantity <= 1}
-              style={[styles.qtyPillBtn, item.Quantity <= 1 && styles.qtyPillBtnDisabled]}
+              style={styles.qtyPillBtn}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              accessibilityLabel="Decrease quantity"
+              accessibilityLabel={item.Quantity <= 1 ? 'Remove item' : 'Decrease quantity'}
               accessibilityRole="button"
             >
-              <Text style={[styles.qtyBtn, item.Quantity <= 1 && styles.qtyBtnDisabled]}>−</Text>
+              <Text style={styles.qtyBtn}>−</Text>
             </TouchableOpacity>
             <Text style={styles.qtyValue}>{item.Quantity}</Text>
             <TouchableOpacity
@@ -147,7 +147,8 @@ export const GuestCartRow = React.memo<{
   const handleDecrement = useCallback(() => {
     haptic.light();
     if (item.quantity > 1) onUpdateQuantity(item.quantity - 1);
-  }, [haptic, item.quantity, onUpdateQuantity]);
+    else onRemove();
+  }, [haptic, item.quantity, onUpdateQuantity, onRemove]);
 
   const handleIncrement = useCallback(() => {
     haptic.light();
@@ -166,7 +167,7 @@ export const GuestCartRow = React.memo<{
           <Image
             source={{ uri: imgUri }}
             style={styles.cartImg}
-            resizeMode="contain"
+            resizeMode="cover"
             onError={onError}
           />
         ) : (
@@ -187,13 +188,12 @@ export const GuestCartRow = React.memo<{
           <View style={styles.qtyPill}>
             <TouchableOpacity
               onPress={handleDecrement}
-              disabled={item.quantity <= 1}
-              style={[styles.qtyPillBtn, item.quantity <= 1 && styles.qtyPillBtnDisabled]}
+              style={styles.qtyPillBtn}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              accessibilityLabel="Decrease quantity"
+              accessibilityLabel={item.quantity <= 1 ? 'Remove item' : 'Decrease quantity'}
               accessibilityRole="button"
             >
-              <Text style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnDisabled]}>−</Text>
+              <Text style={styles.qtyBtn}>−</Text>
             </TouchableOpacity>
             <Text style={styles.qtyValue}>{item.quantity}</Text>
             <TouchableOpacity
@@ -286,12 +286,12 @@ const styles = StyleSheet.create({
     fontSize:      9,
   },
   cartName: {
-    fontFamily:    FontFamily.serif,
+    fontFamily:    FontFamily.sans,
     fontSize:      15,
-    fontWeight:    '400',
+    fontWeight:    '500',
     color:         Colors.ink1,
     letterSpacing: -0.2,
-    lineHeight:    22,
+    lineHeight:    20,
   },
   cartVariant: {
     ...Type.caption,
@@ -305,14 +305,16 @@ const styles = StyleSheet.create({
     marginTop:     2,
   },
   cartLineTotal: {
-    fontFamily:    FontFamily.serif,
+    fontFamily:    FontFamily.sans,
     fontSize:      15,
+    fontWeight:    '700',
     color:         Colors.ink1,
-    letterSpacing: -0.3,
+    letterSpacing: -0.1,
   },
   cartUnitWas: {
-    ...Type.caption,
+    fontFamily:         FontFamily.sans,
     fontSize:           11,
+    fontWeight:         '400',
     color:              Colors.ink4,
     textDecorationLine: 'line-through',
   },
@@ -347,24 +349,21 @@ const styles = StyleSheet.create({
     justifyContent:  'center',
     backgroundColor: Colors.surfaceDeep,
   },
-  qtyPillBtnDisabled: {
-    backgroundColor: Colors.surfaceSoft,
-  },
   qtyBtn: {
-    fontFamily: FontFamily.mono,
     fontSize:   16,
+    fontWeight: '500',
     color:      Colors.ink2,
     lineHeight: 20,
   },
-  qtyBtnDisabled: {
-    color: Colors.ink5,
-  },
   qtyValue: {
-    fontFamily:    FontFamily.mono,
-    fontSize:      13,
-    color:         Colors.ink1,
-    minWidth:      28,
-    textAlign:     'center',
+    fontSize:        13,
+    fontWeight:      '500',
+    color:           Colors.ink1,
+    minWidth:        28,
+    height:          32,
+    lineHeight:      32,
+    backgroundColor: Colors.surfaceDeep,
+    textAlign:       'center',
     letterSpacing: 0.4,
   },
 });

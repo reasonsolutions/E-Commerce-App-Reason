@@ -4,10 +4,13 @@ import { FontFamily } from './fonts';
 
 // Pre-built TextStyle presets for the premium type hierarchy.
 //
-// Three families:
+// Two families:
 //   Serif  (InstrumentSerif)  — display, title, heading, price roles
-//   Mono   (JetBrainsMono)   — label, micro-meta, order numbers
-//   Sans   (system default)  — body, caption, tab, UI copy
+//   Sans   (system default)  — body, caption, tab, label, UI copy
+//
+// FontFamily.mono/monoMedium still exist in fonts.ts but are no longer used
+// by any Type.* preset — label moved to sans (uppercase + letter-spacing
+// carries the "micro-label" role without a third family).
 //
 // All letter-spacing values are in points (RN uses points, not em).
 // Conversions: -0.02em @ 15px = -0.3pt; 0.14em @ 12px = 1.68pt ≈ 1.7.
@@ -119,15 +122,16 @@ export const Type = {
     color:      Colors.ink3,
   } satisfies TextStyle,
 
-  // ── Mono roles ─────────────────────────────────────────────────────────────
+  // ── Label role (sans) ─────────────────────────────────────────────────────
 
   // Brand micro-labels, category kickers, field labels, order numbers.
-  // ← UPDATED: added mono fontFamily; uppercase + 0.14em letter-spacing.
+  // ← UPDATED: mono retired — sans + uppercase + 0.14em letter-spacing carries
+  // the same micro-label role without a third font family.
   // 0.14em @ 12px = 1.68pt ≈ 1.7.
   label: {
-    fontFamily:    FontFamily.mono,
+    fontFamily:    FontFamily.sans,
     fontSize:      FontSize.xs,   // 11 — spec says 12; FontSize.xs is 11, nearest token
-    fontWeight:    FontWeight.regular,
+    fontWeight:    FontWeight.medium,
     letterSpacing: 1.7,
     lineHeight:    FontSize.xs * 1.2,
     color:         Colors.ink3,

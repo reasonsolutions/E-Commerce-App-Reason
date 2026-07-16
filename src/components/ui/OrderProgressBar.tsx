@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../../theme';
-import { FontFamily } from '../../theme/fonts';
+import { Type } from '../../theme/typography';
 import { OrderStatusCode } from '../../api/interfaces';
 
 // Active statuses that map to a step index. Terminal statuses (Delivered,
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
   },
   stepLabel: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      8,
     letterSpacing: 0.3,
     color:         Colors.accent,

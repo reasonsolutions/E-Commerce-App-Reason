@@ -133,11 +133,10 @@ const fieldStyles = StyleSheet.create({
     borderBottomColor: BORDER,
   },
   label: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      9,
     letterSpacing: 1.1,
     color:         Colors.ink4,
-    textTransform: 'uppercase',
     marginBottom:  Space[1],
   },
   valueRow: {
@@ -166,11 +165,10 @@ const fieldStyles = StyleSheet.create({
     gap:           3,
   },
   verifiedText: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      9,
     letterSpacing: 0.5,
     color:         '#2E7D32',
-    textTransform: 'uppercase',
   },
 });
 
@@ -431,11 +429,10 @@ const styles = StyleSheet.create({
     backgroundColor:   'rgba(178, 90, 61, 0.07)',
   },
   memberBadgeText: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      8,
     letterSpacing: 1.0,
     color:         Colors.accent,
-    textTransform: 'uppercase',
   },
 
   // ── Error ──────────────────────────────────────────────────────────────────
@@ -450,11 +447,10 @@ const styles = StyleSheet.create({
     marginBottom:      Space[2],
   },
   sectionLabelText: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      9,
     letterSpacing: 1.4,
     color:         Colors.ink4,
-    textTransform: 'uppercase',
   },
 
   // ── Fields card ────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
 import { Colors } from '../../theme';
-import { FontFamily } from '../../theme/fonts';
+import { Type } from '../../theme/typography';
 import { FadeImage } from './FadeImage';
 
 interface BrandTileProps {
@@ -48,12 +48,10 @@ const styles = StyleSheet.create({
     borderColor:     'rgba(0,0,0,0.06)',
   },
   label: {
-    fontFamily: FontFamily.mono,
-    fontSize:   9.5,
-    fontWeight: '400',
-    color:      Colors.ink2,
-    textAlign:  'center',
+    ...Type.label,
+    fontSize:      9.5,
+    color:         Colors.ink2,
+    textAlign:     'center',
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
 });

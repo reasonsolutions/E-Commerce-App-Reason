@@ -30,6 +30,7 @@ export type { VariantOption } from './VariantSheet';
 export { FilterSheet } from './FilterSheet';
 export type { SortKey } from './FilterSheet';
 export { ConfirmSheet } from './ConfirmSheet';
+export { RemoveCartItemSheet } from './RemoveCartItemSheet';
 export { LoginPromptSheet } from './LoginPromptSheet';
 export { OrderFilterSheet } from './OrderFilterSheet';
 export type { OrderSortKey } from './OrderFilterSheet';

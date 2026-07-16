@@ -11,7 +11,6 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors, Space, Radius } from '../../theme/tokens';
 import { Type } from '../../theme/typography';
-import { FontFamily } from '../../theme/fonts';
 
 interface FloatingLabelInputProps extends Omit<TextInputProps, 'style'> {
   label: string;
@@ -92,10 +91,9 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   label: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      9,
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
     color:         Colors.ink3,
     marginBottom:  Space[2],
   },

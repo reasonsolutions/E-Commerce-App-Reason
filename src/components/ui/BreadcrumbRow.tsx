@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Space } from '../../theme';
-import { FontFamily } from '../../theme/fonts';
+import { Type } from '../../theme/typography';
 
 interface BreadcrumbRowProps {
   category?: string | null;
@@ -31,10 +31,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   label: {
-    fontFamily: FontFamily.mono,
+    ...Type.label,
     fontSize: 10,
     letterSpacing: 1.1,
-    textTransform: 'uppercase',
     color: Colors.ink3,
   },
   sep: {

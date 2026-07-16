@@ -22,6 +22,7 @@ import { FontFamily } from '../theme/fonts';
 import { Motion } from '../theme/motion';
 import { getSavedCartItems, postDeleteCartItem, updateCartItemQuantity, getGuestCart, updateGuestCartItem, removeFromGuestCart, clearGuestCart } from '../api/cart';
 import type { GuestCartItem } from '../api/cart';
+import { addToWishlist } from '../api/wishlist';
 import { isLoggedIn } from '../utils/auth';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,8 +32,9 @@ import { useCart } from '../context/CartContext';
 import { useTactile } from '../hooks/useTactile';
 import { useAppToast } from '../hooks/useAppToast';
 import { useAuthGuard } from '../hooks/useAuthGuard';
+import { useWishlist } from '../context/WishlistContext';
 import { LoginPromptSheet } from '../components/ui/LoginPromptSheet';
-import { ConfirmSheet } from '../components/ui';
+import { ConfirmSheet, RemoveCartItemSheet } from '../components/ui';
 import { CartRow, GuestCartRow, GuestCartRowWrapper } from '../components/ui/CartRow';
 
 type CartScreenProps = {
@@ -46,6 +48,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const checkoutTactile = useTactile();
   const toast = useAppToast();
   const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
+  const { setWishlistCode } = useWishlist();
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
   const [optimistic, setOptimistic] = useState<SavedCartItemInterface[] | null>(null);
@@ -55,6 +58,12 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const [hasFetched, setHasFetched] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<
+    | { kind: 'saved'; item: SavedCartItemInterface }
+    | { kind: 'guest'; inventoryId: number; qty: number; name: string; image: string }
+    | null
+  >(null);
+  const [moveLoading, setMoveLoading] = useState(false);
 
   const cartItems = optimistic ?? fetched ?? [];
 
@@ -158,7 +167,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     setCartCount((prev: number) => prev + delta);
   }, [setCartCount]);
 
-  const handleRemoveItem = useCallback(async (item: SavedCartItemInterface) => {
+  const removeSavedItem = useCallback(async (item: SavedCartItemInterface) => {
     setOptimistic(prev =>
       (prev ?? fetched ?? []).filter(ci => ci.CartDetailsCode !== item.CartDetailsCode),
     );
@@ -170,11 +179,62 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     }
   }, [setCartCount, fetchCart, fetched]);
 
-  const handleRemoveGuestItem = useCallback(async (inventoryId: number, qty: number) => {
+  const removeGuestItem = useCallback(async (inventoryId: number, qty: number) => {
     const updated = await removeFromGuestCart(inventoryId);
     setGuestItems(updated);
     setCartCount((prev: number) => Math.max(0, prev - qty));
   }, [setCartCount]);
+
+  // Both entry points (Remove link, and − at qty 1) route through the
+  // confirmation sheet rather than removing immediately.
+  const handleRemoveItem = useCallback((item: SavedCartItemInterface) => {
+    setRemoveTarget({ kind: 'saved', item });
+  }, []);
+
+  const handleRemoveGuestItem = useCallback((inventoryId: number, qty: number) => {
+    const guestItem = guestItems.find(g => g.inventoryId === inventoryId);
+    setRemoveTarget({
+      kind:  'guest',
+      inventoryId,
+      qty,
+      name:  guestItem?.name ?? '',
+      image: guestItem?.image ?? '',
+    });
+  }, [guestItems]);
+
+  const dismissRemoveSheet = useCallback(() => setRemoveTarget(null), []);
+
+  const confirmRemove = useCallback(() => {
+    if (!removeTarget) return;
+    if (removeTarget.kind === 'saved') removeSavedItem(removeTarget.item);
+    else removeGuestItem(removeTarget.inventoryId, removeTarget.qty);
+    setRemoveTarget(null);
+  }, [removeTarget, removeSavedItem, removeGuestItem]);
+
+  const confirmMoveToWishlist = useCallback(async () => {
+    if (!removeTarget || removeTarget.kind !== 'saved') return;
+    const { item } = removeTarget;
+    setMoveLoading(true);
+    try {
+      const userRaw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+      const profileCode: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
+      if (!profileCode) { setMoveLoading(false); return; }
+
+      const res = await addToWishlist(profileCode, item.InventoryId);
+      if (res?.statusCode === 1) {
+        setWishlistCode(item.InventoryId, -1);
+        await removeSavedItem(item);
+        toast.success({ title: 'Moved to Wishlist', description: item.Name });
+      } else {
+        toast.error({ title: 'Error', description: res?.userMessage ?? "Couldn't move item to wishlist." });
+      }
+    } catch {
+      toast.error({ title: 'Error', description: "Couldn't move item to wishlist." });
+    } finally {
+      setMoveLoading(false);
+      setRemoveTarget(null);
+    }
+  }, [removeTarget, removeSavedItem, setWishlistCode, toast]);
 
   const handleCheckout = useCallback(() => {
     guard(() => navigation.navigate('Address', { cartItems }));
@@ -453,6 +513,18 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           destructive
         />
       )}
+
+      {removeTarget && (
+        <RemoveCartItemSheet
+          itemName={removeTarget.kind === 'saved' ? removeTarget.item.Name : removeTarget.name}
+          itemImage={removeTarget.kind === 'saved' ? removeTarget.item.Images : removeTarget.image}
+          showMoveToWishlist={removeTarget.kind === 'saved'}
+          moveLoading={moveLoading}
+          onRemove={confirmRemove}
+          onMoveToWishlist={confirmMoveToWishlist}
+          onClose={dismissRemoveSheet}
+        />
+      )}
     </View>
   );
 };
@@ -480,9 +552,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space[3],
   },
   headerTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
-    fontWeight:    '400',
+    fontFamily:    FontFamily.sans,
+    fontSize:      18,
+    fontWeight:    '600',
     color:         Colors.ink1,
     letterSpacing: -0.2,
   },
@@ -664,16 +736,18 @@ const styles = StyleSheet.create({
     alignItems:     'baseline',
   },
   summaryTotalLabel: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      17,
+    fontFamily:    FontFamily.sans,
+    fontSize:      15,
+    fontWeight:    '500',
     color:         Colors.ink1,
-    letterSpacing: -0.2,
+    letterSpacing: -0.1,
   },
   summaryTotalValue: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
+    fontFamily:    FontFamily.sans,
+    fontSize:      16,
+    fontWeight:    '700',
     color:         Colors.ink1,
-    letterSpacing: -0.5,
+    letterSpacing: -0.1,
   },
   summaryPayableBlock: {
     gap: 2,
@@ -685,11 +759,12 @@ const styles = StyleSheet.create({
     fontSize:      9,
   },
   summaryPayableAmount: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      28,
+    fontFamily:    FontFamily.sans,
+    fontSize:      24,
+    fontWeight:    '700',
     color:         Colors.ink1,
-    letterSpacing: -0.8,
-    lineHeight:    32,
+    letterSpacing: -0.4,
+    lineHeight:    28,
   },
 
   // ── Trust strip — plain icon row, no card ─────────────────────────────────

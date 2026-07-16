@@ -436,11 +436,10 @@ const styles = StyleSheet.create({
     paddingBottom:     Space[10],
   },
   ftuLabel: {
-    fontFamily:    FontFamily.mono,
+    ...Type.label,
     fontSize:      10,
     letterSpacing: 1.4,
     color:         Colors.ink4,
-    textTransform: 'uppercase',
     marginBottom:  Space[4],
   },
   chipWrap: {
