@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
     fontFamily:    FontFamily.sans,
     fontSize:      14,
     fontWeight:    '500',
-    color:         Colors.accent,
+    color:         Colors.brandNavy,
     letterSpacing: 0,
   },
   resetBtnDisabled: {
@@ -574,8 +574,8 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
   },
   navItemActive: {
-    backgroundColor:  Colors.surface,
-    borderLeftColor:  Colors.ink1,
+    backgroundColor:  Colors.brandNavyTint,
+    borderLeftColor:  Colors.brandNavy,
   },
   navLabel: {
     fontFamily:    FontFamily.sans,
@@ -585,11 +585,11 @@ const styles = StyleSheet.create({
     flex:          1,
   },
   navLabelActive: {
-    color:      Colors.ink1,
+    color:      Colors.brandNavy,
     fontWeight: '500',
   },
   navBadge: {
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    8,
     minWidth:        16,
     height:          16,
@@ -642,8 +642,8 @@ const styles = StyleSheet.create({
     flexShrink:      0,
   },
   checkboxChecked: {
-    backgroundColor: Colors.ink1,
-    borderColor:     Colors.ink1,
+    backgroundColor: Colors.brandNavy,
+    borderColor:     Colors.brandNavy,
   },
   checkLabel: {
     fontFamily:    FontFamily.sans,
@@ -677,13 +677,13 @@ const styles = StyleSheet.create({
     flexShrink:      0,
   },
   radioOuterSelected: {
-    borderColor: Colors.ink1,
+    borderColor: Colors.brandNavy,
   },
   radioInner: {
     width:           10,
     height:          10,
     borderRadius:    5,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
   },
   radioLabel: {
     fontFamily:    FontFamily.sans,
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     borderTopColor:    Colors.rule,
   },
   applyBtn: {
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
     paddingVertical: Space[4],
     alignItems:      'center',

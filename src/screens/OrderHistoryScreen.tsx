@@ -38,6 +38,7 @@ import { FontFamily } from '../theme/fonts';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAuthGuard } from '../hooks/useAuthGuard';
+import { useTabRootBackHandler } from '../hooks/useTabRootBackHandler';
 import { useCart } from '../context/CartContext';
 import { formatDate } from '../utils/formatDate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
@@ -113,11 +114,11 @@ function mixedStatusSummary(items: OrderHistoryItemInterface[]): string | null {
   const parts: string[] = [];
   if (delivered > 0) parts.push(`${delivered} of ${total} delivered`);
   if (inProgress > 0) parts.push(`${inProgress} in progress`);
-  if (cancelled > 0 && delivered === 0 && inProgress === 0) parts.push(`${cancelled} cancelled`);
+  if (cancelled > 0) parts.push(`${cancelled} cancelled`);
   return parts.join(' · ');
 }
 
-const THUMB_SIZE = 52;
+const THUMB_SIZE = 44;
 const MAX_THUMBS = 3;
 
 // ── Order summary card ────────────────────────────────────────────────────────
@@ -134,6 +135,12 @@ const OrderCard: React.FC<{
   const mixed = mixedStatusSummary(group.items);
   const visibleThumbs = group.items.slice(0, MAX_THUMBS);
   const overflow = itemCount - MAX_THUMBS;
+  const sellerCount = new Set(
+    group.items.map(it => it.CompanyName).filter((name): name is string => !!name),
+  ).size;
+  const sellerLabel = sellerCount > 1
+    ? `${sellerCount} sellers`
+    : (group.items.find(it => it.CompanyName)?.CompanyName ?? null);
 
   return (
     <Animated.View style={[entrance, cardStyles.wrapper]}>
@@ -142,55 +149,59 @@ const OrderCard: React.FC<{
         activeOpacity={0.88}
         onPress={() => { haptic.light(); onPress(group); }}
       >
-        {/* Thumbnail strip — visual anchor at top */}
-        <View style={cardStyles.thumbRow}>
-          {visibleThumbs.map((item, i) => (
-            <View key={`${item.Inventory_Id}-${i}`} style={cardStyles.thumbWrap}>
-              <FadeImage
-                uri={resolveImageUrl(item.Images)}
-                width={THUMB_SIZE}
-                height={THUMB_SIZE}
-                borderRadius={Radius.sm}
-                resizeMode="contain"
-                showSkeleton
-              />
-            </View>
-          ))}
-          {overflow > 0 && (
-            <View style={cardStyles.overflowBadge}>
-              <Text style={cardStyles.overflowText}>+{overflow}</Text>
-            </View>
-          )}
+        {/* Thumbnails + total on one row */}
+        <View style={cardStyles.topRow}>
+          <View style={cardStyles.thumbRow}>
+            {visibleThumbs.map((item, i) => (
+              <View key={`${item.Inventory_Id}-${i}`} style={cardStyles.thumbWrap}>
+                <FadeImage
+                  uri={resolveImageUrl(item.Images)}
+                  width={THUMB_SIZE}
+                  height={THUMB_SIZE}
+                  borderRadius={Radius.sm}
+                  resizeMode="contain"
+                  showSkeleton
+                />
+              </View>
+            ))}
+            {overflow > 0 && (
+              <View style={cardStyles.overflowBadge}>
+                <Text style={cardStyles.overflowText}>+{overflow}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={cardStyles.total} numberOfLines={1}>
+            MUR {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          </Text>
         </View>
 
-        {/* Price — dominant */}
-        <Text style={cardStyles.total}>
-          MUR {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-        </Text>
-
-        {/* Status — second visual priority */}
-        <View style={cardStyles.statusRow}>
+        {/* Item count · date · seller(s) — left; status pill — right */}
+        <View style={cardStyles.metaRow}>
+          <View style={cardStyles.metaCol}>
+            <Text style={cardStyles.metaPrimary}>
+              {itemCount} {itemCount === 1 ? 'item' : 'items'}
+            </Text>
+            <Text style={cardStyles.metaSecondary}>
+              {formatDate(group.orderedDate)}
+              {sellerLabel ? `  ·  ${sellerLabel}` : ''}
+            </Text>
+          </View>
           {mixed ? (
-            <>
-              <StatusBadge status="Fulfilled" />
+            <View style={cardStyles.mixedCol}>
+              <StatusBadge status="Mixed" />
               <Text style={cardStyles.mixedSubtitle}>{mixed}</Text>
-            </>
+            </View>
           ) : (
             <StatusBadge status={status} />
           )}
         </View>
 
-        {/* Secondary meta: item count + date */}
-        <View style={cardStyles.meta}>
-          <Text style={cardStyles.metaText}>
-            {itemCount} {itemCount === 1 ? 'item' : 'items'}
-            {'  ·  '}
-            {formatDate(group.orderedDate)}
-          </Text>
-        </View>
-
         {/* Actions */}
         <View style={cardStyles.actions}>
+          <View style={cardStyles.viewDetailsRow}>
+            <Text style={cardStyles.viewDetailsText}>View order details</Text>
+            <Icon name="arrow-forward" size={13} color={Colors.accent} />
+          </View>
           <View
             onStartShouldSetResponder={() => true}
             onResponderTerminationRequest={() => false}
@@ -220,10 +231,17 @@ const cardStyles = StyleSheet.create({
     paddingVertical:   Space[4],
     ...Shadow.sm,
   },
+  topRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    gap:            Space[3],
+    marginBottom:   Space[3],
+  },
   thumbRow: {
     flexDirection: 'row',
+    flexShrink:    1,
     gap:           Space[2],
-    marginBottom:  Space[3],
   },
   thumbWrap: {
     backgroundColor: Colors.surfaceSoft,
@@ -246,56 +264,77 @@ const cardStyles = StyleSheet.create({
   },
   total: {
     fontFamily:    FontFamily.sans,
-    fontSize:      18,
+    fontSize:      17,
     fontWeight:    '700',
     color:         Colors.ink1,
     letterSpacing: -0.2,
-    marginBottom:  Space[2],
+    flexShrink:    0,
   },
-  statusRow: {
-    marginBottom: Space[2],
+  metaRow: {
+    flexDirection:  'row',
+    alignItems:     'flex-start',
+    justifyContent: 'space-between',
+    gap:            Space[3],
   },
-  mixedStatus: {
+  metaCol: {
+    flex: 1,
+    gap:  3,
+  },
+  metaPrimary: {
     fontFamily:    FontFamily.sans,
-    fontSize:      12,
-    color:         Colors.ink3,
-    fontWeight:    '400',
+    fontSize:      13,
+    fontWeight:    '600',
+    color:         Colors.ink1,
     letterSpacing: 0.1,
+  },
+  metaSecondary: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      11.5,
+    fontWeight:    '400',
+    color:         Colors.ink4,
+    letterSpacing: 0.1,
+  },
+  mixedCol: {
+    alignItems: 'flex-end',
+    gap:        3,
   },
   mixedSubtitle: {
     fontFamily:    FontFamily.sans,
     fontSize:      11,
     color:         Colors.ink4,
     fontWeight:    '400',
-    marginTop:     3,
     letterSpacing: 0.1,
-  },
-  meta: {
-    marginBottom: Space[3],
-  },
-  metaText: {
-    ...Type.label,
-    fontSize:      10,
-    color:         Colors.ink5,
-    letterSpacing: 0.2,
+    textAlign:     'right',
   },
   actions: {
     flexDirection:  'row',
     alignItems:     'center',
-    gap:            Space[4],
-    marginTop:      Space[1],
+    justifyContent: 'space-between',
+    marginTop:      Space[3],
     paddingTop:     Space[3],
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.rule,
   },
+  viewDetailsRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           Space[1] + 2,
+  },
+  viewDetailsText: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      12.5,
+    fontWeight:    '700',
+    color:         Colors.accent,
+    letterSpacing: 0.1,
+  },
   reorderLink: {
-    paddingVertical: Space[2],
+    paddingVertical: Space[1],
   },
   reorderLinkText: {
     fontFamily:         FontFamily.sans,
-    fontSize:           13,
+    fontSize:           12.5,
     fontWeight:         '400',
-    color:              Colors.ink3,
+    color:              Colors.brandNavy,
     textDecorationLine: 'underline',
     letterSpacing:      0.1,
   },
@@ -313,6 +352,18 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
   const haptic = useHaptic();
   const { guard, showLoginPrompt, dismissLoginPrompt } = useAuthGuard();
   const { setCartCount } = useCart();
+  useTabRootBackHandler(navigation);
+
+  // Bottom-tab siblings stay mounted at all times and each set their own
+  // StatusBar style — RN merges state from every mounted instance app-wide,
+  // so another tab's style can win even after switching back here. Reassert
+  // on every focus rather than relying solely on the declarative <StatusBar>
+  // below (see HomeScreen.tsx for the same fix / fuller rationale).
+  useFocusEffect(
+    useCallback(() => {
+      StatusBar.setBarStyle('dark-content');
+    }, []),
+  );
 
   const [orders, setOrders]           = useState<OrderHistoryItemInterface[]>([]);
   const [hasMore, setHasMore]         = useState(true);
@@ -671,7 +722,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.filterBtn}
         >
-          <Icon name="options-outline" size={20} color={Colors.ink1} />
+          <Icon name="options-outline" size={18} color={Colors.ink1} />
           {activeFilterCount > 0 ? (
             <View style={styles.filterDot} />
           ) : null}
@@ -723,8 +774,8 @@ const styles = StyleSheet.create({
     gap:       2,
   },
   headerTitle: {
-    fontFamily:  FontFamily.sans,
-    fontSize:    18,
+    fontFamily:  FontFamily.serif,
+    fontSize:    26,
     fontWeight:  '600',
     color:       Colors.ink1,
     letterSpacing: -0.1,
@@ -739,7 +790,15 @@ const styles = StyleSheet.create({
   },
 
   filterBtn: {
-    position: 'relative',
+    position:        'relative',
+    width:           40,
+    height:          40,
+    borderRadius:    20,
+    backgroundColor: Colors.surface,
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     Colors.rule,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
   filterDot: {
     position:        'absolute',
@@ -748,7 +807,7 @@ const styles = StyleSheet.create({
     width:           7,
     height:          7,
     borderRadius:    4,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brandNavy,
   },
 
   list: {

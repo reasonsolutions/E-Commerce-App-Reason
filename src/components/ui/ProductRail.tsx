@@ -9,6 +9,7 @@ import ProductCard from '../ProductCard';
 interface ProductRailProps {
   eyebrow?: string;
   title: string;
+  note?: string;
   items: ProductInterface[] | null;
   cardWidth?: number;
   onSeeAll?: () => void;
@@ -16,11 +17,13 @@ interface ProductRailProps {
   secondaryAction?: string;
   onSecondaryAction?: () => void;
   onPress: (itemId: number) => void;
+  showQuickAdd?: boolean;
 }
 
 export const ProductRail: React.FC<ProductRailProps> = ({
   eyebrow,
   title,
+  note,
   items,
   cardWidth = 158,
   onSeeAll,
@@ -28,6 +31,7 @@ export const ProductRail: React.FC<ProductRailProps> = ({
   secondaryAction,
   onSecondaryAction,
   onPress,
+  showQuickAdd = false,
 }) => {
   const renderItem = useCallback(
     ({ item }: { item: ProductInterface }) => (
@@ -35,9 +39,10 @@ export const ProductRail: React.FC<ProductRailProps> = ({
         product={item}
         cardWidth={cardWidth}
         onPress={() => onPress(item.ItemID)}
+        showQuickAdd={showQuickAdd}
       />
     ),
-    [cardWidth, onPress],
+    [cardWidth, onPress, showQuickAdd],
   );
 
   return (
@@ -45,6 +50,7 @@ export const ProductRail: React.FC<ProductRailProps> = ({
       <SectionHead
         eyebrow={eyebrow}
         title={title}
+        note={note}
         action={onSeeAll ? actionLabel : undefined}
         onAction={onSeeAll}
         secondaryAction={secondaryAction}

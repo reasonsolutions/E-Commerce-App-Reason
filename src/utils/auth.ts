@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { clearTokenCache } from '../api/axiosInstance';
 import { wishlistCache } from './wishlistCache';
+import { resetCartCount } from '../context/CartContext';
 
 export async function getInitialRoute(): Promise<'MainTabs'> {
   return 'MainTabs';
@@ -20,6 +21,7 @@ export async function isLoggedIn(): Promise<boolean> {
 export async function clearSession(): Promise<void> {
   clearTokenCache();
   wishlistCache.invalidate();
+  resetCartCount();
   await Promise.all([
     Keychain.resetGenericPassword({ service: STORAGE_KEYS.authToken }),
     Keychain.resetGenericPassword({ service: STORAGE_KEYS.refreshToken }),

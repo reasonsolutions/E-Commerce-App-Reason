@@ -206,12 +206,18 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     if (preselect) setSelectedVariantId(String(preselect.InventoryId));
   }, [data, plateAnim]);
 
-  // Recently viewed write
+  // Recently viewed write — uses the currently-selected variant (same one the
+  // wishlist toggle acts on) so Inventory_Id stays consistent with whatever
+  // InventoryID the item may be wishlisted under, instead of re-deriving an
+  // independent "first in-stock" default that can disagree with the user's
+  // actual variant selection.
   useEffect(() => {
     if (!data?.product) return;
     const p = data.product;
     const itemIdNum = parseInt(p.ItemId, 10);
-    const preselect = p.Variants?.find(v => v.StockStatus?.Description !== 'out_of_stock') ?? p.Variants?.[0];
+    const preselect = p.Variants?.find(v => String(v.InventoryId) === selectedVariantId)
+      ?? p.Variants?.find(v => v.StockStatus?.Description !== 'out_of_stock')
+      ?? p.Variants?.[0];
     AsyncStorage.getItem(STORAGE_KEYS.userData).then(userRaw => {
       const code: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
       const key = scopedKey('recentlyViewed', code);
@@ -233,12 +239,13 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
             ? Math.round(((maxComparePrice - minPrice) / maxComparePrice) * 100)
             : 0,
           Inventory_Id:    preselect?.InventoryId ?? null,
+          CategoryName:    p.CategoryName,
         };
         const next = [snapshot, ...prev.filter((x: any) => x.ItemID !== itemIdNum)].slice(0, 8);
         AsyncStorage.setItem(key, JSON.stringify(next));
       });
     }).catch(() => {});
-  }, [data]);
+  }, [data, selectedVariantId]);
 
   // Wishlist match on load — runs once we have both product data and a logged-in profile
   useEffect(() => {
@@ -727,7 +734,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               style={styles.stepBtn}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <Icon name="remove" size={12} color={INK} />
+              <Icon name="remove" size={12} color={Colors.brandNavy} />
             </TouchableOpacity>
             <Text style={styles.stepCount}>{quantity}</Text>
             <TouchableOpacity
@@ -735,7 +742,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               style={styles.stepBtn}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <Icon name="add" size={12} color={INK} />
+              <Icon name="add" size={12} color={Colors.brandNavy} />
             </TouchableOpacity>
           </View>
           <View style={{ flex: 1 }}>
@@ -810,7 +817,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 14,
     left: 14,
-    backgroundColor: 'rgba(27,12,8,0.88)',
+    backgroundColor: Colors.brandNavyDeep,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
@@ -820,7 +827,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.04 * 12,
-    color: Colors.accent,
+    color: Colors.brandYellow,
   },
   dotsRow: {
     position: 'absolute',
@@ -837,7 +844,7 @@ const styles = StyleSheet.create({
   },
   dotActive: {
     width: 20,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: Colors.brandNavy,
   },
   dotInactive: {
     width: 6,
@@ -922,7 +929,7 @@ const styles = StyleSheet.create({
     fontFamily:  FontFamily.sans,
     fontSize:    12,
     fontWeight:  '600',
-    color:       Colors.accent,
+    color:       Colors.brandNavy,
   },
 
   // ── Purchase bar ───────────────────────────────────────────────────────────
@@ -948,7 +955,7 @@ const styles = StyleSheet.create({
     borderRadius:    18,
     backgroundColor: Colors.surfaceSoft,
     borderWidth:     1,
-    borderColor:     Colors.rule,
+    borderColor:     Colors.brandNavy,
     alignItems:      'center',
     justifyContent:  'center',
   },

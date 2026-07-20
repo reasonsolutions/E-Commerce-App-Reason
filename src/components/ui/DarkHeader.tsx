@@ -29,7 +29,7 @@ export const DarkHeader: React.FC<DarkHeaderProps> = ({
         onPress={onBack}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <Icon name="chevron-back" size={20} color="#FFFFFF" />
+        <Icon name="chevron-back" size={20} color={Colors.ink1} />
       </TouchableOpacity>
 
       <View style={styles.headerTitleBlock}>
@@ -52,7 +52,7 @@ export const DarkHeader: React.FC<DarkHeaderProps> = ({
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor:   Colors.ink1,
+    backgroundColor:   Colors.surface,
     paddingHorizontal: Space.screenH,
     paddingBottom:     Space[4],
   },
@@ -73,20 +73,20 @@ const styles = StyleSheet.create({
   },
   headerEyebrow: {
     ...Type.label,
-    color: 'rgba(255,255,255,0.30)',
+    color: Colors.ink4,
   },
   headerTitleSerif: {
     fontFamily:    FontFamily.serif,
     fontSize:      26,
     fontWeight:    '400',
-    color:         '#FFFFFF',
+    color:         Colors.ink1,
     letterSpacing: -0.5,
     lineHeight:    26 * 1.1,
   },
   headerTitleMono: {
     fontSize:      18,
     fontWeight:    '500',
-    color:         '#FFFFFF',
+    color:         Colors.ink1,
     letterSpacing: 0.3,
     lineHeight:    18 * 1.2,
   },
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   headerSeam: {
     height:           StyleSheet.hairlineWidth,
-    backgroundColor:  'rgba(255,255,255,0.06)',
+    backgroundColor:  Colors.rule,
     marginTop:        Space[4],
     marginHorizontal: -Space.screenH,
   },

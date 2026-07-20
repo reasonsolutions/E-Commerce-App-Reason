@@ -194,7 +194,7 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
 
       {/* ── Search ─────────────────────────────────────────────────────────── */}
       <View style={styles.searchWrap}>
-        <Icon name="search-outline" size={15} color={Colors.ink4} style={styles.searchIcon} />
+        <Icon name="search-outline" size={15} color={Colors.brandNavy} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search categories…"
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     ...Type.label,
-    color:         Colors.ink4,
+    color:         Colors.brandKicker,
     letterSpacing: 1.5,
   },
   searchIcon: {

@@ -134,8 +134,8 @@ const styles = StyleSheet.create({
     gap:               Space[4],
   },
   title: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      18,
+    fontFamily:    FontFamily.serif,
+    fontSize:      20,
     fontWeight:    '600',
     color:         Colors.ink1,
     letterSpacing: -0.2,

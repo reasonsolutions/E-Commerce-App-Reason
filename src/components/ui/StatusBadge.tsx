@@ -11,7 +11,11 @@ export type OrderStatus =
   | 'In transit'
   | 'Delivered'
   | 'Cancelled'
-  | 'Returned';
+  | 'Returned'
+  // UI-only display state — synthesized client-side when an order's items
+  // have different statuses (see mixedStatusSummary in OrderHistoryScreen.tsx).
+  // Never comes from the API; not a real OrderStatusCode value.
+  | 'Mixed';
 
 interface StatusBadgeProps {
   status: OrderStatus;
@@ -19,10 +23,10 @@ interface StatusBadgeProps {
 
 type StatusPalette = { fg: string; bg: string; dot: string };
 
-// Premium register: ember for in-progress, ink for completed, muted danger for cancelled.
+// Premium register: ember for placed/in-progress, ink for completed, muted danger for cancelled.
 // Retired: saturated semantic tints (warningTint/infoTint) — too noisy.
 const palette: Record<OrderStatus, StatusPalette> = {
-  New:          { fg: '#92650A', bg: '#FEF3C7', dot: '#D97706' },  // amber
+  New:          { fg: '#B0592E', bg: Colors.brandNavyTint, dot: '#B0592E' },  // ember tint
   Confirmed:    { fg: '#1D4ED8', bg: '#DBEAFE', dot: '#3B82F6' },  // blue
   Processing:   { fg: '#1D4ED8', bg: '#DBEAFE', dot: '#3B82F6' },  // blue
   Fulfilled:    { fg: '#6D28D9', bg: '#EDE9FE', dot: '#8B5CF6' },  // violet
@@ -31,6 +35,9 @@ const palette: Record<OrderStatus, StatusPalette> = {
   Delivered:    { fg: Colors.success, bg: Colors.successTint, dot: Colors.success },
   Cancelled:    { fg: Colors.danger,  bg: Colors.dangerTint,  dot: Colors.danger },
   Returned:     { fg: Colors.danger,  bg: Colors.dangerTint,  dot: Colors.danger },
+  // Neutral — doesn't imply progress, success, or failure; paired with a
+  // subtitle spelling out the actual per-item breakdown.
+  Mixed:        { fg: Colors.ink3, bg: Colors.surfaceDeep, dot: Colors.ink3 },
 };
 
 const displayLabel: Record<OrderStatus, string> = {
@@ -43,6 +50,7 @@ const displayLabel: Record<OrderStatus, string> = {
   Delivered:    'Delivered',
   Cancelled:    'Cancelled',
   Returned:     'Return Initiated',
+  Mixed:        'Mixed Status',
 };
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {

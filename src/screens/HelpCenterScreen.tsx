@@ -132,7 +132,7 @@ const FaqRow: React.FC<{ item: FaqItem }> = ({ item }) => {
         <Icon
           name={expanded ? 'remove' : 'add'}
           size={18}
-          color={Colors.ink3}
+          color={Colors.brandNavy}
         />
       </View>
       {expanded ? <Text style={styles.faqAnswer}>{item.answer}</Text> : null}
@@ -154,7 +154,7 @@ const HelpCenterScreen: React.FC<HelpCenterScreenProps> = ({ navigation }) => {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           activeOpacity={0.6}
         >
-          <Icon name="chevron-back" size={22} color={Colors.ink1} />
+          <Icon name="chevron-back" size={16} color={Colors.ink1} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Help Center</Text>
         <View style={styles.headerRight} />
@@ -199,16 +199,25 @@ const styles = StyleSheet.create({
     backgroundColor:   Colors.surface,
   },
   backBtn: {
-    width: 32,
+    width:           36,
+    height:          36,
+    borderRadius:    18,
+    backgroundColor: Colors.surface,
+    borderWidth:     1,
+    borderColor:     '#ECE7DC',
+    alignItems:      'center',
+    justifyContent:  'center',
   },
   headerTitle: {
-    flex:       1,
-    textAlign:  'center',
-    ...Type.heading,
-    color:      Colors.ink1,
+    flex:          1,
+    textAlign:     'center',
+    fontFamily:    FontFamily.serif,
+    fontSize:      22,
+    fontWeight:    '600',
+    color:         Colors.ink1,
   },
   headerRight: {
-    width: 32,
+    width: 36,
   },
   headerDivider: {
     height:          StyleSheet.hairlineWidth,
@@ -229,18 +238,20 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...Type.label,
-    color:         Colors.ink4,
+    color:         Colors.brandKicker,
     letterSpacing: 1.6,
     marginBottom:  Space[3],
   },
   sectionCard: {
-    backgroundColor: Colors.surfaceSoft,
-    borderRadius:    16,
+    backgroundColor:   Colors.surface,
+    borderRadius:      16,
+    borderWidth:       1,
+    borderColor:       '#ECE7DC',
     paddingHorizontal: Space[4],
   },
   faqDivider: {
     height:          StyleSheet.hairlineWidth,
-    backgroundColor: Colors.rule,
+    backgroundColor: '#F1EDE3',
   },
   faqRow: {
     paddingVertical: Space[4],
@@ -254,16 +265,17 @@ const styles = StyleSheet.create({
   faqQuestion: {
     flex:       1,
     fontFamily: FontFamily.sans,
-    fontSize:   15,
-    fontWeight: '500',
+    fontSize:   14.5,
+    fontWeight: '700',
     color:      Colors.ink1,
-    lineHeight: 21,
+    lineHeight: 20,
   },
   faqAnswer: {
     ...Type.caption,
-    color:     Colors.ink3,
-    marginTop: Space[2],
-    lineHeight: 19,
+    fontSize:   13.5,
+    color:      '#7A7568',
+    marginTop:  Space[2],
+    lineHeight: 20.25,
   },
 });
 

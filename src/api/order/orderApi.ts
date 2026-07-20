@@ -13,6 +13,7 @@ interface RawOrderHistoryItem {
   ItemID:          number;
   BrandID:         number;
   BrandName:       string;
+  SubOrderID?:     number;
   SubOrderNumber?: string;
   Price:           number;
   ComparePrice?:   number;
@@ -50,7 +51,7 @@ export const postOrderHistory = async (
   customerprofilecode: number,
   page: number = 1,
   filters: OrderHistoryFilters = {},
-): Promise<{ items: any[]; hasMore: boolean }> => {
+): Promise<{ items: any[]; hasMore: boolean; totalRecords: number }> => {
   const payload: OrderHistoryRequest = {
     CustomerProfileCode: customerprofilecode,
     PageNumber:          page,
@@ -64,7 +65,7 @@ export const postOrderHistory = async (
   const orders = raw.result?.Orders as unknown as RawOrderHistoryGroup[] | undefined;
 
   if (!Array.isArray(orders) || orders.length === 0) {
-    return { items: [], hasMore: false };
+    return { items: [], hasMore: false, totalRecords: 0 };
   }
 
   const PAGE_SIZE = payload.PageSize ?? 10;
@@ -77,7 +78,7 @@ export const postOrderHistory = async (
       OrderMasterCode: order.OrderMasterCode,
       Inventory_Id:    item.InventoryID,
       Item_Id:         item.ItemID,
-      SubOrder:        { Code: 0, Number: item.SubOrderNumber ?? '' },
+      SubOrder:        { Code: item.SubOrderID ?? 0, Number: item.SubOrderNumber ?? '' },
       Brand_Id:        item.BrandID,
       Brand_Name:      item.BrandName,
       Amount:          item.Price ?? 0,
@@ -87,7 +88,7 @@ export const postOrderHistory = async (
 
   const totalRecords = raw.result?.TotalRecords ?? 0;
   const pageNum = payload.PageNumber ?? 1;
-  return { items, hasMore: pageNum * PAGE_SIZE < totalRecords };
+  return { items, hasMore: pageNum * PAGE_SIZE < totalRecords, totalRecords };
 };
 
 export const cancelOrder = async (data: CancelOrderInterface) => {

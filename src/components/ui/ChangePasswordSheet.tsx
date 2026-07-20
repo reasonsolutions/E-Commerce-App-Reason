@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     marginTop:       Space[8],
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
     paddingVertical: Space[4],
     alignItems:      'center',

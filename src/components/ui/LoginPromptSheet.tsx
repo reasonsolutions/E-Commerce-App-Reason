@@ -101,7 +101,7 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
             {/* Icon + heading */}
             <View style={styles.headingBlock}>
               <View style={styles.iconWrap}>
-                <Icon name={icon} size={20} color={Colors.accent} />
+                <Icon name={icon} size={20} color={Colors.brandNavy} />
               </View>
               <Text style={styles.title}>{title}</Text>
               <Text style={styles.body}>{body}</Text>
@@ -142,7 +142,7 @@ export const LoginPromptSheet: React.FC<LoginPromptSheetProps> = ({
             <View style={styles.benefitsRow}>
               {benefits.map(b => (
                 <View key={b} style={styles.chip}>
-                  <Icon name="checkmark" size={10} color={Colors.accent} />
+                  <Icon name="checkmark" size={10} color={Colors.brandNavy} />
                   <Text style={styles.chipText}>{b}</Text>
                 </View>
               ))}
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     width:           48,
     height:          48,
     borderRadius:    24,
-    backgroundColor: 'rgba(178, 90, 61, 0.08)',
+    backgroundColor: Colors.brandNavyTint,
     alignItems:      'center',
     justifyContent:  'center',
     marginBottom:    Space[1],
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     width:           '100%',
     height:          52,
     borderRadius:    Radius.pill,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     alignItems:      'center',
     justifyContent:  'center',
   },

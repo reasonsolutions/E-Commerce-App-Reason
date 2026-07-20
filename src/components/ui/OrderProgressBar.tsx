@@ -79,13 +79,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ink3,
   },
   segmentActive: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brandNavy,
   },
   stepLabel: {
     ...Type.label,
     fontSize:      8,
     letterSpacing: 0.3,
-    color:         Colors.accent,
+    color:         Colors.brandNavy,
     marginTop:     3,
     textAlign:     'center',
   },

@@ -31,6 +31,7 @@ import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { PaymentModes } from '../config/enum_files/PaymentModes';
+import { AddressLabel } from '../config/enum_files/AddressLabel';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { Motion } from '../theme/motion';
 
@@ -47,6 +48,7 @@ export interface DeliveryAddress {
   Landmark: string | null;
   Zipcode: string | null;
   IsPrimary: boolean;
+  AddressLabel?: AddressLabel | null;
 }
 
 type AddressScreenProps = {
@@ -70,6 +72,18 @@ type AddressScreenProps = {
 
 const EMPTY_FORM = { CustomerName: '', MobileNumber: '', Address: '', StreetName: '', City: '', Landmark: '', Zipcode: '' };
 const EMPTY_ERRORS = { CustomerName: '', MobileNumber: '', Address: '', StreetName: '', City: '', Landmark: '', Zipcode: '' };
+
+const LABEL_ICON: Record<AddressLabel, string> = {
+  [AddressLabel.Home]:  'home-outline',
+  [AddressLabel.Work]:  'briefcase-outline',
+  [AddressLabel.Other]: 'location-outline',
+};
+const LABEL_TEXT: Record<AddressLabel, string> = {
+  [AddressLabel.Home]:  'HOME',
+  [AddressLabel.Work]:  'WORK',
+  [AddressLabel.Other]: 'OTHER',
+};
+const LABEL_OPTIONS = [AddressLabel.Home, AddressLabel.Work, AddressLabel.Other];
 
 // ── Single address row ────────────────────────────────────────────────────────
 const AddressRow: React.FC<{
@@ -96,6 +110,12 @@ const AddressRow: React.FC<{
           <View style={[styles.addressLeftRule, isSelected && styles.addressLeftRuleActive]} />
 
           <View style={styles.addressContent}>
+            {item.AddressLabel ? (
+              <View style={styles.labelChip}>
+                <Icon name={LABEL_ICON[item.AddressLabel]} size={11} color={Colors.brandNavy} />
+                <Text style={styles.labelChipText}>{LABEL_TEXT[item.AddressLabel]}</Text>
+              </View>
+            ) : null}
             <Text style={[styles.addressName, isSelected && styles.addressNameSelected]}>
               {item.CustomerName}
             </Text>
@@ -163,6 +183,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
   const [showForm, setShowForm]   = useState(false);
   const [form, setForm]           = useState(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState(EMPTY_ERRORS);
+  const [addressLabel, setAddressLabel] = useState<AddressLabel | null>(null);
   const [profileCode, setProfileCode] = useState<number | null>(null);
   const [savingAddress, setSavingAddress] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
@@ -240,6 +261,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         Zipcode:             form.Zipcode.trim(),
         IsPrimary:           '0',
         CustomerProfileCode: profileCode,
+        AddressLabel:        addressLabel ?? undefined,
       });
       if (response.statusCode === 1) {
         const list: DeliveryAddress[] = response.result || [];
@@ -249,6 +271,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         }
         setForm(EMPTY_FORM);
         setFormErrors(EMPTY_ERRORS);
+        setAddressLabel(null);
       } else {
         setAddError('Failed to save address. Please try again.');
       }
@@ -409,6 +432,23 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
   const AddressForm = (
     <View style={styles.formSection}>
       <Text style={styles.sectionEyebrow}>ADD NEW ADDRESS</Text>
+      <View style={styles.labelPickerRow}>
+        {LABEL_OPTIONS.map(opt => {
+          const selected = addressLabel === opt;
+          return (
+            <TouchableOpacity
+              key={opt}
+              onPress={() => setAddressLabel(opt)}
+              style={[styles.labelPill, selected && styles.labelPillSelected]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.labelPillText, selected && styles.labelPillTextSelected]}>
+                {LABEL_TEXT[opt]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
       <View style={styles.formFields}>
         <FloatingLabelInput
           label="Full name"
@@ -698,11 +738,28 @@ const styles = StyleSheet.create({
     flexShrink:   0,
   },
   addressLeftRuleActive: {
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
   },
   addressContent: {
     flex: 1,
     gap:  3,
+  },
+  labelChip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    alignSelf:         'flex-start',
+    gap:               5,
+    backgroundColor:   Colors.brandNavyTint,
+    borderRadius:      Radius.pill,
+    paddingVertical:   3,
+    paddingHorizontal: 8,
+    marginBottom:      4,
+  },
+  labelChipText: {
+    ...Type.label,
+    fontSize:      10,
+    color:         Colors.brandNavy,
+    letterSpacing: 0.4,
   },
   addressName: {
     ...Type.body,
@@ -748,13 +805,13 @@ const styles = StyleSheet.create({
     flexShrink:    0,
   },
   radioOuterSelected: {
-    borderColor: Colors.ink1,
+    borderColor: Colors.brandNavy,
   },
   radioInner: {
     width:         9,
     height:        9,
     borderRadius:  5,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
   },
   rowDivider: {
     height:          StyleSheet.hairlineWidth,
@@ -769,14 +826,41 @@ const styles = StyleSheet.create({
     borderTopWidth:  StyleSheet.hairlineWidth,
     borderTopColor:  Colors.rule,
   },
+  labelPickerRow: {
+    flexDirection: 'row',
+    gap:           Space[2],
+    marginTop:     Space[3],
+    marginBottom:  Space[5],
+  },
+  labelPill: {
+    flex:              1,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingVertical:   Space[2] + 2,
+    borderRadius:      Radius.pill,
+    borderWidth:       1.5,
+    borderColor:       Colors.rule,
+    backgroundColor:   Colors.surface,
+  },
+  labelPillSelected: {
+    backgroundColor: Colors.brandNavy,
+    borderColor:     Colors.brandNavy,
+  },
+  labelPillText: {
+    ...Type.label,
+    color: Colors.ink1,
+  },
+  labelPillTextSelected: {
+    color: '#FFFFFF',
+  },
   formFields: {
     gap: Space[6],
     marginBottom: Space[5],
   },
-  // Secondary ink pill — lighter weight than Place Order CTA
+  // Secondary navy pill — lighter weight than Place Order CTA
   saveBtn: {
     borderWidth:      1.5,
-    borderColor:      Colors.ink1,
+    borderColor:      Colors.brandNavy,
     borderRadius:     Radius.pill,
     paddingVertical:  Space[3] + 2,
     alignItems:       'center',
@@ -787,7 +871,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     ...Type.bodyStrong,
-    color: Colors.ink1,
+    color: Colors.brandNavy,
   },
 
   // ── Payment method picker ─────────────────────────────────────────────────────
@@ -813,7 +897,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceSoft,
   },
   paymentOptionSelected: {
-    borderColor:     Colors.ink1,
+    borderColor:     Colors.brandNavy,
     backgroundColor: Colors.surface,
   },
   paymentRadio: {
@@ -825,8 +909,8 @@ const styles = StyleSheet.create({
     flexShrink:   0,
   },
   paymentRadioSelected: {
-    borderColor:     Colors.ink1,
-    backgroundColor: Colors.ink1,
+    borderColor:     Colors.brandNavy,
+    backgroundColor: Colors.brandNavy,
   },
   paymentOptionText: {
     ...Type.caption,
@@ -847,7 +931,7 @@ const styles = StyleSheet.create({
     gap:               Space[3],
   },
   ctaBtn: {
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
     height:          52,
     alignItems:      'center',
@@ -889,7 +973,7 @@ const styles = StyleSheet.create({
   emptyAddBtn: {
     height:          44,
     borderWidth:     1.5,
-    borderColor:     Colors.ink1,
+    borderColor:     Colors.brandNavy,
     borderRadius:    Radius.pill,
     paddingHorizontal: Space[6],
     alignItems:      'center',
@@ -898,7 +982,7 @@ const styles = StyleSheet.create({
   },
   emptyAddBtnText: {
     ...Type.bodyStrong,
-    color: Colors.ink1,
+    color: Colors.brandNavy,
   },
 });
 

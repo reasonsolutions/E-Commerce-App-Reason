@@ -17,13 +17,12 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/types';
-import { useProfileCode } from '../hooks/useProfileCode';
 import { getWishlist, removeFromWishlist } from '../api/wishlist';
 import { postSaveCartItems } from '../api/cart';
 import type { WishlistItemInterface } from '../api/interfaces';
 import { Price, SkeletonGrid, TrustLine, FadeImage } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { scopedKey } from '../config/storageKeys';
+import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -32,6 +31,7 @@ import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
+import { useTabRootBackHandler } from '../hooks/useTabRootBackHandler';
 import { useCart } from '../context/CartContext';
 import { toastEmitter } from '../utils/toastEmitter';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
@@ -81,8 +81,9 @@ const WishlistCard: React.FC<{
               uri={imageUri}
               width={COL_W}
               height={IMG_H}
-              resizeMode="cover"
+              resizeMode="contain"
               fallbackText={item.BrandName || item.Name}
+              style={styles.imgBackdrop}
             />
 
             {/* OOS overlay */}
@@ -163,12 +164,29 @@ const WishlistCard: React.FC<{
 });
 
 
+const getProfileCode = async (): Promise<number | null> => {
+  const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+  if (!raw) return null;
+  return JSON.parse(raw).CustomerProfileCode ?? null;
+};
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const insets      = useSafeAreaInsets();
   const haptic      = useHaptic();
   const { setCartCount } = useCart();
-  const profileCode = useProfileCode();
+  useTabRootBackHandler(navigation);
+
+  // Bottom-tab siblings stay mounted at all times and each set their own
+  // StatusBar style — RN merges state from every mounted instance app-wide,
+  // so another tab's style can win even after switching back here. Reassert
+  // on every focus rather than relying solely on the declarative <StatusBar>
+  // below (see HomeScreen.tsx for the same fix / fuller rationale).
+  useFocusEffect(
+    useCallback(() => {
+      StatusBar.setBarStyle('dark-content');
+    }, []),
+  );
 
   const { data: fetched, loading, isError, error, run } =
     useAsyncState<WishlistItemInterface[]>([]);
@@ -176,22 +194,27 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const [items, setItems]         = useState<WishlistItemInterface[]>([]);
   const [addingIds, setAddingIds] = useState<Set<number>>(new Set());
   const [isFTU, setIsFTU]         = useState(false);
+  const [isGuest, setIsGuest]     = useState(false);
+  const [profileCode, setProfileCode] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const STALE_MS = 30_000;
 
   const fetchWishlist = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
-        if (!profileCode) return [];
-        const response = await getWishlist(profileCode);
+        const code = await getProfileCode();
+        if (!code) { setIsGuest(true); return []; }
+        setIsGuest(false);
+        setProfileCode(code);
+        const response = await getWishlist(code);
         const result = response.statusCode === 1 ? (response.result || []) : [];
         wishlistCache.markFresh();
         // FTU detection: empty result + wishlistSeen not yet set
         if (result.length === 0) {
-          const seen = await AsyncStorage.getItem(scopedKey('wishlistSeen', profileCode));
+          const seen = await AsyncStorage.getItem(scopedKey('wishlistSeen', code));
           if (!seen) {
             setIsFTU(true);
-            await AsyncStorage.setItem(scopedKey('wishlistSeen', profileCode), '1');
+            await AsyncStorage.setItem(scopedKey('wishlistSeen', code), '1');
           } else {
             setIsFTU(false);
           }
@@ -200,7 +223,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         }
         return result;
       }, cancelled),
-    [run, profileCode],
+    [run],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -281,6 +304,38 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     />
   );
 
+  const renderGuestEmpty = () => (
+    <View style={[styles.listContentEmpty, styles.stateWrap]}>
+      <View style={styles.emptyInner}>
+        <View style={styles.emptyIconCircle}>
+          <Icon name="person-outline" size={22} color={Colors.ink4} />
+        </View>
+        <Text style={styles.emptyTitle}>Sign in to view your wishlist.</Text>
+        <Text style={styles.emptyBody}>
+          Save products you love and find them here after signing in.
+        </Text>
+        <TouchableOpacity
+          style={styles.emptyCTA}
+          activeOpacity={0.88}
+          onPress={() => navigation.navigate('Login')}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in"
+        >
+          <Text style={styles.emptyCTAText}>Sign In</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.emptySecondary}
+          activeOpacity={0.7}
+          onPress={() => navigation.navigate('Home')}
+          accessibilityRole="button"
+          accessibilityLabel="Continue shopping"
+        >
+          <Text style={styles.emptySecondaryText}>Continue Shopping</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   const renderEmpty = () => {
     if (isFTU) {
       return (
@@ -350,6 +405,8 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         </View>
       );
     }
+
+    if (isGuest) return renderGuestEmpty();
 
     if (!wishlistCache.lastFetchTime) return renderSkeleton();
 
@@ -425,17 +482,17 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex:        1,
-    fontFamily:  FontFamily.sans,
-    fontSize:    18,
+    fontFamily:  FontFamily.serif,
+    fontSize:    26,
     fontWeight:  '600',
     color:       Colors.ink1,
     letterSpacing: -0.1,
   },
   headerCount: {
     fontFamily:    FontFamily.sans,
-    fontSize:      18,
-    fontWeight:    '400',
-    color:         Colors.ink3,
+    fontSize:      15,
+    fontWeight:    '600',
+    color:         Colors.ink4,
     letterSpacing: -0.1,
   },
   headerRight: {
@@ -481,6 +538,12 @@ const styles = StyleSheet.create({
     overflow:        'hidden',
     position:        'relative',
   },
+  // resizeMode="contain" letterboxes when a photo's aspect ratio doesn't
+  // match the 4:5 box — white backdrop reads as an intentional product
+  // backdrop (matches ProductScreen's hero) rather than a grey gap.
+  imgBackdrop: {
+    backgroundColor: '#FFFFFF',
+  },
 
   // ── OOS overlay ───────────────────────────────────────────────────────────────
   oosOverlay: {
@@ -504,39 +567,40 @@ const styles = StyleSheet.create({
 
   // ── Discount badge ────────────────────────────────────────────────────────────
   discountBadge: {
-    position:          'absolute',
-    top:               Space[2],
-    left:              Space[2],
-    paddingHorizontal: Space[2],
-    paddingVertical:   2,
-    backgroundColor:   Colors.accent,
-    borderRadius:      Radius.xs,
+    position:            'absolute',
+    top:                 12,
+    left:                0,
+    paddingHorizontal:   Space[2],
+    paddingVertical:     4,
+    backgroundColor:     Colors.emberBright,
+    borderTopRightRadius:    6,
+    borderBottomRightRadius: 6,
   },
   discountBadgeText: {
     ...Type.label,
-    fontSize:      10,
+    fontSize:      11,
+    fontWeight:    '800',
     color:         '#FFFFFF',
     letterSpacing: 0.3,
   },
 
-  // ── Remove — bare × top-right corner ─────────────────────────────────────────
+  // ── Remove — white circular button, top-right corner ─────────────────────────
   removeBtn: {
     position:        'absolute',
-    top:             Space[2],
-    right:           Space[2],
-    width:           24,
-    height:          24,
+    top:             Space[1],
+    right:           Space[1],
+    width:           27,
+    height:          27,
+    borderRadius:    13.5,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems:      'center',
     justifyContent:  'center',
   },
   removeGlyph: {
-    fontSize:          18,
-    lineHeight:        20,
+    fontSize:          16,
+    lineHeight:        18,
     color:             Colors.ink1,
-    fontWeight:        '300',
-    textShadowColor:   'rgba(255,255,255,0.8)',
-    textShadowOffset:  { width: 0, height: 0 },
-    textShadowRadius:  4,
+    fontWeight:        '400',
   },
 
   // ── Info block ────────────────────────────────────────────────────────────────
@@ -560,7 +624,7 @@ const styles = StyleSheet.create({
   // ── Move to Bag — solid black, full-width, sharp corners ─────────────────────
   bagBtn: {
     marginTop:       Space[2] + 2,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.xs,
     paddingVertical: Space[2] + 2,
     alignItems:      'center',
@@ -631,7 +695,7 @@ const styles = StyleSheet.create({
     marginTop:       Space[4],
     height:          52,
     width:           '100%',
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
     alignItems:      'center',
     justifyContent:  'center',
@@ -640,6 +704,15 @@ const styles = StyleSheet.create({
     ...Type.bodyStrong,
     color:    '#FFFFFF',
     fontSize: 15,
+  },
+  emptySecondary: {
+    alignItems:      'center',
+    paddingVertical: Space[2],
+  },
+  emptySecondaryText: {
+    ...Type.caption,
+    color:              Colors.ink3,
+    textDecorationLine: 'underline',
   },
 });
 

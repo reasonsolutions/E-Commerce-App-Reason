@@ -75,16 +75,22 @@ const AppNavigator = () => {
         />
         <Stack.Screen name="Register" component={RegisterScreen} options={{ animation: 'none' }} />
         <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} options={{ animation: 'none' }} />
-        <Stack.Screen name="MainTabs" component={MainTabs} options={{ animation: 'none' }} />
+        {/* Tab root — swipe-back/hardware-back should never pop this off the
+            stack. It's the navigation root once inside the app; there's
+            nothing meaningful to "go back" to, and popping it can resurface
+            whatever screen (Cart, Address, etc.) happened to sit underneath
+            from an earlier flow. Tab switching is handled entirely by the
+            bottom tab bar, not by back gestures. */}
+        <Stack.Screen name="MainTabs" component={MainTabs} options={{ animation: 'none', gestureEnabled: false }} />
         <Stack.Screen name="Product" component={ProductScreen} />
         <Stack.Screen name="Cart" component={CartScreen} options={{ contentStyle: { backgroundColor: '#FFFFFF' } }} />
         <Stack.Screen name="Result" component={ResultScreen} />
         <Stack.Screen name="Address" component={AddressScreen} />
-        <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} />
+        <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="OrderDetails" component={OrderDetailScreen} options={{ animation: 'none' }} />
         <Stack.Screen name="AddressManagement" component={AddressManagementScreen} />
         <Stack.Screen name="Search" component={SearchScreen} options={{ animation: 'fade' }} />
-        <Stack.Screen name="EcomPayment" component={EcomPaymentScreen} />
+        <Stack.Screen name="EcomPayment" component={EcomPaymentScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
         <Stack.Screen name="Brands" component={BrandsScreen} />
         <Stack.Screen name="Categories" component={CategoriesScreen} />

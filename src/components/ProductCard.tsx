@@ -10,6 +10,7 @@ import {
 import { ProductInterface } from '../api/interfaces';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { WishlistHeart } from './ui/WishlistHeart';
+import { QuickAddButton } from './ui/QuickAddButton';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
@@ -20,6 +21,7 @@ interface ProductCardProps {
   cardWidth?: number;
   showHeart?: boolean;
   showDelivery?: boolean;
+  showQuickAdd?: boolean;
 }
 
 
@@ -29,6 +31,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   cardWidth = 158,
   showHeart = true,
   showDelivery = true,
+  showQuickAdd = false,
 }) => {
   const imgUri = resolveImageUrl(product.Images);
   const [imgFailed, setImgFailed] = useState(false);
@@ -57,12 +60,12 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
       onPress={onPress}
       activeOpacity={0.86}
     >
-      <View style={[styles.imgWrap, { height: imgH, backgroundColor: Colors.surfaceDeep }]}>
+      <View style={[styles.imgWrap, { height: imgH, backgroundColor: '#FFFFFF' }]}>
         {imgUri && !imgFailed ? (
           <Image
             source={{ uri: imgUri }}
             style={styles.img}
-            resizeMode="cover"
+            resizeMode="contain"
             onError={onError}
           />
         ) : (
@@ -79,6 +82,8 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
         {showHeart && product.Inventory_Id ? (
           <WishlistHeart inventoryId={product.Inventory_Id} />
         ) : null}
+
+        {showQuickAdd ? <QuickAddButton product={product} /> : null}
       </View>
 
       <View style={styles.info}>
@@ -96,7 +101,9 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
             <Text style={styles.was} numberOfLines={1}>MUR {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
           )}
           {discountPct > 0 && (
-            <Text style={styles.discountLabel} numberOfLines={1}>−{discountPct}%</Text>
+            <View style={styles.discountChip}>
+              <Text style={styles.discountChipText} numberOfLines={1}>−{discountPct}%</Text>
+            </View>
           )}
         </View>
         {product.Variant ? (
@@ -149,10 +156,17 @@ const styles = StyleSheet.create({
     color:         '#FFFFFF',
     letterSpacing: 1.2,
   },
-  discountLabel: {
+  discountChip: {
+    backgroundColor:   Colors.accent,
+    borderRadius:      5,
+    paddingVertical:   2,
+    paddingHorizontal: 6,
+  },
+  discountChipText: {
     ...Type.label,
-    fontSize:      10,
-    color:         Colors.accent,
+    fontSize:      10.5,
+    fontWeight:    '800',
+    color:         '#FFFFFF',
     letterSpacing: 0.2,
   },
   info: {
@@ -211,7 +225,7 @@ const styles = StyleSheet.create({
   delivery: {
     ...Type.caption,
     fontSize:   10.5,
-    color:      Colors.success,
+    color:      Colors.brandNavy,
   },
 });
 

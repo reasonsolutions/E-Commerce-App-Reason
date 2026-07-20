@@ -426,13 +426,13 @@ const styles = StyleSheet.create({
     paddingVertical:   2,
     paddingHorizontal: 6,
     borderRadius:      3,
-    backgroundColor:   'rgba(178, 90, 61, 0.07)',
+    backgroundColor:   Colors.brandNavyTint,
   },
   memberBadgeText: {
     ...Type.label,
     fontSize:      8,
     letterSpacing: 1.0,
-    color:         Colors.accent,
+    color:         Colors.brandNavy,
   },
 
   // ── Error ──────────────────────────────────────────────────────────────────
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     width:           '100%',
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
     paddingVertical: Space[4],
     alignItems:      'center',

@@ -438,6 +438,10 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 
         {/* ── Sticky checkout footer ─────────────────────────────────── */}
         <View style={[styles.summaryPanel, { paddingBottom: insets.bottom + Space[4] }]}>
+          <View style={styles.footerPayableRow}>
+            <Text style={styles.footerPayableLabel}>PAYABLE NOW</Text>
+            <Text style={styles.footerPayableAmount}>MUR {subtotal.toLocaleString('en-IN')}</Text>
+          </View>
           <Animated.View style={checkoutTactile.animatedStyle}>
             <TouchableOpacity
               style={styles.checkoutBtn}
@@ -552,8 +556,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space[3],
   },
   headerTitle: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      18,
+    fontFamily:    FontFamily.serif,
+    fontSize:      22,
     fontWeight:    '600',
     color:         Colors.ink1,
     letterSpacing: -0.2,
@@ -632,7 +636,7 @@ const styles = StyleSheet.create({
   },
   emptyCTA: {
     height:          52,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
     alignItems:      'center',
     justifyContent:  'center',
@@ -759,12 +763,12 @@ const styles = StyleSheet.create({
     fontSize:      9,
   },
   summaryPayableAmount: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      24,
-    fontWeight:    '700',
+    fontFamily:    FontFamily.serif,
+    fontSize:      30,
+    fontWeight:    '600',
     color:         Colors.ink1,
     letterSpacing: -0.4,
-    lineHeight:    28,
+    lineHeight:    34,
   },
 
   // ── Trust strip — plain icon row, no card ─────────────────────────────────
@@ -798,6 +802,25 @@ const styles = StyleSheet.create({
     borderTopWidth:    StyleSheet.hairlineWidth,
     borderTopColor:    Colors.rule,
   },
+  footerPayableRow: {
+    flexDirection:  'row',
+    alignItems:     'baseline',
+    justifyContent: 'space-between',
+    marginBottom:   Space[3],
+  },
+  footerPayableLabel: {
+    ...Type.label,
+    color:         Colors.ink4,
+    letterSpacing: 1.6,
+    fontSize:      9,
+  },
+  footerPayableAmount: {
+    fontFamily:    FontFamily.serif,
+    fontSize:      20,
+    fontWeight:    '600',
+    color:         Colors.ink1,
+    letterSpacing: -0.2,
+  },
   summaryTopRule: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
@@ -806,7 +829,7 @@ const styles = StyleSheet.create({
     width:           '100%',
     height:          52,
     borderRadius:    Radius.pill,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     flexDirection:   'row',
     alignItems:      'center',
     justifyContent:  'center',

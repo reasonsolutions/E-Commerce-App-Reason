@@ -10,7 +10,7 @@ export async function postOrderHistory(
   customerProfileCode: number,
   page: number = 1,
   filters: real.OrderHistoryFilters = {},
-): Promise<{ items: OrderHistoryItemInterface[]; hasMore: boolean }> {
+): Promise<{ items: OrderHistoryItemInterface[]; hasMore: boolean; totalRecords: number }> {
   return real.postOrderHistory(customerProfileCode, page, filters);
 }
 

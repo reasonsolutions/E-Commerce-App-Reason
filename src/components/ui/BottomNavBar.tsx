@@ -43,7 +43,7 @@ const NavItem: React.FC<{
   cartCount?: number;
 }> = ({ tab, isActive, onPress, cartCount }) => {
   const haptic = useHaptic();
-  const iconColor = isActive ? Colors.accent : Colors.ink4;
+  const iconColor = isActive ? Colors.brandNavy : Colors.ink4;
   const badgeScale = useRef(new Animated.Value(1)).current;
   const prevCount = useRef(cartCount);
 
@@ -190,13 +190,13 @@ const styles = StyleSheet.create({
     borderRadius:   13,
   },
   iconWrapActive: {
-    backgroundColor: Colors.accentTint,
+    backgroundColor: Colors.brandNavyTint,
   },
   badge: {
     position:          'absolute',
     top:               -3,
     right:             2,
-    backgroundColor:   Colors.accent,
+    backgroundColor:   Colors.brandNavy,
     borderRadius:      Radius.pill,
     minWidth:          15,
     height:            15,
@@ -219,6 +219,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   labelActive: {
-    color: Colors.accent,
+    color: Colors.brandNavy,
   },
 });

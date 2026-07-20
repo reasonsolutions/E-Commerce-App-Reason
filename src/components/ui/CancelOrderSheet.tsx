@@ -189,8 +189,8 @@ const styles = StyleSheet.create({
     flexShrink:   0,
   },
   optionRadioSelected: {
-    borderColor:     Colors.ink1,
-    backgroundColor: Colors.ink1,
+    borderColor:     Colors.brandNavy,
+    backgroundColor: Colors.brandNavy,
   },
   optionLabel: {
     ...Type.body,

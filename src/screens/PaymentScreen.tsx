@@ -34,6 +34,7 @@ type PaymentScreenProps = {
     goBack: () => void;
     navigate: (screen: string, params?: Record<string, any>) => void;
     replace: (screen: string, params?: Record<string, any>) => void;
+    pop: (count: number) => void;
   };
   route: {
     params: {
@@ -435,6 +436,11 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
       setCartCount(0);
       successRef.current = true;
 
+      // Pop EcomPayment off first so the replace below removes Address too —
+      // matches the COD path, which leaves Cart (not Address) under
+      // OrderSuccess. Keeps swipe-back-past-OrderSuccess consistent between
+      // both payment methods.
+      navigation.pop(1);
       navigation.replace('OrderSuccess', {
         orderNumber:    response.result?.OrderNumber ?? '',
         itemCount:      cartItems.length,

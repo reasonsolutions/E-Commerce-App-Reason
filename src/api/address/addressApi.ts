@@ -4,11 +4,13 @@ import type {
   postCreateDeliveryAddressInterface,
   postUpdateDeliveryAddressInterface,
 } from '../interfaces';
+import { AddressLabel } from '../../config/enum_files/AddressLabel';
 
-export const getDeliveryAddresses = async (customerprofilecode: number) => {
-  const response = await axiosInstance.get(
-    `${addressEndpoints.getDeliveryAddress}?CustomerProfileCode=${customerprofilecode}`,
-  );
+export const getDeliveryAddresses = async (customerprofilecode: number, addressLabel?: AddressLabel) => {
+  const query = addressLabel
+    ? `?CustomerProfileCode=${customerprofilecode}&AddressLabel=${addressLabel}`
+    : `?CustomerProfileCode=${customerprofilecode}`;
+  const response = await axiosInstance.get(`${addressEndpoints.getDeliveryAddress}${query}`);
   return response.data;
 };
 

@@ -39,7 +39,11 @@ const OTPVerificationScreen: React.FC = () => {
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(30);
 
-  const inputRef = useRef<TextInput>(null);
+  // One ref object per box. See the cssInterop={false} note on each TextInput
+  // below for why plain refs didn't work here until that prop was added.
+  const boxRefs = useRef(
+    Array.from({ length: OTP_LENGTH }, () => React.createRef<TextInput>()),
+  ).current;
   const shakeAnim  = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
 
@@ -50,7 +54,7 @@ const OTPVerificationScreen: React.FC = () => {
       ...Motion.spring.settle,
       useNativeDriver: true,
     }).start();
-    setTimeout(() => inputRef.current?.focus(), 400);
+    setTimeout(() => boxRefs[0].current?.focus(), 400);
   }, [contentAnim]);
 
   useEffect(() => {
@@ -126,33 +130,99 @@ const OTPVerificationScreen: React.FC = () => {
     }
   }, [loading, CustomerName, EmailID, MobileNumber, CountryCode, navigation, shake, haptic]);
 
-  const handleOtpChange = useCallback((val: string) => {
-    const cleaned = val.replace(/\D/g, '').slice(0, OTP_LENGTH);
-    setOtp(cleaned);
+  // Each box is its own real TextInput — a single hidden TextInput behind
+  // decorative boxes previously relied on an imperative .focus() forward that
+  // silently failed on iOS (both a near-zero-size input and, separately,
+  // pointerEvents="none" each independently block first-responder status),
+  // leaving the keyboard unable to appear at all. Per-box real inputs remove
+  // that indirection entirely — the same direct-tap pattern already used and
+  // proven working on RegisterScreen's FloatingLabelInput fields.
+  const handleBoxChange = useCallback((index: number, val: string) => {
+    // val can arrive as more than one character — e.g. iOS offering the full
+    // autofilled one-time-code into a single box, or fast typing coalescing
+    // two keystrokes into one onChangeText call. Handle both a single digit
+    // (advance one box) and a multi-digit paste/autofill (spread across the
+    // remaining boxes) instead of assuming exactly one new character.
+    const digits = val.replace(/\D/g, '');
     setError(null);
-    if (cleaned.length === OTP_LENGTH) handleVerify(cleaned);
+
+    if (digits.length > 1) {
+      const nextEmpty = Math.min(index + digits.length, OTP_LENGTH - 1);
+      boxRefs[nextEmpty].current?.focus();
+      setOtp(prev => {
+        const chars = prev.split('');
+        for (let d = 0; d < digits.length && index + d < OTP_LENGTH; d++) {
+          chars[index + d] = digits[d];
+        }
+        const next = chars.join('').slice(0, OTP_LENGTH);
+        if (next.length === OTP_LENGTH) handleVerify(next);
+        return next;
+      });
+      return;
+    }
+
+    const digit = digits.slice(-1);
+    if (digit && index < OTP_LENGTH - 1) {
+      boxRefs[index + 1].current?.focus();
+    }
+    setOtp(prev => {
+      const chars = prev.split('');
+      chars[index] = digit;
+      const next = chars.join('').slice(0, OTP_LENGTH);
+      if (next.length === OTP_LENGTH) handleVerify(next);
+      return next;
+    });
   }, [handleVerify]);
+
+  const handleBoxKeyPress = useCallback((index: number, key: string) => {
+    if (key === 'Backspace' && !otp[index] && index > 0) {
+      boxRefs[index - 1].current?.focus();
+      setOtp(prev => {
+        const chars = prev.split('');
+        chars[index - 1] = '';
+        return chars.join('');
+      });
+    }
+  }, [otp]);
 
   const entranceStyle = {
     transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
   };
 
-  // Render OTP boxes
+  // Render OTP boxes — each a real, directly-tappable TextInput
   const boxes = Array.from({ length: OTP_LENGTH }, (_, i) => {
     const char = otp[i] ?? '';
     const isActive = otp.length === i;
     return (
-      <View
+      <TextInput
         key={i}
+        ref={boxRefs[i]}
+        // Root cause of refs never attaching, confirmed via runtime tracing:
+        // NativeWind's babel preset routes EVERY .tsx file through its own
+        // JSX runtime (react-native-css-interop), which swaps every
+        // <TextInput> for an interop-wrapped version project-wide — even
+        // here, where no className is used anywhere in this file. That
+        // wrapper's ref-forwarding does not reliably reach the real native
+        // TextInput in this RN/React 19 setup (ref.current stayed null on
+        // EVERY box, confirmed via onLayout logging on a physical device).
+        // cssInterop={false} is react-native-css-interop's own documented
+        // escape hatch (see wrap-jsx.js) — it skips the interop swap for
+        // this element, restoring normal ref behavior.
+        cssInterop={false}
+        value={char}
+        onChangeText={val => handleBoxChange(i, val)}
+        onKeyPress={({ nativeEvent }) => handleBoxKeyPress(i, nativeEvent.key)}
+        keyboardType="number-pad"
+        maxLength={1}
+        textContentType={i === 0 ? 'oneTimeCode' : undefined}
+        autoComplete={i === 0 ? 'one-time-code' : undefined}
         style={[
           styles.otpBox,
           isActive && styles.otpBoxActive,
           !!char && styles.otpBoxFilled,
-          error && styles.otpBoxError,
+          !!error && styles.otpBoxError,
         ]}
-      >
-        <Text style={styles.otpChar}>{char}</Text>
-      </View>
+      />
     );
   });
 
@@ -176,28 +246,9 @@ const OTPVerificationScreen: React.FC = () => {
           <Text style={styles.emailHighlight}>{EmailID}</Text>
         </Text>
 
-        {/* Hidden input — drives OTP boxes */}
-        <TextInput
-          ref={inputRef}
-          value={otp}
-          onChangeText={handleOtpChange}
-          keyboardType="number-pad"
-          maxLength={OTP_LENGTH}
-          style={styles.hiddenInput}
-          caretHidden
-          textContentType="oneTimeCode"
-          autoComplete="one-time-code"
-        />
-
-        {/* OTP boxes */}
-        <Animated.View style={[styles.otpRow, { transform: [{ translateX: shakeAnim }] }]}>
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={() => inputRef.current?.focus()}
-            style={styles.otpTouchable}
-          >
-            {boxes}
-          </TouchableOpacity>
+        {/* OTP boxes — each a real, directly-tappable TextInput */}
+        <Animated.View style={[styles.otpRow, styles.otpTouchable, { transform: [{ translateX: shakeAnim }] }]}>
+          {boxes}
         </Animated.View>
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -262,12 +313,6 @@ const styles = StyleSheet.create({
     ...Type.body,
     color: Colors.ink1,
   },
-  hiddenInput: {
-    position: 'absolute',
-    opacity:  0,
-    width:    1,
-    height:   1,
-  },
   otpRow: {
     marginBottom: Space[4],
   },
@@ -282,8 +327,11 @@ const styles = StyleSheet.create({
     borderWidth:     1,
     borderColor:     Colors.rule,
     backgroundColor: Colors.surfaceSoft,
-    alignItems:      'center',
-    justifyContent:  'center',
+    textAlign:       'center',
+    fontSize:        20,
+    fontWeight:      '600',
+    color:           Colors.ink1,
+    padding:         0,
   },
   otpBoxActive: {
     borderColor: Colors.ink2,
@@ -294,12 +342,6 @@ const styles = StyleSheet.create({
   },
   otpBoxError: {
     borderColor: Colors.danger,
-  },
-  otpChar: {
-    fontSize:      20,
-    fontWeight:    '600',
-    color:         Colors.ink1,
-    letterSpacing: 0,
   },
   errorText: {
     ...Type.caption,

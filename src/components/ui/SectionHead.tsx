@@ -8,6 +8,7 @@ import { FontFamily } from '../../theme/fonts';
 interface SectionHeadProps {
   eyebrow?: string;
   title: string;
+  note?: string;
   action?: string;
   onAction?: () => void;
   secondaryAction?: string;
@@ -15,12 +16,13 @@ interface SectionHeadProps {
 }
 
 export const SectionHead: React.FC<SectionHeadProps> = ({
-  eyebrow, title, action, onAction, secondaryAction, onSecondaryAction,
+  eyebrow, title, note, action, onAction, secondaryAction, onSecondaryAction,
 }) => (
-  <View style={styles.row}>
+  <View style={[styles.row, note ? styles.rowWithNote : null]}>
     <View style={styles.left}>
       {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
       <Text style={styles.title} numberOfLines={1}>{title}</Text>
+      {note ? <Text style={styles.note} numberOfLines={2}>{note}</Text> : null}
     </View>
     <View style={styles.actions}>
       {secondaryAction && onSecondaryAction ? (
@@ -38,7 +40,7 @@ export const SectionHead: React.FC<SectionHeadProps> = ({
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={styles.actionText}>{action}</Text>
-          <Icon name="arrow-forward" size={14} color={Colors.ink3} />
+          <Icon name="arrow-forward" size={14} color={Colors.heroLink} />
         </TouchableOpacity>
       ) : null}
     </View>
@@ -51,8 +53,11 @@ const styles = StyleSheet.create({
     alignItems:        'flex-end',
     justifyContent:    'space-between',
     paddingHorizontal: Space.screenH,
-    marginBottom:      Space[3],
+    marginBottom:      10,
     gap:               Space[3],
+  },
+  rowWithNote: {
+    alignItems: 'flex-start',
   },
   left: {
     flex:    1,
@@ -61,14 +66,21 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     ...Type.label,
-    color:         Colors.ink4,
+    color:         Colors.heroKicker,
     letterSpacing: 2,
+  },
+  note: {
+    ...Type.caption,
+    color:      Colors.heroInkMuted,
+    fontStyle:  'italic',
+    lineHeight: 16,
+    marginTop:  2,
   },
   title: {
     fontFamily:    FontFamily.serif,
     fontSize:      22,
     fontWeight:    '600',
-    color:         Colors.ink1,
+    color:         Colors.heroInk,
     letterSpacing: 0.1,
     lineHeight:    26,
   },
@@ -86,10 +98,10 @@ const styles = StyleSheet.create({
   actionText: {
     ...Type.caption,
     fontWeight: '600',
-    color:      Colors.ink3,
+    color:      Colors.heroLink,
   },
   secondaryActionText: {
     ...Type.caption,
-    color: Colors.ink4,
+    color: Colors.heroInkMuted,
   },
 });

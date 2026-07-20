@@ -7,7 +7,9 @@ import {
   Animated,
   TouchableOpacity,
   ScrollView,
+  BackHandler,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Colors, Space, Radius } from '../theme';
@@ -22,8 +24,9 @@ import { formatOrderTimestamp } from '../utils/formatOrderTimestamp';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-const HERO_IMG_SIZE = 112;
+const THUMB_SIZE = 72;
 const THUMB_RADIUS = Radius.md;
+const MAX_THUMBS = 3;
 
 const RING_R = 36;
 const RING_SIZE = 88;
@@ -66,6 +69,7 @@ type OrderSuccessParams = {
 
 type NavigationProp = {
   navigate: (screen: string, params?: Record<string, any>) => void;
+  replace: (screen: string, params?: Record<string, any>) => void;
   goBack: () => void;
 };
 
@@ -115,11 +119,11 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
   if (deliveryAddress?.street) addrLines.push(deliveryAddress.street);
   if (deliveryAddress?.city) addrLines.push(deliveryAddress.city);
 
-  const heroItem = cartItems.find(i => !!i.image) ?? cartItems[0] ?? null;
-  const extraCount =
-    heroItem && cartItems.length > 1 ? cartItems.length - 1 : 0;
-  const hasHeroImg = !!heroItem?.image;
-  const showOrder = hasHeroImg || !!metaLine || !!paymentMethod;
+  const imageItems = cartItems.filter(i => !!i.image);
+  const visibleThumbs = imageItems.slice(0, MAX_THUMBS);
+  const extraCount = imageItems.length - visibleThumbs.length;
+  const hasThumbs = visibleThumbs.length > 0;
+  const showOrder = hasThumbs || !!metaLine || !!paymentMethod;
   const showAddress = addrLines.length > 0;
 
   // ── Animations ────────────────────────────────────────────────────────────
@@ -190,13 +194,31 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
     ],
   });
 
+  // replace (not navigate) — removes OrderSuccess from the stack instead of
+  // pushing MainTabs on top of it. Otherwise MainTabs ends up ABOVE
+  // OrderSuccess in the stack, and swiping back from Orders/Home lands back
+  // on the (already-used) order confirmation screen.
   const handleTrackOrder = useCallback(
-    () => navigation.navigate('MainTabs', { screen: 'Orders', params: { refresh: true } }),
+    () => navigation.replace('MainTabs', { screen: 'Orders', params: { refresh: true } }),
     [navigation],
   );
   const handleContinueShopping = useCallback(
-    () => navigation.navigate('MainTabs', { screen: 'Home' }),
+    () => navigation.replace('MainTabs', { screen: 'Home' }),
     [navigation],
+  );
+
+  // Android hardware back would otherwise pop into Cart/Address underneath —
+  // re-entering an already-used checkout flow for a completed order. Redirect
+  // to Home instead, same as the Continue Shopping CTA. iOS swipe-back is
+  // separately disabled via gestureEnabled: false in AppNavigator.js.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        handleContinueShopping();
+        return true;
+      });
+      return () => sub.remove();
+    }, [handleContinueShopping]),
   );
 
   return (
@@ -223,7 +245,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
                 cy={RING_CX}
                 r={RING_R}
                 fill="none"
-                stroke={Colors.accent}
+                stroke={Colors.brandNavy}
                 strokeWidth={2}
                 strokeDasharray={CIRCUMFERENCE}
                 strokeDashoffset={strokeOffset}
@@ -233,7 +255,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
             </Svg>
             {showMark ? (
               <Animated.View style={{ opacity: markOpacity }}>
-                <Icon name="checkmark" size={26} color={Colors.accent} />
+                <Icon name="checkmark" size={26} color={Colors.brandNavy} />
               </Animated.View>
             ) : null}
           </View>
@@ -264,24 +286,30 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* ── Order card — images + meta ───────────────────────────────────── */}
         {showOrder ? (
           <Animated.View style={[s.card, fade(orderAnim)]}>
-            {hasHeroImg ? (
-              <FadeImage
-                uri={heroItem!.image}
-                width={HERO_IMG_SIZE}
-                height={HERO_IMG_SIZE}
-                borderRadius={THUMB_RADIUS}
-              />
+            {hasThumbs ? (
+              <View style={s.thumbRow}>
+                {visibleThumbs.map((item, i) => (
+                  <View key={`${item.name}-${i}`} style={s.thumbWrap}>
+                    <FadeImage
+                      uri={item.image}
+                      width={THUMB_SIZE}
+                      height={THUMB_SIZE}
+                      borderRadius={THUMB_RADIUS}
+                    />
+                  </View>
+                ))}
+                {extraCount > 0 ? (
+                  <View style={[s.thumbWrap, s.overflowBadge]}>
+                    <Text style={s.overflowText}>+{extraCount}</Text>
+                  </View>
+                ) : null}
+              </View>
             ) : null}
 
             <View style={s.orderMeta}>
               {metaLine ? <Text style={s.meta}>{metaLine}</Text> : null}
               {paymentMethod ? (
                 <Text style={s.payment}>{paymentMethod}</Text>
-              ) : null}
-              {extraCount > 0 ? (
-                <Text style={s.extraLabel}>
-                  +{extraCount} more item{extraCount > 1 ? 's' : ''}
-                </Text>
               ) : null}
             </View>
           </Animated.View>
@@ -291,7 +319,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
         {showAddress ? (
           <Animated.View style={[s.card, fade(addressAnim)]}>
             <View style={s.addrHeader}>
-              <Icon name="location-outline" size={15} color={Colors.accent} />
+              <Icon name="location-outline" size={15} color={Colors.brandNavy} />
               <Text style={s.addrHeaderText}>Delivering To</Text>
             </View>
             {addrLines.map((line, i) => (
@@ -349,7 +377,7 @@ const s = StyleSheet.create({
 
   // ── Hero — open, tinted warm patch behind it ──────────────────────────────
   hero: {
-    backgroundColor: 'rgba(178,90,61,0.04)',
+    backgroundColor: '#F1EEE7',
     borderRadius: 24,
     padding: Space[5],
     paddingBottom: Space[6],
@@ -365,7 +393,7 @@ const s = StyleSheet.create({
   ringFill: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: Radius.pill,
-    backgroundColor: Colors.accentTint,
+    backgroundColor: Colors.brandNavyTint,
   },
   headline: {
     fontFamily: FontFamily.sans,
@@ -424,6 +452,32 @@ const s = StyleSheet.create({
     gap: Space[3],
   },
 
+  // ── Order thumbnails ──────────────────────────────────────────────────────
+  thumbRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space[2],
+  },
+  thumbWrap: {
+    backgroundColor: Colors.surfaceSoft,
+    borderRadius: THUMB_RADIUS,
+    overflow: 'hidden',
+  },
+  overflowBadge: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    backgroundColor: Colors.surfaceDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overflowText: {
+    fontFamily: FontFamily.sans,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.ink3,
+    letterSpacing: 0.1,
+  },
+
   // ── Order meta group ───────────────────────────────────────────────────────
   orderMeta: {
     gap: Space[1],
@@ -435,10 +489,6 @@ const s = StyleSheet.create({
     lineHeight: 20,
   },
   payment: {
-    ...Type.caption,
-    color: Colors.ink4,
-  },
-  extraLabel: {
     ...Type.caption,
     color: Colors.ink4,
   },
@@ -477,13 +527,13 @@ const s = StyleSheet.create({
     width: '100%',
     height: 52,
     borderRadius: Radius.pill,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryBtnText: {
     ...Type.bodyStrong,
-    color: Colors.accentInk,
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   tertiaryBtn: {

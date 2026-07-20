@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { clearSession } from '../utils/auth';
-import { useCart } from '../context/CartContext';
 import {
   Skeleton,
   ConfirmSheet,
@@ -34,6 +33,7 @@ import { FontFamily } from '../theme/fonts';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useAppToast } from '../hooks/useAppToast';
+import { useTabRootBackHandler } from '../hooks/useTabRootBackHandler';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -61,7 +61,7 @@ const avatarStyles = StyleSheet.create({
     width:           76,
     height:          76,
     borderRadius:    38,
-    backgroundColor: Colors.surfaceDeep,
+    backgroundColor: Colors.brandNavyTint,
     alignItems:      'center',
     justifyContent:  'center',
   },
@@ -69,7 +69,7 @@ const avatarStyles = StyleSheet.create({
     fontFamily:    FontFamily.serif,
     fontSize:      26,
     fontWeight:    '400',
-    color:         Colors.ink2,
+    color:         Colors.brandNavy,
     letterSpacing: 0.5,
   },
 });
@@ -100,7 +100,7 @@ const StatRow: React.FC<{
           activeOpacity={0.7}
           accessibilityRole="button"
         >
-          <Icon name={item.icon} size={16} color={Colors.ink4} style={statStyles.cellIcon} />
+          <Icon name={item.icon} size={16} color={Colors.ink1} style={statStyles.cellIcon} />
           {loading ? (
             <Skeleton height={18} width={32} radius={Radius.xs} />
           ) : (
@@ -120,37 +120,32 @@ const statStyles = StyleSheet.create({
     flexDirection:   'row',
     backgroundColor: Colors.surface,
     borderRadius:    16,
-    borderWidth:     StyleSheet.hairlineWidth,
-    borderColor:     'rgba(0,0,0,0.07)',
+    borderWidth:     1,
+    borderColor:     '#ECE7DC',
     overflow:        'hidden',
-    shadowColor:     '#000000',
-    shadowOffset:    { width: 0, height: 1 },
-    shadowOpacity:   0.02,
-    shadowRadius:    3,
-    elevation:       1,
   },
   cell: {
     flex:            1,
     alignItems:      'center',
     paddingVertical: Space[4],
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: Colors.surfaceDeep,
+    borderRightColor: '#ECE7DC',
     gap:             3,
   },
   cellIcon: {
     marginBottom: 2,
   },
   cellValue: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      20,
-    fontWeight:    '400',
+    fontFamily:    FontFamily.sans,
+    fontSize:      19,
+    fontWeight:    '800',
     color:         Colors.ink1,
     letterSpacing: -0.3,
     lineHeight:    22,
   },
   cellLabel: {
     ...Type.caption,
-    fontSize: 11,
+    fontSize: 12,
     color:    Colors.ink4,
   },
 });
@@ -171,7 +166,7 @@ const MenuRow: React.FC<{
       style={[rowStyles.row, showDivider && rowStyles.border]}
     >
       <View style={[rowStyles.iconWrap, danger && rowStyles.iconWrapDanger]}>
-        <Icon name={icon} size={17} color={danger ? Colors.danger : Colors.ink3} />
+        <Icon name={icon} size={17} color={danger ? '#B3261E' : Colors.brandNavy} />
       </View>
       <Text style={[rowStyles.label, danger && rowStyles.labelDanger]}>{label}</Text>
       {!danger && <Icon name="chevron-forward" size={14} color={Colors.ink5} />}
@@ -189,28 +184,28 @@ const rowStyles = StyleSheet.create({
   },
   border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.surfaceDeep,
+    borderBottomColor: '#F1EDE3',
   },
   iconWrap: {
-    width:           34,
-    height:          34,
-    borderRadius:    10,
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    width:           40,
+    height:          40,
+    borderRadius:    12,
+    backgroundColor: Colors.brandNavyTint,
     alignItems:      'center',
     justifyContent:  'center',
   },
   iconWrapDanger: {
-    backgroundColor: 'rgba(185,28,28,0.06)',
+    backgroundColor: '#FBEAEA',
   },
   label: {
     flex:       1,
-    fontSize:   15,
-    fontWeight: '500',
+    fontSize:   14.5,
+    fontWeight: '700',
     color:      Colors.ink1,
     lineHeight: 20,
   },
   labelDanger: {
-    color: Colors.danger,
+    color: '#B3261E',
   },
 });
 
@@ -230,7 +225,7 @@ const LoggedOutView: React.FC<{
 }> = ({ onSignIn, onRegister }) => (
   <View style={loggedOutStyles.root}>
     <View style={loggedOutStyles.iconCircle}>
-      <Icon name="person-outline" size={26} color={Colors.accent} />
+      <Icon name="person-outline" size={26} color={Colors.brandNavy} />
     </View>
     <Text style={loggedOutStyles.title}>Your account</Text>
     <Text style={loggedOutStyles.body}>
@@ -252,7 +247,7 @@ const LoggedOutView: React.FC<{
     <View style={loggedOutStyles.benefitsRow}>
       {GUEST_BENEFITS.map(b => (
         <View key={b} style={loggedOutStyles.chip}>
-          <Icon name="checkmark" size={10} color={Colors.accent} />
+          <Icon name="checkmark" size={10} color={Colors.brandNavy} />
           <Text style={loggedOutStyles.chipText}>{b}</Text>
         </View>
       ))}
@@ -271,7 +266,7 @@ const loggedOutStyles = StyleSheet.create({
     width:           88,
     height:          88,
     borderRadius:    44,
-    backgroundColor: 'rgba(178, 90, 61, 0.08)',
+    backgroundColor: Colors.brandNavyTint,
     alignItems:      'center',
     justifyContent:  'center',
     marginBottom:    Space[5],
@@ -341,7 +336,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const toast  = useAppToast();
-  const { setCartCount } = useCart();
+  useTabRootBackHandler(navigation);
+
+  // Bottom-tab siblings stay mounted at all times and each set their own
+  // StatusBar style — RN merges state from every mounted instance app-wide,
+  // so another tab's style can win even after switching back here. Reassert
+  // on every focus rather than relying solely on the declarative <StatusBar>
+  // calls below (see HomeScreen.tsx for the same fix / fuller rationale).
+  useFocusEffect(
+    useCallback(() => {
+      StatusBar.setBarStyle('dark-content');
+    }, []),
+  );
 
   const heroAnim  = useEntrance(0);
   const statsAnim = useEntrance(80);
@@ -383,12 +389,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         postOrderHistory(code, 1, {})
           .then(res => {
             if (cancelled) return;
-            // Count distinct orders, not line items — matches OrderHistoryScreen's
-            // groupOrders logic so the two screens agree.
-            const distinctOrders = new Set(res.items.map(item => item.OrderNumber)).size;
-            // hasMore means there are additional pages — show count as "N+" so
-            // the stat isn't misleadingly low for users with many orders.
-            setOrderCount(res.hasMore ? -distinctOrders : distinctOrders);
+            setOrderCount(res.totalRecords);
           })
           .catch(() => {});
 
@@ -420,7 +421,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const confirmLogout = async () => {
     setLogoutVisible(false);
     await clearSession();
-    setCartCount(0);
     navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
   };
 
@@ -528,7 +528,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 <>
                   <Text style={styles.heroName}>{displayName}</Text>
                   <View style={styles.memberBadge}>
-                    <Text style={styles.memberBadgeText}>◆ {BRAND.memberLabel}</Text>
+                    <Text style={styles.memberBadgeText}>
+                      <Text style={styles.memberBadgeDiamond}>◆</Text> {BRAND.memberLabel}
+                    </Text>
                   </View>
                   {displayMobile
                     ? <Text style={styles.heroContact}>{displayMobile}</Text>
@@ -563,6 +565,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
           <View style={styles.menuCard}>
             <Text style={styles.menuLabel}>ACCOUNT</Text>
+            <MenuRow
+              icon="location-outline"
+              label="Saved Addresses"
+              onPress={() => { haptic.light(); navigation.navigate('AddressManagement'); }}
+            />
             <MenuRow
               icon="lock-closed-outline"
               label="Change Password"
@@ -646,36 +653,36 @@ const styles = StyleSheet.create({
     marginBottom:   Space[4],
   },
   manageBtn: {
-    paddingVertical:   6,
-    paddingHorizontal: Space[3],
+    paddingVertical:   9,
+    paddingHorizontal: Space[4],
     borderRadius:      Radius.pill,
-    borderWidth:       StyleSheet.hairlineWidth,
-    borderColor:       Colors.rule,
-    backgroundColor:   Colors.surfaceSoft,
+    borderWidth:       1,
+    borderColor:       '#ECE7DC',
   },
   manageBtnText: {
     ...Type.label,
-    fontSize:      10,
-    letterSpacing: 0.5,
-    color:         Colors.ink3,
+    fontSize:      11,
+    fontWeight:    '700',
+    letterSpacing: 0.8,
+    color:         Colors.ink1,
   },
   heroIdentity: {
     gap: 4,
   },
   heroName: {
     fontFamily:    FontFamily.serif,
-    fontSize:      26,
-    fontWeight:    '400',
+    fontSize:      27,
+    fontWeight:    '600',
     letterSpacing: -0.5,
     color:         Colors.ink1,
-    lineHeight:    30,
+    lineHeight:    31,
   },
   memberBadge: {
     alignSelf:         'flex-start',
     paddingVertical:   2,
     paddingHorizontal: 6,
     borderRadius:      3,
-    backgroundColor:   'rgba(178, 90, 61, 0.07)',
+    backgroundColor:   Colors.brandNavyTint,
     marginTop:         4,
     marginBottom:      4,
   },
@@ -683,7 +690,10 @@ const styles = StyleSheet.create({
     ...Type.label,
     fontSize:      8,
     letterSpacing: 1.0,
-    color:         Colors.accent,
+    color:         Colors.brandNavy,
+  },
+  memberBadgeDiamond: {
+    color: Colors.brandNavy,
   },
   heroContact: {
     ...Type.caption,
@@ -706,16 +716,11 @@ const styles = StyleSheet.create({
   menuCard: {
     backgroundColor:   Colors.surface,
     borderRadius:      16,
-    borderWidth:       StyleSheet.hairlineWidth,
-    borderColor:       Colors.surfaceDeep,
+    borderWidth:       1,
+    borderColor:       '#ECE7DC',
     paddingHorizontal: Space[4],
     paddingTop:        Space[3],
     paddingBottom:     Space[1],
-    shadowColor:       '#000000',
-    shadowOffset:      { width: 0, height: 1 },
-    shadowOpacity:     0.02,
-    shadowRadius:      3,
-    elevation:         1,
   },
   menuLabel: {
     ...Type.label,

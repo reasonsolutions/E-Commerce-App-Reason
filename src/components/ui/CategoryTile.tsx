@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
-import { Colors, Space } from '../../theme';
+import { Colors, Space, Shadow } from '../../theme';
 import { FontFamily } from '../../theme/fonts';
-
-const TONE_FILLS: string[] = [
-  '#EDE8E0', '#E4E8E2', '#EDE3D9', '#E2E4DF',
-  '#EDE7DB', '#E0DBD3', '#EDE0D9', '#DBD9C8', '#D8DCE0',
-];
 
 interface CategoryTileProps {
   name: string;
@@ -20,14 +15,13 @@ interface CategoryTileProps {
 
 const CIRCLE = 68;
 
-export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, index, onPress }) => {
-  const fill = TONE_FILLS[index % TONE_FILLS.length];
+export const CategoryTile: React.FC<CategoryTileProps> = ({ name, imageUri, onPress }) => {
   const resolved = imageUri ? resolveImageUrl(imageUri) : '';
   const [failed, setFailed] = useState(false);
 
   return (
     <TouchableOpacity style={styles.wrap} onPress={onPress} activeOpacity={0.82}>
-      <View style={[styles.circle, { backgroundColor: fill }]}>
+      <View style={styles.circle}>
         {resolved && !failed ? (
           <Image
             source={{ uri: resolved }}
@@ -51,12 +45,14 @@ const styles = StyleSheet.create({
     gap:        Space[2],
   },
   circle: {
-    width:          CIRCLE,
-    height:         CIRCLE,
-    borderRadius:   CIRCLE / 2,
-    overflow:       'hidden',
-    alignItems:     'center',
-    justifyContent: 'center',
+    width:           CIRCLE,
+    height:          CIRCLE,
+    borderRadius:    CIRCLE / 2,
+    overflow:        'hidden',
+    alignItems:      'center',
+    justifyContent:  'center',
+    backgroundColor: '#FFFFFF',
+    ...Shadow.sm,
   },
   img: {
     width:  CIRCLE,
@@ -65,13 +61,13 @@ const styles = StyleSheet.create({
   initial: {
     fontFamily: FontFamily.serifItalic,
     fontSize:   26,
-    color:      'rgba(40,32,24,0.28)',
+    color:      Colors.heroStageStart,
   },
   label: {
     fontFamily: FontFamily.sans,
     fontSize:   11,
-    fontWeight: '500',
-    color:      Colors.ink2,
+    fontWeight: '600',
+    color:      '#FFFFFF',
     textAlign:  'center',
     lineHeight: 14,
   },

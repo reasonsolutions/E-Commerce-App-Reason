@@ -7,6 +7,9 @@ export const Colors = {
   accent:      '#B25A3D',
   accentInk:   '#FFFFFF',
   accentTint:  'rgba(178, 90, 61, 0.07)',
+  // Brighter "Ink & Ember" ember — Orders/Wishlist/Cart handoff's exact hex.
+  // Distinct from `accent` (deeper terracotta) — do not merge the two.
+  emberBright: '#E8794A',
 
   // ── Surfaces ──────────────────────────────────────────────────────────────
   // Three warm off-white levels replace the flat #FFFFFF + drop-shadow system.
@@ -48,6 +51,45 @@ export const Colors = {
 
   // ── Ratings ───────────────────────────────────────────────────────────────
   star: '#F5A623',
+
+  // ── Home hero stage ("Ink & Ember" palette) ──────────────────────────────
+  // Scoped to the Home screen's top section (nav/search/categories/hero).
+  // Not part of the general design system — do not reuse elsewhere.
+  heroStageStart: '#15171C',
+  heroStageEnd:   '#15171C',
+  heroNavy:       '#15171C',
+  heroYellow:     '#E8794A',
+  heroTextSoft:   '#E9E6DF',
+  heroSearchIcon: '#15171C',
+  heroSearchPlaceholder: '#9A9488',
+
+  // ── Home below-hero sections ("Ink & Ember" palette, continued) ──────────
+  // Scoped to Home's below-hero content (product rails, brand tiles, section
+  // bands). Not part of the general design system — do not reuse elsewhere.
+  heroPageBg:      '#FAF7F2',  // page base background for these sections
+  heroBandTint:    '#FBEEE3',  // soft ember tint alternate section band
+  heroInk:         '#15171C',  // titles/prices
+  heroInkMuted:    '#9A9488',  // brand label / muted meta
+  heroInkFaint:    '#B7B0A2',  // MRP strikethrough
+  heroKicker:      '#9A9488',  // section kicker (JUST IN, ON SALE, etc.)
+  heroLink:        '#15171C',  // "See all" / "View all" link
+  heroTileBorder:  '#ECE7DC',  // brand tile border
+
+  // ── Brand accent ("Ink & Ember" palette, app-wide) ───────────────────────
+  // Used for the restyle of Categories, My Orders (+ Sort & Filter, Order
+  // Detail), Help Center, Product Detail, Profile (+ Change Password),
+  // Privacy/Terms, the shared bottom tab bar, Wishlist, and Cart. Reused
+  // token names from the earlier Mauritius Post navy rollout — repointed here
+  // to Ink & Ember hex values (matches the `hero*` tokens above, which were
+  // already migrated) so every screen stays visually consistent. `Colors.accent`
+  // (terracotta, #B25A3D) is a distinct, separately-tuned legacy token — do not
+  // conflate the two even though both now land in the same orange family.
+  brandNavy:       '#15171C',  // links, active states, buttons, icon tints (ink)
+  brandNavyDeep:   '#E8794A',  // badge fills (ember)
+  brandNavyTint:   '#FBEEE3',  // selected rows, badges, icon tiles (soft ember tint)
+  brandYellow:     '#FFFFFF',  // discount chip text on ember
+  brandKicker:     '#9A9488',  // section kicker (all-caps labels)
+  brandCardTint:   '#FBEEE3',  // grouped FAQ/list card background
 } as const;
 
 // 4px base grid

@@ -152,7 +152,7 @@ const BrandsScreen: React.FC<BrandsScreenProps> = ({ navigation }) => {
 
       {/* ── Search ─────────────────────────────────────────────────────────── */}
       <View style={styles.searchWrap}>
-        <Icon name="search-outline" size={15} color={Colors.ink4} style={styles.searchIcon} />
+        <Icon name="search-outline" size={15} color={Colors.brandNavy} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search brands…"

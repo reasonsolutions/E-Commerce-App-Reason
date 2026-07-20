@@ -34,6 +34,7 @@ import { useTactile } from '../hooks/useTactile';
 import { useAppToast } from '../hooks/useAppToast';
 import { DeliveryAddress } from './AddressScreen';
 import { Motion } from '../theme/motion';
+import { AddressLabel } from '../config/enum_files/AddressLabel';
 
 type Props = {
   navigation: {
@@ -49,6 +50,18 @@ const EMPTY_ERRORS = {
   CustomerName: '', MobileNumber: '', Address: '',
   StreetName: '', City: '', Landmark: '', Zipcode: '',
 };
+
+const LABEL_ICON: Record<AddressLabel, string> = {
+  [AddressLabel.Home]:  'home-outline',
+  [AddressLabel.Work]:  'briefcase-outline',
+  [AddressLabel.Other]: 'location-outline',
+};
+const LABEL_TEXT: Record<AddressLabel, string> = {
+  [AddressLabel.Home]:  'HOME',
+  [AddressLabel.Work]:  'WORK',
+  [AddressLabel.Other]: 'OTHER',
+};
+const LABEL_OPTIONS = [AddressLabel.Home, AddressLabel.Work, AddressLabel.Other];
 
 // ── Single address row ────────────────────────────────────────────────────────
 const AddressRow: React.FC<{
@@ -74,6 +87,12 @@ const AddressRow: React.FC<{
           <View style={[styles.primaryDot, item.IsPrimary && styles.primaryDotActive]} />
 
           <View style={styles.addressContent}>
+            {item.AddressLabel ? (
+              <View style={styles.labelChip}>
+                <Icon name={LABEL_ICON[item.AddressLabel]} size={11} color={Colors.brandNavy} />
+                <Text style={styles.labelChipText}>{LABEL_TEXT[item.AddressLabel]}</Text>
+              </View>
+            ) : null}
             <View style={styles.nameRow}>
               <Text style={styles.addressName}>{item.CustomerName}</Text>
               {item.IsPrimary ? (
@@ -104,14 +123,14 @@ const AddressRow: React.FC<{
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.actionBtn}
             >
-              <Icon name="pencil-outline" size={16} color={Colors.ink3} />
+              <Icon name="pencil-outline" size={16} color={Colors.brandNavy} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => { haptic.warning(); onDelete(); }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.actionBtn}
             >
-              <Icon name="trash-outline" size={16} color={Colors.ink4} />
+              <Icon name="trash-outline" size={16} color={Colors.danger} />
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -130,6 +149,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
   const [profileCode, setProfileCode]   = useState<number | null>(null);
   const [form, setForm]                 = useState(EMPTY_FORM);
   const [formErrors, setFormErrors]     = useState(EMPTY_ERRORS);
+  const [addressLabel, setAddressLabel] = useState<AddressLabel | null>(null);
   const [submitting, setSubmitting]     = useState(false);
   const [formError, setFormError]       = useState<string | null>(null);
   const [editingCode, setEditingCode]   = useState<number | null>(null);
@@ -189,6 +209,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
       Landmark:     item.Landmark     ?? '',
       Zipcode:      item.Zipcode      ?? '',
     });
+    setAddressLabel(item.AddressLabel ?? null);
     setFormErrors(EMPTY_ERRORS);
     setFormError(null);
   };
@@ -196,6 +217,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
   const cancelEdit = () => {
     setEditingCode(null);
     setForm(EMPTY_FORM);
+    setAddressLabel(null);
     setFormErrors(EMPTY_ERRORS);
     setFormError(null);
   };
@@ -217,6 +239,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
           Landmark:                 form.Landmark.trim(),
           Zipcode:                  Number(form.Zipcode.trim()),
           IsPrimary:                0,
+          AddressLabel:             addressLabel ?? undefined,
         });
         if (response.statusCode === 1) {
           run(async () => response.result as DeliveryAddress[]);
@@ -235,6 +258,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
           Zipcode:             form.Zipcode.trim(),
           IsPrimary:           '0',
           CustomerProfileCode: profileCode,
+          AddressLabel:        addressLabel ?? undefined,
         });
         if (response.statusCode === 1) {
           run(async () => response.result as DeliveryAddress[]);
@@ -282,6 +306,23 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         ) : null}
+      </View>
+      <View style={styles.labelPickerRow}>
+        {LABEL_OPTIONS.map(opt => {
+          const selected = addressLabel === opt;
+          return (
+            <TouchableOpacity
+              key={opt}
+              onPress={() => setAddressLabel(opt)}
+              style={[styles.labelPill, selected && styles.labelPillSelected]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.labelPillText, selected && styles.labelPillTextSelected]}>
+                {LABEL_TEXT[opt]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
       <View style={styles.formFields}>
         <FloatingLabelInput
@@ -492,7 +533,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   primaryDotActive: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brandNavy,
   },
   nameRow: {
     flexDirection: 'row',
@@ -503,6 +544,23 @@ const styles = StyleSheet.create({
   addressContent: {
     flex: 1,
     gap:  3,
+  },
+  labelChip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    alignSelf:         'flex-start',
+    gap:               5,
+    backgroundColor:   Colors.brandNavyTint,
+    borderRadius:      Radius.pill,
+    paddingVertical:   3,
+    paddingHorizontal: 8,
+    marginBottom:      4,
+  },
+  labelChipText: {
+    ...Type.label,
+    fontSize:      10,
+    color:         Colors.brandNavy,
+    letterSpacing: 0.4,
   },
   addressName: {
     ...Type.body,
@@ -526,7 +584,7 @@ const styles = StyleSheet.create({
     marginTop:     2,
   },
   primaryBadge: {
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.xs,
     paddingHorizontal: 5,
     paddingVertical:   2,
@@ -571,15 +629,40 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...Type.caption,
-    color: Colors.accent,
+    color: Colors.brandNavy,
+  },
+  labelPickerRow: {
+    flexDirection: 'row',
+    gap:           Space[2],
+    marginBottom:  Space[5],
+  },
+  labelPill: {
+    flex:              1,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingVertical:   Space[2] + 2,
+    borderRadius:      Radius.pill,
+    borderWidth:       1.5,
+    borderColor:       Colors.rule,
+    backgroundColor:   Colors.surface,
+  },
+  labelPillSelected: {
+    backgroundColor: Colors.brandNavy,
+    borderColor:     Colors.brandNavy,
+  },
+  labelPillText: {
+    ...Type.label,
+    color: Colors.ink1,
+  },
+  labelPillTextSelected: {
+    color: '#FFFFFF',
   },
   formFields: {
     gap:          Space[6],
     marginBottom: Space[5],
   },
   saveBtn: {
-    borderWidth:     1.5,
-    borderColor:     Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
     paddingVertical: Space[3] + 2,
     alignItems:      'center',
@@ -588,7 +671,7 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.35 },
   saveBtnText: {
     ...Type.bodyStrong,
-    color: Colors.ink1,
+    color: '#FFFFFF',
   },
 });
 

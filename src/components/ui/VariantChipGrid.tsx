@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   },
   sizeGuide: {
     ...Type.caption,
-    color: Colors.accent,
+    color: Colors.brandNavy,
   },
   chipRow: {
     flexDirection: 'row',
@@ -150,12 +150,12 @@ const styles = StyleSheet.create({
     borderWidth:     1.5,
   },
   chipSelected: {
-    backgroundColor: Colors.ink1,
-    borderColor:     Colors.ink1,
+    backgroundColor: Colors.brandNavy,
+    borderColor:     Colors.brandNavy,
   },
   chipInStock: {
     backgroundColor: Colors.surface,
-    borderColor:     Colors.ink2,
+    borderColor:     Colors.brandNavy,
   },
   chipOOS: {
     backgroundColor: Colors.surfaceSoft,

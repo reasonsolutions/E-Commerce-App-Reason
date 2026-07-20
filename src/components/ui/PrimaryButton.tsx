@@ -3,6 +3,7 @@ import { Animated, ActivityIndicator } from 'react-native';
 import { Button, ButtonText } from '../primitives';
 import { useTactile } from '../../hooks/useTactile';
 import { type TouchableOpacityProps } from 'react-native';
+import { Colors } from '../../theme';
 
 interface PrimaryButtonProps extends Omit<TouchableOpacityProps, 'children'> {
   label: string;
@@ -11,7 +12,7 @@ interface PrimaryButtonProps extends Omit<TouchableOpacityProps, 'children'> {
   height?: number;
 }
 
-// Full-width ink pill CTA — the canonical primary action button for the app.
+// Full-width navy pill CTA — the canonical primary action button for the app.
 // Wraps useTactile so callers don't wire it manually. Handles loading state.
 // Use for every "Add to Bag", "Place Order", "Confirm" action.
 export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
@@ -28,8 +29,8 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
   return (
     <Animated.View style={tactile.animatedStyle}>
       <Button
-        className="w-full rounded-full bg-ink1 items-center justify-center"
-        style={{ height, borderWidth: 0 }}
+        className="w-full rounded-full items-center justify-center"
+        style={{ height, borderWidth: 0, backgroundColor: Colors.brandNavy }}
         onPress={onPress}
         {...tactile.handlers}
         isDisabled={loading || isDisabled}

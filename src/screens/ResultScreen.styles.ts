@@ -72,13 +72,13 @@ export const styles = StyleSheet.create({
     lineHeight:  12 * 1.2,
   },
   filterPillTextActive: {
-    color: Colors.accent,
+    color: Colors.brandNavy,
   },
   filterDot: {
     width:           6,
     height:          6,
     borderRadius:    3,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brandNavy,
   },
 
   // ── Scroll canvas ────────────────────────────────────────────────────────────
@@ -140,12 +140,20 @@ export const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     lineHeight:         11 * 1.2,
   },
-  heroDiscount: {
+  // Filled chip — matches ProductCard.tsx's (Home) discount badge, so
+  // discount styling reads consistently between Home and Result.
+  discountChip: {
+    backgroundColor:   Colors.accent,
+    borderRadius:      5,
+    paddingVertical:   2,
+    paddingHorizontal: 6,
+  },
+  discountChipText: {
     ...Type.label,
-    fontSize:      10,
-    color:         Colors.ink3,
+    fontSize:      10.5,
+    fontWeight:    '800',
+    color:         '#FFFFFF',
     letterSpacing: 0.2,
-    lineHeight:    10 * 1.2,
   },
 
   // ── Grid divider ─────────────────────────────────────────────────────────────

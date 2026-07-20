@@ -39,6 +39,7 @@ export { SectionHead } from './SectionHead';
 export { BrandTile } from './BrandTile';
 export { CategoryTile } from './CategoryTile';
 export { WishlistHeart } from './WishlistHeart';
+export { QuickAddButton } from './QuickAddButton';
 export { ProductRail } from './ProductRail';
 export { ProductGrid } from './ProductGrid';
 export { TrustStrip } from './TrustStrip';

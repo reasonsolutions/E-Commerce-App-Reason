@@ -8,6 +8,7 @@ import { HazardLabel }        from '../config/enum_files/HazardLabel';
 import { WarrantyType }       from '../config/enum_files/WarrantyType';
 import { ProductDemographic } from '../config/enum_files/ProductDemographic';
 import { Season }             from '../config/enum_files/Season';
+import { AddressLabel }       from '../config/enum_files/AddressLabel';
 
 export interface PostCartSaveInterface {
   CustomerProfileCode: number;
@@ -94,6 +95,7 @@ export interface postCreateDeliveryAddressInterface {
     Zipcode: string;
     IsPrimary: string;
     CustomerProfileCode: number;
+    AddressLabel?: AddressLabel;
 }
 
 export interface postUpdateDeliveryAddressInterface {
@@ -107,6 +109,7 @@ export interface postUpdateDeliveryAddressInterface {
     Landmark: string;
     Zipcode: number;
     IsPrimary: number;
+    AddressLabel?: AddressLabel;
 }
 
 export interface postPlacedSingleOrderInterface {
@@ -513,6 +516,7 @@ export interface DeliveryAddressInterface {
     Landmark: string | null;
     Zipcode: string | null;
     IsPrimary: boolean;
+    AddressLabel?: AddressLabel | null;
 }
 
 //Order api result
@@ -719,6 +723,7 @@ export interface OrderHistoryItemInterface {
     OrderNumber:      string;
     OrderedDate:      string;
     PaymentInfo?:     OrderPaymentInfoInterface;
+    CompanyName?:     string;
 }
 
 export interface OrderHistoryApiResponse {

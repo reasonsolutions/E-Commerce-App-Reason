@@ -337,15 +337,15 @@ const barStyles = StyleSheet.create({
   btn: {
     height:          44,
     borderRadius:    Radius.pill,
-    borderWidth:     1,
-    borderColor:     Colors.rule,
+    borderWidth:     1.5,
+    borderColor:     Colors.brandNavy,
     alignItems:      'center',
     justifyContent:  'center',
     backgroundColor: Colors.surface,
   },
   btnText: {
     ...Type.bodyStrong,
-    color: Colors.ink2,
+    color: Colors.brandNavy,
   },
 });
 
@@ -432,6 +432,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
       haptic.success();
       setShowCancelSheet(false);
       setCancelSuccess(true);
+      fetchOrderDetails();
     } catch (err) {
       setCancelError(userFacingMessage(err));
     } finally {
@@ -461,7 +462,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   if (!orderNumber) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent />
         {Header}
         <View style={styles.stateWrap}>
           <ErrorState title="Order reference missing" message="Please go back and try again." onRetry={() => navigation.goBack()} retryLoading={false} />
@@ -473,7 +474,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   if (isError) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent />
         {Header}
         <View style={styles.stateWrap}>
           <ErrorState title="Couldn't load this order." message={error ?? 'Tap retry to try again.'} onRetry={() => fetchOrderDetails()} retryLoading={loading} />
@@ -486,7 +487,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   if (!orderDetails) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent />
         {Header}
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.section}>
@@ -536,7 +537,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.ink1} translucent />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent />
       {Header}
 
       <ScrollView
@@ -684,7 +685,7 @@ const styles = StyleSheet.create({
   section: {
     marginTop:         Space[4],
     marginHorizontal:  Space.screenH,
-    backgroundColor:   '#FFFFFF',
+    backgroundColor:   Colors.surface,
     borderRadius:      16,
     paddingHorizontal: Space[4],
     paddingVertical:   Space[2],

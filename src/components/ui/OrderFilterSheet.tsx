@@ -106,7 +106,7 @@ const radioStyles = StyleSheet.create({
     marginHorizontal:  -Space[3],
   },
   rowSelected: {
-    backgroundColor: 'rgba(178, 90, 61, 0.05)',
+    backgroundColor: '#EEE7DA',
   },
   border: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -132,13 +132,13 @@ const radioStyles = StyleSheet.create({
     justifyContent:  'center',
   },
   outerSelected: {
-    borderColor: Colors.accent,
+    borderColor: Colors.brandNavy,
   },
   inner: {
     width:           10,
     height:          10,
     borderRadius:    5,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.brandNavy,
   },
 });
 
@@ -288,14 +288,15 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily:    FontFamily.serif,
-    fontSize:      18,
+    fontSize:      21,
     fontWeight:    '400',
     color:         Colors.ink1,
     letterSpacing: -0.2,
   },
   clearBtn: {
     ...Type.caption,
-    color: Colors.accent,
+    color:              Colors.ink1,
+    textDecorationLine: 'underline',
   },
 
   // Section label — sans uppercase matching profile screen
@@ -322,7 +323,7 @@ const styles = StyleSheet.create({
   },
   applyBtn: {
     height:          52,
-    backgroundColor: Colors.ink1,
+    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
     alignItems:      'center',
     justifyContent:  'center',

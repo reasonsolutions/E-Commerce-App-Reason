@@ -101,7 +101,9 @@ const FeaturedCard: React.FC<{
             <View style={styles.heroPriceRow}>
               <Text style={styles.featuredPrice}>MUR {product.Price.toFixed(0)}</Text>
               {hasDiscount && (
-                <Text style={styles.heroDiscount}>−{discountPct}%</Text>
+                <View style={styles.discountChip}>
+                  <Text style={styles.discountChipText}>−{discountPct}%</Text>
+                </View>
               )}
             </View>
           </View>
@@ -162,7 +164,9 @@ const GridTile: React.FC<{
             <View style={styles.heroPriceRow}>
               <Text style={styles.gridPrice}>MUR {product.Price.toFixed(0)}</Text>
               {hasDiscount && (
-                <Text style={styles.heroDiscount}>−{discountPct}%</Text>
+                <View style={styles.discountChip}>
+                  <Text style={styles.discountChipText}>−{discountPct}%</Text>
+                </View>
               )}
             </View>
           </View>
@@ -221,7 +225,9 @@ const SpanCard: React.FC<{
             <View style={styles.heroPriceRow}>
               <Text style={styles.gridPrice}>MUR {product.Price.toFixed(0)}</Text>
               {hasDiscount && (
-                <Text style={styles.heroDiscount}>−{discountPct}%</Text>
+                <View style={styles.discountChip}>
+                  <Text style={styles.discountChipText}>−{discountPct}%</Text>
+                </View>
               )}
             </View>
           </View>
@@ -781,7 +787,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       <Icon
         name="options-outline"
         size={13}
-        color={activeFilterCount > 0 ? Colors.accent : Colors.ink3}
+        color={activeFilterCount > 0 ? Colors.brandNavy : Colors.ink3}
       />
       <Text
         style={[
