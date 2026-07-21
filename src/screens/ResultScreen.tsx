@@ -28,6 +28,7 @@ import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
 import {
   ProductByCategoryProductDetails,
+  AllProductsRawItem,
   CategoryInterface,
   GetBrandItem,
 } from '../api/interfaces';
@@ -54,10 +55,19 @@ import {
 import { deduplicateProducts, isFeaturedSpan, toServerSortBy, applySort } from '../utils/resultHelpers';
 import { useWishlist } from '../context/WishlistContext';
 import { wishlistCache } from '../utils/wishlistCache';
+import { discountPct as calcDiscountPct } from '../utils/pricing';
+import { isProductSoldOut } from '../utils/stock';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
 };
+
+// A list-card shows one image/price for the whole product (not per-variant),
+// so it reads as sold out only when every one of its variants is unavailable —
+// checking just the first variant misreports products where only that
+// specific variant (e.g. one size) is out of stock while others are fine.
+const isProductOOS = (product: ProductByCategoryProductDetails): boolean =>
+  isProductSoldOut(product.RawVariants);
 
 // ── Featured card — full-width, used when ≤3 results ─────────────────────────
 const FeaturedCard: React.FC<{
@@ -69,9 +79,10 @@ const FeaturedCard: React.FC<{
   const { animatedStyle: entranceStyle } = { animatedStyle: useEntrance(delay, false, Motion.list.initialY) };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
+  const isOOS = isProductOOS(product);
 
-  const hasDiscount = (product.DiscountPct ?? 0) > 0;
-  const discountPct = Math.round(product.DiscountPct ?? 0);
+  const discountPct = calcDiscountPct(product.Price, product.ComparePrice);
+  const hasDiscount = !isOOS && discountPct > 0;
 
   return (
     <Animated.View style={[styles.featuredCard, entranceStyle]}>
@@ -85,7 +96,7 @@ const FeaturedCard: React.FC<{
             {firstImage ? (
               <Image
                 source={{ uri: firstImage }}
-                style={styles.gridImg}
+                style={[styles.gridImg, isOOS && styles.oosImage]}
                 resizeMode="cover"
               />
             ) : null}
@@ -100,11 +111,15 @@ const FeaturedCard: React.FC<{
             <Text style={styles.featuredName} numberOfLines={2}>{product.Name}</Text>
             <View style={styles.heroPriceRow}>
               <Text style={styles.featuredPrice}>MUR {product.Price.toFixed(0)}</Text>
-              {hasDiscount && (
+              {isOOS ? (
+                <View style={styles.oosChip}>
+                  <Text style={styles.oosChipText}>Sold Out</Text>
+                </View>
+              ) : hasDiscount ? (
                 <View style={styles.discountChip}>
                   <Text style={styles.discountChipText}>−{discountPct}%</Text>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
         </TouchableOpacity>
@@ -127,9 +142,10 @@ const GridTile: React.FC<{
   };
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
+  const isOOS = isProductOOS(product);
 
-  const hasDiscount = (product.DiscountPct ?? 0) > 0;
-  const discountPct = Math.round(product.DiscountPct ?? 0);
+  const discountPct = calcDiscountPct(product.Price, product.ComparePrice);
+  const hasDiscount = !isOOS && discountPct > 0;
 
   return (
     <Animated.View style={[centered ? styles.gridTileCentered : styles.gridTile, entranceStyle]}>
@@ -146,7 +162,7 @@ const GridTile: React.FC<{
             {firstImage ? (
               <Image
                 source={{ uri: firstImage }}
-                style={styles.gridImg}
+                style={[styles.gridImg, isOOS && styles.oosImage]}
                 resizeMode="cover"
               />
             ) : null}
@@ -163,11 +179,15 @@ const GridTile: React.FC<{
             </Text>
             <View style={styles.heroPriceRow}>
               <Text style={styles.gridPrice}>MUR {product.Price.toFixed(0)}</Text>
-              {hasDiscount && (
+              {isOOS ? (
+                <View style={styles.oosChip}>
+                  <Text style={styles.oosChipText}>Sold Out</Text>
+                </View>
+              ) : hasDiscount ? (
                 <View style={styles.discountChip}>
                   <Text style={styles.discountChipText}>−{discountPct}%</Text>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
         </TouchableOpacity>
@@ -187,9 +207,10 @@ const SpanCard: React.FC<{
   const entranceStyle = useEntrance(delay, false, Motion.list.initialY);
   const { animatedStyle: pressStyle, handlers } = useTactile();
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
+  const isOOS = isProductOOS(product);
 
-  const hasDiscount = (product.DiscountPct ?? 0) > 0;
-  const discountPct = Math.round(product.DiscountPct ?? 0);
+  const discountPct = calcDiscountPct(product.Price, product.ComparePrice);
+  const hasDiscount = !isOOS && discountPct > 0;
 
   return (
     <Animated.View style={[styles.spanCard, entranceStyle]}>
@@ -207,7 +228,7 @@ const SpanCard: React.FC<{
             {firstImage ? (
               <Image
                 source={{ uri: firstImage }}
-                style={StyleSheet.absoluteFillObject}
+                style={[StyleSheet.absoluteFillObject, isOOS && styles.oosImage]}
                 resizeMode="contain"
               />
             ) : null}
@@ -224,11 +245,15 @@ const SpanCard: React.FC<{
             </Text>
             <View style={styles.heroPriceRow}>
               <Text style={styles.gridPrice}>MUR {product.Price.toFixed(0)}</Text>
-              {hasDiscount && (
+              {isOOS ? (
+                <View style={styles.oosChip}>
+                  <Text style={styles.oosChipText}>Sold Out</Text>
+                </View>
+              ) : hasDiscount ? (
                 <View style={styles.discountChip}>
                   <Text style={styles.discountChipText}>−{discountPct}%</Text>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
         </TouchableOpacity>
@@ -298,13 +323,23 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     searchQuery: searchQueryParam,
     categoryName = 'Browse',
     flashDeals: isFlashDeals = false,
+    itemIds,
   } = route.params as {
     categoryId?: string;
     brandId?: number;
     searchQuery?: string;
     categoryName?: string;
     flashDeals?: boolean;
+    itemIds?: number[];
   };
+
+  // Curated ID list (e.g. Home's "Picked for you → See all") — a fixed set,
+  // not an incrementally-fetchable feed, so pagination/infinite-scroll is
+  // skipped and the result is just the fetched page filtered to these IDs.
+  const itemIdSet = useMemo(
+    () => (itemIds && itemIds.length > 0 ? new Set(itemIds) : null),
+    [itemIds],
+  );
 
   const { loading, isError, error, run } = useAsyncState<
     ProductByCategoryProductDetails[]
@@ -441,26 +476,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   ]);
 
   // ── Shared mapper: allProducts API response → ProductByCategoryProductDetails
-  interface RawProduct {
-    ItemID:       string;
-    Name:         string;
-    MinPrice:     number;
-    MaxComparePrice: number;
-    Description:  string;
-    SubcategoryID:string;
-    Images:       string;
-    CreatedDate:  string;
-    BrandID:      string;
-    BrandName:    string;
-    CategoryID:   string;
-    CategoryName: string;
-    CategoryImage:string;
-    SCName:       string;
-    DiscountPct?: number;
-    Variants?:    { InventoryID: string; Variant: string; Stock: number }[];
-  }
-
-  const mapProducts = (raw: RawProduct[]): ProductByCategoryProductDetails[] =>
+  // Carries the full merchant-portal payload through as optional passthrough
+  // fields (ComplianceInfo, ProductClassification, Marketing, PolicyInfo,
+  // AdditionalInfo, ShippingInfo, RawVariants) instead of discarding them —
+  // cards today still only read the flattened fields below, unchanged.
+  const mapProducts = (raw: AllProductsRawItem[]): ProductByCategoryProductDetails[] =>
     raw.map(p => ({
       Item_Id: Number(p.ItemID),
       Name: p.Name,
@@ -484,6 +504,14 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       Variant: p.Variants?.[0]?.Variant ?? '',
       Count: p.Variants?.[0]?.Stock ?? 0,
       Date_Updated: p.CreatedDate,
+      RelatedProducts:       p.RelatedProducts,
+      ComplianceInfo:        p.ComplianceInfo,
+      ProductClassification: p.ProductClassification,
+      Marketing:             p.Marketing,
+      PolicyInfo:            p.PolicyInfo,
+      AdditionalInfo:        p.AdditionalInfo,
+      ShippingInfo:          p.ShippingInfo,
+      RawVariants:           p.Variants,
     }));
 
   // ── Build allProducts payload from current filter + route state ───────────
@@ -563,16 +591,22 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           productEndpoints.allProducts,
           payload,
         );
-        const page = deduplicateProducts(
+        let page = deduplicateProducts(
           mapProducts(response.data?.result?.Products ?? []),
         );
-        setTotalCount(response.data?.result?.TotalRecords ?? null);
-        if (page.length < PAGE_SIZE) setHasMore(false);
+        if (itemIdSet) {
+          page = page.filter(p => itemIdSet.has(p.Item_Id));
+          setHasMore(false);
+          setTotalCount(page.length);
+        } else {
+          setTotalCount(response.data?.result?.TotalRecords ?? null);
+          if (page.length < PAGE_SIZE) setHasMore(false);
+        }
         setAllProducts(page);
         return page;
       }, opts?.cancelled);
     },
-    [run, buildPayload],
+    [run, buildPayload, itemIdSet],
   );
 
   // ── Load next page — appends to list ─────────────────────────────────────

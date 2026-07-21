@@ -121,6 +121,7 @@ export const styles = StyleSheet.create({
   },
   heroPriceRow: {
     flexDirection: 'row',
+    flexWrap:      'wrap',
     alignItems:    'baseline',
     gap:           Space[2],
     marginTop:     2,
@@ -154,6 +155,24 @@ export const styles = StyleSheet.create({
     fontWeight:    '800',
     color:         '#FFFFFF',
     letterSpacing: 0.2,
+  },
+  // Muted variant of discountChip — out-of-stock label, takes priority
+  // over the discount badge when both would otherwise apply.
+  oosChip: {
+    backgroundColor:   Colors.ink3,
+    borderRadius:      5,
+    paddingVertical:   2,
+    paddingHorizontal: 6,
+  },
+  oosChipText: {
+    ...Type.label,
+    fontSize:      10.5,
+    fontWeight:    '800',
+    color:         '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  oosImage: {
+    opacity: 0.5,
   },
 
   // ── Grid divider ─────────────────────────────────────────────────────────────

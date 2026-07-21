@@ -27,13 +27,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { BRAND } from '../config/brand';
 import { setPendingPassword } from '../utils/registrationState';
 import type { RootStackParamList } from '../navigation/types';
-
-const COUNTRY_OPTIONS = [
-  { label: 'Mauritius', dialCode: '+230', code: 230 },
-  { label: 'India',     dialCode: '+91',  code: 91  },
-] as const;
-
-type CountryOption = typeof COUNTRY_OPTIONS[number];
+import { COUNTRY_OPTIONS, type CountryOption } from '../config/countries';
 
 const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();

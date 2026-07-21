@@ -24,6 +24,7 @@ import { BRAND } from '../../config/brand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useHaptic } from '../../hooks/useHaptic';
 import type { LoggedInCustomerInterface } from '../../api/interfaces';
+import { dialCodeForCountry } from '../../config/countries';
 
 const PAGE_BG  = '#F8F5F2';
 const CARD_BG  = '#FFFFFF';
@@ -76,21 +77,24 @@ const CardField: React.FC<{
   autoCapitalize?: 'none' | 'words' | 'sentences';
   returnKeyType?: 'next' | 'done';
   editable?: boolean;
-  verified?: boolean;
   showDivider?: boolean;
   onSubmitEditing?: () => void;
   inputRef?: React.RefObject<TextInput | null>;
+  prefix?: string;
+  error?: string | null;
+  onBlurField?: () => void;
 }> = ({
   label, value, onChangeText, keyboardType = 'default',
   autoCapitalize = 'sentences', returnKeyType = 'next',
-  editable = true, verified = false, showDivider = true,
-  onSubmitEditing, inputRef,
+  editable = true, showDivider = true,
+  onSubmitEditing, inputRef, prefix, error, onBlurField,
 }) => {
   const [focused, setFocused] = useState(false);
   return (
     <View style={[fieldStyles.wrap, showDivider && fieldStyles.wrapDivider]}>
       <Text style={fieldStyles.label}>{label}</Text>
       <View style={fieldStyles.valueRow}>
+        {prefix ? <Text style={fieldStyles.prefix}>{prefix}</Text> : null}
         <TextInput
           ref={inputRef}
           value={value}
@@ -100,7 +104,10 @@ const CardField: React.FC<{
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            onBlurField?.();
+          }}
           editable={editable}
           style={[
             fieldStyles.input,
@@ -110,16 +117,11 @@ const CardField: React.FC<{
           placeholderTextColor={Colors.ink4}
           autoCorrect={false}
         />
-        {verified && (
-          <View style={fieldStyles.verifiedBadge}>
-            <Icon name="checkmark-circle" size={13} color="#2E7D32" />
-            <Text style={fieldStyles.verifiedText}>Verified</Text>
-          </View>
-        )}
-        {!editable && !verified && (
+        {!editable && (
           <Icon name="lock-closed-outline" size={13} color={Colors.ink5} />
         )}
       </View>
+      {error ? <Text style={fieldStyles.errorText}>{error}</Text> : null}
     </View>
   );
 };
@@ -153,22 +155,22 @@ const fieldStyles = StyleSheet.create({
     paddingVertical: 0,
     paddingHorizontal: 0,
   },
+  prefix: {
+    fontFamily: FontFamily.sans,
+    fontSize:   16,
+    fontWeight: '400',
+    color:      Colors.ink4,
+  },
   inputFocused: {
     color: Colors.ink1,
   },
   inputLocked: {
     color: Colors.ink4,
   },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           3,
-  },
-  verifiedText: {
-    ...Type.label,
-    fontSize:      9,
-    letterSpacing: 0.5,
-    color:         '#2E7D32',
+  errorText: {
+    ...Type.caption,
+    color:     Colors.danger,
+    marginTop: Space[1],
   },
 });
 
@@ -192,6 +194,10 @@ export const EditProfileSheet: React.FC<EditProfileSheetProps> = ({
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [nameError,   setNameError]   = useState<string | null>(null);
+  const [emailError,  setEmailError]  = useState<string | null>(null);
+  const [mobileError, setMobileError] = useState<string | null>(null);
+
   const emailRef  = useRef<TextInput>(null);
   const mobileRef = useRef<TextInput>(null);
 
@@ -203,16 +209,50 @@ export const EditProfileSheet: React.FC<EditProfileSheetProps> = ({
       setEmail(session.EmailID ?? '');
       setMobile(session.MobileNumber !== undefined ? String(session.MobileNumber) : '');
       setSaveError(null);
+      setNameError(null);
+      setEmailError(null);
+      setMobileError(null);
       setSaving(false);
     }
   }, [isOpen, session]);
+
+  const validateName = useCallback(() => {
+    const err = !name.trim() ? 'Full name is required.' : null;
+    setNameError(err);
+    return err;
+  }, [name]);
+
+  const validateEmail = useCallback(() => {
+    let err: string | null = null;
+    if (!email.trim()) err = 'Email is required.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) err = 'Enter a valid email address.';
+    setEmailError(err);
+    return err;
+  }, [email]);
+
+  const validateMobile = useCallback(() => {
+    let err: string | null = null;
+    const trimmed = mobile.trim();
+    if (!trimmed) {
+      err = 'Mobile number is required.';
+    } else if (trimmed !== originalMobile && !/^\d{7,15}$/.test(trimmed)) {
+      // Only enforce the format on a number the user actually changed —
+      // a pre-existing saved number may not fit this rule and shouldn't
+      // block saving unrelated field edits.
+      err = 'Enter a valid mobile number.';
+    }
+    setMobileError(err);
+    return err;
+  }, [mobile, originalMobile]);
 
   const handleSave = useCallback(async () => {
     if (saving || !isDirty) return;
     setSaveError(null);
 
-    if (!name.trim() || !email.trim() || !mobile.trim()) {
-      setSaveError('Name, email and mobile are required.');
+    const nameErr   = validateName();
+    const emailErr  = validateEmail();
+    const mobileErr = validateMobile();
+    if (nameErr || emailErr || mobileErr) {
       return;
     }
     setSaving(true);
@@ -222,7 +262,7 @@ export const EditProfileSheet: React.FC<EditProfileSheetProps> = ({
         CustomerName:        name.trim(),
         EmailID:             email.trim(),
         MobileNumber:        mobile.trim(),
-        CountryCode:         230,
+        CountryCode:         session.CountryCode,
       });
 
       if (res?.statusCode !== 1) {
@@ -231,11 +271,12 @@ export const EditProfileSheet: React.FC<EditProfileSheetProps> = ({
         return;
       }
 
+      const parsedMobile = Number(mobile.trim());
       const updated: LoggedInCustomerInterface = {
         ...session,
         CustomerName: name.trim(),
         EmailID:      email.trim(),
-        MobileNumber: Number(mobile.trim()),
+        MobileNumber: Number.isNaN(parsedMobile) ? session.MobileNumber : parsedMobile,
       };
       await AsyncStorage.setItem(STORAGE_KEYS.userData, JSON.stringify(updated));
       haptic.success();
@@ -245,7 +286,19 @@ export const EditProfileSheet: React.FC<EditProfileSheetProps> = ({
       setSaveError(userFacingMessage(err));
       setSaving(false);
     }
-  }, [saving, isDirty, name, email, mobile, session, haptic, onSaved]);
+  }, [
+    saving,
+    isDirty,
+    name,
+    email,
+    mobile,
+    session,
+    haptic,
+    onSaved,
+    validateName,
+    validateEmail,
+    validateMobile,
+  ]);
 
   const displayName = name || originalName || '—';
 
@@ -308,34 +361,48 @@ export const EditProfileSheet: React.FC<EditProfileSheetProps> = ({
               <CardField
                 label="Full Name"
                 value={name}
-                onChangeText={setName}
+                onChangeText={(t) => {
+                  setName(t);
+                  if (nameError) setNameError(null);
+                }}
                 autoCapitalize="words"
                 returnKeyType="next"
                 onSubmitEditing={() => emailRef.current?.focus()}
                 showDivider
+                error={nameError}
+                onBlurField={validateName}
               />
               <CardField
                 label="Email"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(t) => {
+                  setEmail(t);
+                  if (emailError) setEmailError(null);
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 returnKeyType="next"
                 inputRef={emailRef}
                 onSubmitEditing={() => mobileRef.current?.focus()}
-                verified
                 showDivider
+                error={emailError}
+                onBlurField={validateEmail}
               />
               <CardField
                 label="Mobile Number"
                 value={mobile}
-                onChangeText={setMobile}
+                onChangeText={(t) => {
+                  setMobile(t);
+                  if (mobileError) setMobileError(null);
+                }}
                 keyboardType="phone-pad"
                 returnKeyType="done"
                 inputRef={mobileRef}
                 onSubmitEditing={handleSave}
-                verified
                 showDivider={false}
+                prefix={dialCodeForCountry(session.CountryCode)}
+                error={mobileError}
+                onBlurField={validateMobile}
               />
             </View>
 

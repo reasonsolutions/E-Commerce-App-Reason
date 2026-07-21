@@ -10,6 +10,7 @@ import { useCart } from '../../context/CartContext';
 import { useAppToast } from '../../hooks/useAppToast';
 import { useHaptic } from '../../hooks/useHaptic';
 import type { ProductInterface } from '../../api/interfaces';
+import { isProductSoldOut } from '../../utils/stock';
 
 interface QuickAddButtonProps {
   product: ProductInterface;
@@ -24,9 +25,10 @@ export const QuickAddButton: React.FC<QuickAddButtonProps> = ({ product }) => {
 
   const inventoryId = product.Inventory_Id;
   const firstVariant = product.Variants?.[0];
-  const isOOS = firstVariant
-    ? firstVariant.StockStatus?.Description === 'out_of_stock' && !firstVariant.BackOrder?.AllowBackOrder
-    : false;
+  const isOOS = isProductSoldOut(product.Variants);
+  const variantMaxPerOrder = firstVariant?.MaxPerOrder ?? null;
+  const variantStock       = firstVariant?.Stock ?? null;
+  const variantBackOrder   = firstVariant?.BackOrder;
 
   const bounce = useCallback(() => {
     Animated.sequence([
@@ -71,6 +73,9 @@ export const QuickAddButton: React.FC<QuickAddButtonProps> = ({ product }) => {
           variant:        product.Variant ?? '',
           image:          product.Images,
           organisationId: product.OrganisationId,
+          maxPerOrder:    variantMaxPerOrder,
+          stock:          variantStock,
+          backOrder:      variantBackOrder,
         });
       }
       setCartCount((prev: number) => prev + 1);
@@ -82,7 +87,7 @@ export const QuickAddButton: React.FC<QuickAddButtonProps> = ({ product }) => {
     } finally {
       setAdding(false);
     }
-  }, [inventoryId, adding, isOOS, haptic, bounce, toast, setCartCount, product]);
+  }, [inventoryId, adding, isOOS, haptic, bounce, toast, setCartCount, product, variantMaxPerOrder, variantStock, variantBackOrder]);
 
   if (!inventoryId) return null;
 

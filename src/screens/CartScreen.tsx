@@ -130,19 +130,25 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   }, [hasFetched, summaryOpacity, summaryTranslateY]);
   const summaryAnim = { opacity: summaryOpacity, transform: [{ translateY: summaryTranslateY }] };
 
+  // Out-of-stock lines stay visible in the list (not silently dropped) but
+  // are excluded from totals/checkout — Count is live stock as of the last
+  // fetch, so an item added while available can go to 0 by the time the cart
+  // is reopened.
+  const purchasableCartItems = cartItems.filter(item => item.Count > 0);
+
   const subtotal = isGuest
     ? guestItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
-    : cartItems.reduce((sum, item) => sum + cartLineNet(item), 0);
-  const taxGroups = isGuest ? [] : cartTaxBreakdown(cartItems);
+    : purchasableCartItems.reduce((sum, item) => sum + cartLineNet(item), 0);
+  const taxGroups = isGuest ? [] : cartTaxBreakdown(purchasableCartItems);
   const grossTotal = isGuest
     ? subtotal
-    : cartItems.reduce((sum, item) => sum + cartLineGross(item), 0);
+    : purchasableCartItems.reduce((sum, item) => sum + cartLineGross(item), 0);
   const itemCount = isGuest
     ? guestItems.reduce((sum, i) => sum + i.quantity, 0)
-    : cartItems.reduce((sum, item) => sum + item.Quantity, 0);
+    : purchasableCartItems.reduce((sum, item) => sum + item.Quantity, 0);
   const originalTotal = isGuest
     ? guestItems.reduce((sum, i) => sum + (i.comparePrice > i.price ? i.comparePrice : i.price) * i.quantity, 0)
-    : cartItems.reduce((sum, item) => {
+    : purchasableCartItems.reduce((sum, item) => {
         const was = cartDisplayWas(item);
         const unitGross = item.PriceDetails?.GrossAmount ?? item.Price;
         return sum + (was ?? unitGross) * item.Quantity;
@@ -243,8 +249,13 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   }, [removeTarget, removeSavedItem, setWishlistCode, toast]);
 
   const handleCheckout = useCallback(() => {
-    guard(() => navigation.navigate('Address', { cartItems }));
-  }, [guard, navigation, cartItems]);
+    guard(() => navigation.navigate('Address', { cartItems: purchasableCartItems }));
+  }, [guard, navigation, purchasableCartItems]);
+
+  // Guest carts aren't re-validated against live stock (their stock field is
+  // only a snapshot from add-time), so only the logged-in cart's OOS lines
+  // can gate checkout here.
+  const isCheckoutDisabled = !isGuest && purchasableCartItems.length === 0 && cartItems.length > 0;
 
   const clearCart = useCallback(async () => {
     setClearing(true);
@@ -456,8 +467,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           </View>
           <Animated.View style={checkoutTactile.animatedStyle}>
             <TouchableOpacity
-              style={styles.checkoutBtn}
+              style={[styles.checkoutBtn, isCheckoutDisabled && styles.checkoutBtnDisabled]}
               onPress={handleCheckout}
+              disabled={isCheckoutDisabled}
               {...checkoutTactile.handlers}
               activeOpacity={1}
               accessibilityRole="button"
@@ -845,6 +857,9 @@ const styles = StyleSheet.create({
     flexDirection:   'row',
     alignItems:      'center',
     justifyContent:  'center',
+  },
+  checkoutBtnDisabled: {
+    opacity: 0.4,
   },
   checkoutBtnText: {
     ...Type.bodyStrong,

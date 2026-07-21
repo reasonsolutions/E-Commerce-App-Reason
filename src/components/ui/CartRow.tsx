@@ -16,6 +16,8 @@ import { FontFamily } from '../../theme/fonts';
 import { Motion } from '../../theme/motion';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useAppToast } from '../../hooks/useAppToast';
+import { effectiveMaxPerOrder, effectivePurchaseLimit } from '../../utils/stock';
 
 // ── Logged-in cart row ────────────────────────────────────────────────────────
 export const CartRow = React.memo<{
@@ -25,6 +27,7 @@ export const CartRow = React.memo<{
   delay: number;
 }>(({ item, onUpdateQuantity, onRemove, delay }) => {
   const haptic         = useHaptic();
+  const toast          = useAppToast();
   const animOpacity    = useRef(new Animated.Value(0)).current;
   const animTranslateY = useRef(new Animated.Value(Motion.list.initialY)).current;
   useEffect(() => {
@@ -38,6 +41,10 @@ export const CartRow = React.memo<{
   const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
   const lineTotal    = item.Price * item.Quantity;
   const hasDiscount  = comparePrice > item.Price;
+  // Count is live stock at fetch time — an item added while in stock can go
+  // to 0 by the time the cart is reopened. Kept visible (not silently
+  // dropped) so the user isn't confused by a total that changed on its own.
+  const isOOS = item.Count <= 0;
 
   const handleDecrement = useCallback(() => {
     haptic.light();
@@ -45,10 +52,26 @@ export const CartRow = React.memo<{
     else onRemove(item);
   }, [haptic, item, onUpdateQuantity, onRemove]);
 
+  // Count doubles as available stock on this endpoint (confirmed against
+  // getAllProducts' Stock for the same InventoryId) — same rule ProductScreen
+  // applies pre-cart: no merchant-set MaxPerOrder means the cap is whatever
+  // stock is actually available, not unlimited.
   const handleIncrement = useCallback(() => {
+    if (isOOS) return;
+    const limit = effectiveMaxPerOrder(item.MaxPerOrder, item.Count);
+    if (item.Quantity >= limit) {
+      haptic.warning();
+      toast.warning({
+        title: 'Limit reached',
+        description: item.MaxPerOrder != null && item.MaxPerOrder <= item.Count
+          ? `Max ${item.MaxPerOrder} per order for this item.`
+          : 'No more stock available.',
+      });
+      return;
+    }
     haptic.light();
     onUpdateQuantity(item, item.Quantity + 1);
-  }, [haptic, item, onUpdateQuantity]);
+  }, [haptic, toast, item, onUpdateQuantity, isOOS]);
 
   const handleRemove = useCallback(() => {
     haptic.light();
@@ -60,7 +83,7 @@ export const CartRow = React.memo<{
       <View style={styles.cartImgWrap}>
         <Image
           source={{ uri: resolveImageUrl(item.Images) }}
-          style={styles.cartImg}
+          style={[styles.cartImg, isOOS && styles.cartImgOOS]}
           resizeMode="cover"
         />
       </View>
@@ -74,17 +97,24 @@ export const CartRow = React.memo<{
           <Text style={styles.cartVariant}>{item.Variant}</Text>
         ) : null}
 
-        <View style={styles.cartPriceRow}>
-          <Text style={styles.cartLineTotal}>MUR {lineTotal.toLocaleString('en-IN')}</Text>
-          {hasDiscount && (
-            <Text style={styles.cartUnitWas}>MUR {(comparePrice * item.Quantity).toLocaleString('en-IN')}</Text>
-          )}
-        </View>
+        {isOOS ? (
+          <View style={styles.oosChip}>
+            <Text style={styles.oosChipText}>Out of Stock</Text>
+          </View>
+        ) : (
+          <View style={styles.cartPriceRow}>
+            <Text style={styles.cartLineTotal}>MUR {lineTotal.toLocaleString('en-IN')}</Text>
+            {hasDiscount && (
+              <Text style={styles.cartUnitWas}>MUR {(comparePrice * item.Quantity).toLocaleString('en-IN')}</Text>
+            )}
+          </View>
+        )}
 
         <View style={styles.cartBottom}>
-          <View style={styles.qtyPill}>
+          <View style={[styles.qtyPill, isOOS && styles.qtyPillDisabled]}>
             <TouchableOpacity
               onPress={handleDecrement}
+              disabled={isOOS}
               style={styles.qtyPillBtn}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               accessibilityLabel={item.Quantity <= 1 ? 'Remove item' : 'Decrease quantity'}
@@ -95,6 +125,7 @@ export const CartRow = React.memo<{
             <Text style={styles.qtyValue}>{item.Quantity}</Text>
             <TouchableOpacity
               onPress={handleIncrement}
+              disabled={isOOS}
               style={styles.qtyPillBtn}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               accessibilityLabel="Increase quantity"
@@ -128,6 +159,7 @@ export const GuestCartRow = React.memo<{
   delay: number;
 }>(({ item, onUpdateQuantity, onRemove, delay }) => {
   const haptic         = useHaptic();
+  const toast          = useAppToast();
   const animOpacity    = useRef(new Animated.Value(0)).current;
   const animTranslateY = useRef(new Animated.Value(Motion.list.initialY)).current;
   useEffect(() => {
@@ -150,10 +182,27 @@ export const GuestCartRow = React.memo<{
     else onRemove();
   }, [haptic, item.quantity, onUpdateQuantity, onRemove]);
 
+  // maxPerOrder/stock/backOrder are only present if captured at add-to-cart
+  // time (ProductScreen/QuickAddButton) — older guest-cart entries predating
+  // this fix won't have them, so an absent value must not block incrementing.
+  const limit = item.maxPerOrder != null || item.stock != null
+    ? effectivePurchaseLimit(item.maxPerOrder, item.stock, item.backOrder)
+    : Infinity;
+
   const handleIncrement = useCallback(() => {
+    if (item.quantity >= limit) {
+      haptic.warning();
+      toast.warning({
+        title: 'Limit reached',
+        description: item.maxPerOrder != null && item.maxPerOrder <= limit
+          ? `Max ${item.maxPerOrder} per order for this item.`
+          : 'No more stock available.',
+      });
+      return;
+    }
     haptic.light();
     onUpdateQuantity(item.quantity + 1);
-  }, [haptic, item.quantity, onUpdateQuantity]);
+  }, [haptic, toast, item, onUpdateQuantity, limit]);
 
   const handleRemove = useCallback(() => {
     haptic.light();
@@ -266,6 +315,9 @@ const styles = StyleSheet.create({
     width:  '100%',
     height: '100%',
   },
+  cartImgOOS: {
+    opacity: 0.5,
+  },
   cartImgFallback: {
     alignItems:     'center',
     justifyContent: 'center',
@@ -336,6 +388,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
     paddingVertical:   3,
     gap:               6,
+  },
+  qtyPillDisabled: {
+    opacity: 0.4,
+  },
+  oosChip: {
+    alignSelf:         'flex-start',
+    backgroundColor:   Colors.ink3,
+    borderRadius:      5,
+    paddingVertical:   2,
+    paddingHorizontal: 6,
+    marginTop:         2,
+  },
+  oosChipText: {
+    ...Type.label,
+    fontSize:      10.5,
+    fontWeight:    '800',
+    color:         '#FFFFFF',
+    letterSpacing: 0.2,
   },
   qtyPillBtn: {
     width:           26,

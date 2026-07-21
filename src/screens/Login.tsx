@@ -20,6 +20,7 @@ import {
   clearGuestCart,
   type GuestCartItem,
 } from '../api/cart';
+import { effectivePurchaseLimit } from '../utils/stock';
 import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
@@ -217,21 +218,33 @@ const Login: React.FC = () => {
           existingCartRes?.statusCode === 1 ? existingCartRes.result ?? [] : [];
         if (guestItems.length > 0) {
           let mergeFailures = 0;
+          let mergeTrimmed  = 0;
           await Promise.all(
             guestItems.map((item: GuestCartItem) => {
               const existing = existingItems.find(
                 ci => ci.InventoryId === item.inventoryId,
               );
+              const combinedQty = (existing?.Quantity ?? 0) + item.quantity;
+              // maxPerOrder/stock/backOrder are only captured for guest items
+              // added after those fixes shipped — undefined for older entries,
+              // in which case there's nothing reliable to clamp against, so
+              // pass the raw quantity through unchanged rather than guess.
+              const limit = item.maxPerOrder != null || item.stock != null
+                ? effectivePurchaseLimit(item.maxPerOrder, item.stock, item.backOrder)
+                : null;
+              const finalQty = limit != null ? Math.min(combinedQty, limit) : combinedQty;
+              if (limit != null && finalQty < combinedQty) mergeTrimmed++;
+
               return existing
                 ? updateCartItemQuantity(
                     existing.CartDetailsCode,
                     item.inventoryId,
-                    existing.Quantity + item.quantity,
+                    finalQty,
                   ).catch(() => { mergeFailures++; })
                 : postSaveCartItems({
                     CustomerProfileCode: userData.CustomerProfileCode,
                     InventoryId: item.inventoryId,
-                    Quantity: item.quantity,
+                    Quantity: finalQty,
                     IsPurchased: false,
                   }).catch(() => { mergeFailures++; });
             }),
@@ -241,6 +254,11 @@ const Login: React.FC = () => {
             toast.error({
               title: 'Some cart items not synced',
               description: `${mergeFailures} item${mergeFailures > 1 ? 's' : ''} couldn't be added to your cart.`,
+            });
+          } else if (mergeTrimmed > 0) {
+            toast.warning({
+              title: 'Cart quantities adjusted',
+              description: `${mergeTrimmed} item${mergeTrimmed > 1 ? 's' : ''} exceeded the per-order limit and ${mergeTrimmed > 1 ? 'were' : 'was'} trimmed.`,
             });
           }
         }

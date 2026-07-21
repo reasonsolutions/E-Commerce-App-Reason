@@ -23,6 +23,9 @@ export function useEntrance(delay = 0, withScale = false, initialY = 10): Entran
   const translateY = useRef(new Animated.Value(initialY)).current;
   const scale      = useRef(new Animated.Value(withScale ? 0.97 : 1)).current;
 
+  // Runs once per mounted instance — deliberately ignores later changes to
+  // delay/withScale so a parent re-render (e.g. a list re-fetch reshuffling
+  // indices) never replays the animation on rows that already settled.
   useEffect(() => {
     Animated.parallel([
       Animated.timing(opacity,    { toValue: 1, duration: withScale ? Motion.duration.carry : Motion.duration.settle, delay, useNativeDriver: true }),
@@ -31,7 +34,8 @@ export function useEntrance(delay = 0, withScale = false, initialY = 10): Entran
         ? [Animated.timing(scale, { toValue: 1, duration: Motion.duration.carry, delay, useNativeDriver: true })]
         : []),
     ]).start();
-  }, [opacity, translateY, scale, delay, withScale]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     opacity,

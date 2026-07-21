@@ -35,7 +35,9 @@ const Field: React.FC<{
   returnKeyType?: 'next' | 'done';
   onSubmitEditing?: () => void;
   nextRef?: React.RefObject<TextInput | null>;
-}> = ({ label, value, onChangeText, returnKeyType = 'next', onSubmitEditing, nextRef }) => {
+  error?: string | null;
+  onBlurField?: () => void;
+}> = ({ label, value, onChangeText, returnKeyType = 'next', onSubmitEditing, nextRef, error, onBlurField }) => {
   const [focused, setFocused] = useState(false);
   const [secure,  setSecure]  = useState(true);
   return (
@@ -49,7 +51,10 @@ const Field: React.FC<{
           returnKeyType={returnKeyType}
           onSubmitEditing={nextRef ? () => nextRef.current?.focus() : onSubmitEditing}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            onBlurField?.();
+          }}
           style={fieldStyles.input}
           placeholderTextColor={Colors.ink4}
           autoCorrect={false}
@@ -62,7 +67,8 @@ const Field: React.FC<{
           <Icon name={secure ? 'eye-outline' : 'eye-off-outline'} size={18} color={Colors.ink4} />
         </TouchableOpacity>
       </View>
-      <View style={[fieldStyles.underline, focused && fieldStyles.underlineFocused]} />
+      <View style={[fieldStyles.underline, focused && fieldStyles.underlineFocused, error && fieldStyles.underlineError]} />
+      {error ? <Text style={fieldStyles.errorText}>{error}</Text> : null}
     </View>
   );
 };
@@ -101,6 +107,15 @@ const fieldStyles = StyleSheet.create({
     height:          1,
     backgroundColor: Colors.ink2,
   },
+  underlineError: {
+    height:          1,
+    backgroundColor: Colors.danger,
+  },
+  errorText: {
+    ...Type.caption,
+    color:     Colors.danger,
+    marginTop: Space[1],
+  },
 });
 
 export const ChangePasswordSheet: React.FC<ChangePasswordSheetProps> = ({
@@ -118,6 +133,10 @@ export const ChangePasswordSheet: React.FC<ChangePasswordSheetProps> = ({
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [oldPasswordError,     setOldPasswordError]     = useState<string | null>(null);
+  const [newPasswordError,     setNewPasswordError]     = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
+
   const newPasswordRef     = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
 
@@ -127,24 +146,43 @@ export const ChangePasswordSheet: React.FC<ChangePasswordSheetProps> = ({
       setNewPassword('');
       setConfirmPassword('');
       setSaveError(null);
+      setOldPasswordError(null);
+      setNewPasswordError(null);
+      setConfirmPasswordError(null);
       setSaving(false);
     }
   }, [isOpen]);
+
+  const validateOldPassword = useCallback(() => {
+    const err = !oldPassword.trim() ? 'Current password is required.' : null;
+    setOldPasswordError(err);
+    return err;
+  }, [oldPassword]);
+
+  const validateNewPassword = useCallback(() => {
+    let err: string | null = null;
+    if (!newPassword.trim()) err = 'New password is required.';
+    else if (newPassword.length < 6) err = 'New password must be at least 6 characters.';
+    setNewPasswordError(err);
+    return err;
+  }, [newPassword]);
+
+  const validateConfirmPassword = useCallback(() => {
+    let err: string | null = null;
+    if (!confirmPassword.trim()) err = 'Please confirm your new password.';
+    else if (confirmPassword !== newPassword) err = 'New passwords do not match.';
+    setConfirmPasswordError(err);
+    return err;
+  }, [confirmPassword, newPassword]);
 
   const handleSave = useCallback(async () => {
     if (saving) return;
     setSaveError(null);
 
-    if (!oldPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
-      setSaveError('All fields are required.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setSaveError('New passwords do not match.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setSaveError('New password must be at least 6 characters.');
+    const oldErr     = validateOldPassword();
+    const newErr      = validateNewPassword();
+    const confirmErr = validateConfirmPassword();
+    if (oldErr || newErr || confirmErr) {
       return;
     }
 
@@ -169,7 +207,18 @@ export const ChangePasswordSheet: React.FC<ChangePasswordSheetProps> = ({
       setSaveError(userFacingMessage(err));
       setSaving(false);
     }
-  }, [saving, oldPassword, newPassword, confirmPassword, customerProfileCode, haptic, onSaved]);
+  }, [
+    saving,
+    oldPassword,
+    newPassword,
+    confirmPassword,
+    customerProfileCode,
+    haptic,
+    onSaved,
+    validateOldPassword,
+    validateNewPassword,
+    validateConfirmPassword,
+  ]);
 
   return (
     <Modal
@@ -211,23 +260,38 @@ export const ChangePasswordSheet: React.FC<ChangePasswordSheetProps> = ({
             <Field
               label="Current Password"
               value={oldPassword}
-              onChangeText={setOldPassword}
+              onChangeText={(t) => {
+                setOldPassword(t);
+                if (oldPasswordError) setOldPasswordError(null);
+              }}
               returnKeyType="next"
               nextRef={newPasswordRef}
+              error={oldPasswordError}
+              onBlurField={validateOldPassword}
             />
             <Field
               label="New Password"
               value={newPassword}
-              onChangeText={setNewPassword}
+              onChangeText={(t) => {
+                setNewPassword(t);
+                if (newPasswordError) setNewPasswordError(null);
+              }}
               returnKeyType="next"
               nextRef={confirmPasswordRef}
+              error={newPasswordError}
+              onBlurField={validateNewPassword}
             />
             <Field
               label="Confirm New Password"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(t) => {
+                setConfirmPassword(t);
+                if (confirmPasswordError) setConfirmPasswordError(null);
+              }}
               returnKeyType="done"
               onSubmitEditing={handleSave}
+              error={confirmPasswordError}
+              onBlurField={validateConfirmPassword}
             />
 
             <TouchableOpacity

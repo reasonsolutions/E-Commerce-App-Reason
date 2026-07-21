@@ -71,6 +71,9 @@ const categoryTileW = 76;
 
 // ── Recently viewed snapshot — only the fields ProductCard actually reads,
 // plus CategoryName which backs the "Picked for you" personalization note.
+// Variants carries StockStatus only (as of the moment the product was last
+// viewed) so ProductCard's out-of-stock badge can render here too — it can
+// go stale if stock changes after the visit, unlike live-fetched rails.
 interface RecentlyViewedItem {
   ItemID: number;
   Name: string;
@@ -81,6 +84,10 @@ interface RecentlyViewedItem {
   DiscountPct?: number;
   Inventory_Id?: number | null;
   CategoryName?: string;
+  Variants?: {
+    StockStatus?: { Value: number; Description: string };
+    BackOrder?:   { AllowBackOrder?: boolean };
+  }[];
 }
 
 // ── Spotlight shape for BannerSlot ────────────────────────────────────────────

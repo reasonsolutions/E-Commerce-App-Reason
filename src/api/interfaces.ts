@@ -382,6 +382,42 @@ export interface CategoryProductRaw {
     ApprovedOn: string | null;
 }
 
+// raw row from getAllProducts (productEndpoints.allProducts) — full merchant-portal payload
+export interface AllProductsRawItem {
+    ItemID:                number;
+    Name:                  string;
+    OrganisationName:      string;
+    OrganisationId:        string;
+    Description:           string;
+    SubcategoryID:         string;
+    Images:                string;
+    CreatedDate:           string;
+    BrandID:               string;
+    BrandName:             string;
+    SCName:                string;
+    CategoryID:            string;
+    CategoryName:          string;
+    CategoryImage:         string;
+    RelatedProducts:       string | null;
+    MinPrice:              number;
+    MaxComparePrice:       number;
+    DiscountPct:           number;
+    ComplianceInfo:        ProductComplianceInfo;
+    ProductClassification: ProductClassification;
+    Marketing:             ProductMarketing;
+    PolicyInfo:            ProductPolicyInfo;
+    AdditionalInfo: {
+        VideoUrl:            string | null;
+        SizeChart:           string | null;
+        CareInstructions:    string | null;
+        MaterialComposition: string | null;
+        Color:               string | null;
+        Season:              { Value: number; Description: string } | null;
+    };
+    ShippingInfo: ProductShippingInfo;
+    Variants:     ProductVariant[];
+}
+
 //get products by category api result
 export interface ProductByCategoryProductDetails {
     Item_Id: number;
@@ -396,6 +432,23 @@ export interface ProductByCategoryProductDetails {
     Brand_Id: number;
     ApprovedBy: string | null;
     ApprovedOn: string | null;
+    // Optional passthrough — populated only when sourced from getAllProducts
+    // (mapProducts in ResultScreen.tsx); absent for getProductsByCategory rows.
+    RelatedProducts?:       string | null;
+    ComplianceInfo?:        ProductComplianceInfo;
+    ProductClassification?: ProductClassification;
+    Marketing?:             ProductMarketing;
+    PolicyInfo?:            ProductPolicyInfo;
+    AdditionalInfo?: {
+        VideoUrl:            string | null;
+        SizeChart:           string | null;
+        CareInstructions:    string | null;
+        MaterialComposition: string | null;
+        Color:               string | null;
+        Season:              { Value: number; Description: string } | null;
+    };
+    ShippingInfo?: ProductShippingInfo;
+    RawVariants?:  ProductVariant[];
     VendorID: number;
     Brand_Name: string;
     Category_Id: number;
@@ -559,6 +612,7 @@ export interface SavedCartItemInterface {
     OrganisationId: string;
     OrganisationName: string;
     Price: number;
+    MaxPerOrder: number | null;
     PriceDetails: {
         Price: number;
         ComparePrice: number;

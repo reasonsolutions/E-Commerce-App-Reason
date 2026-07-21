@@ -242,7 +242,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
           AddressLabel:             addressLabel ?? undefined,
         });
         if (response.statusCode === 1) {
-          run(async () => response.result as DeliveryAddress[]);
+          await fetchAddresses();
           cancelEdit();
         } else {
           setFormError(response.userMessage || 'Failed to update address.');
@@ -261,7 +261,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
           AddressLabel:        addressLabel ?? undefined,
         });
         if (response.statusCode === 1) {
-          run(async () => response.result as DeliveryAddress[]);
+          await fetchAddresses();
           cancelEdit();
         } else {
           setFormError(response.userMessage || 'Failed to save address.');
@@ -283,7 +283,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
     try {
       const response = await postDeleteDeliveryAddress(code);
       if (response.statusCode === 1) {
-        run(async () => response.result as DeliveryAddress[]);
+        await fetchAddresses();
         if (editingCode === code) cancelEdit();
       } else {
         toast.error({ title: 'Could not delete address', description: response.userMessage || undefined });

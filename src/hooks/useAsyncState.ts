@@ -64,7 +64,11 @@ export function useAsyncState<T>(
         const result = await fn();
         set({ status: 'success', data: result, error: null });
       } catch (err) {
-        set({ status: 'error', error: userFacingMessage(err), data: initialDataRef.current });
+        set({
+          status: 'error',
+          error: userFacingMessage(err),
+          data: initialDataRef.current,
+        });
       }
     },
     [],

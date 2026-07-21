@@ -48,6 +48,7 @@ export const WishlistHeart: React.FC<WishlistHeartProps> = ({
           const res = await removeFromWishlist(profileCode, prev);
           if (res?.statusCode === 1) {
             wishlistCache.invalidate();
+            toastEmitter.emit('success', 'Removed from wishlist');
           } else {
             setWishlistCode(inventoryId, prev);
             toastEmitter.emit('error', "Couldn't remove from wishlist", res?.userMessage);
@@ -70,6 +71,7 @@ export const WishlistHeart: React.FC<WishlistHeartProps> = ({
               );
               setWishlistCode(inventoryId, match?.WishlistCode ?? -1);
             }
+            toastEmitter.emit('success', 'Added to wishlist');
           } else {
             setWishlistCode(inventoryId, null);
             toastEmitter.emit('error', "Couldn't save to wishlist", res?.userMessage);

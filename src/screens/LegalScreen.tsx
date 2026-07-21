@@ -36,7 +36,7 @@ const PRIVACY_SECTIONS = [
   },
   {
     title: 'Your Rights',
-    body: 'You may request access to, correction of, or deletion of your personal data at any time by contacting us. You may also opt out of marketing communications while continuing to receive transactional messages.',
+    body: 'You may request access to, correction of, or deletion of your personal data at any time by contacting us.',
   },
   {
     title: 'Cookies and Analytics',
@@ -60,10 +60,6 @@ const TERMS_SECTIONS = [
   {
     title: 'Orders and Payments',
     body: 'When you place an order you are making an offer to purchase. We reserve the right to cancel orders in the event of pricing errors, stock unavailability, or suspected fraud. Payment is charged at the time of order confirmation.',
-  },
-  {
-    title: 'Returns and Refunds',
-    body: 'Return eligibility varies by product and seller. Please check the product page before purchasing. Approved refunds are processed within 5–10 business days to your original payment method.',
   },
   {
     title: 'Prohibited Use',

@@ -14,6 +14,8 @@ import { QuickAddButton } from './ui/QuickAddButton';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
+import { discountPct as calcDiscountPct } from '../utils/pricing';
+import { isProductSoldOut } from '../utils/stock';
 
 interface ProductCardProps {
   product: ProductInterface;
@@ -40,8 +42,12 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
     setImgFailed(true);
   }, []);
 
-  const hasDiscount = product.MaxComparePrice > product.MinPrice;
-  const discountPct = hasDiscount && product.DiscountPct > 0 ? Math.round(product.DiscountPct) : 0;
+  // A product reads as sold out only when every one of its variants is
+  // unavailable — not just the first (e.g. one size out of stock shouldn't
+  // hide the whole product), and backorderable variants stay purchasable.
+  const isOOS = isProductSoldOut(product.Variants);
+  const discountPct = calcDiscountPct(product.MinPrice, product.MaxComparePrice);
+  const hasDiscount = !isOOS && discountPct > 0;
 
   const isNew = (() => {
     if (!product.CreatedDate) return false;
@@ -64,7 +70,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
         {imgUri && !imgFailed ? (
           <Image
             source={{ uri: imgUri }}
-            style={styles.img}
+            style={[styles.img, isOOS && styles.imgOOS]}
             resizeMode="contain"
             onError={onError}
           />
@@ -100,11 +106,15 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
           {hasDiscount && product.MinPrice > 0 && (
             <Text style={styles.was} numberOfLines={1}>MUR {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
           )}
-          {discountPct > 0 && (
+          {isOOS ? (
+            <View style={styles.oosChip}>
+              <Text style={styles.oosChipText} numberOfLines={1}>Sold Out</Text>
+            </View>
+          ) : hasDiscount ? (
             <View style={styles.discountChip}>
               <Text style={styles.discountChipText} numberOfLines={1}>−{discountPct}%</Text>
             </View>
-          )}
+          ) : null}
         </View>
         {product.Variant ? (
           <Text style={styles.variant} numberOfLines={1}>{product.Variant}</Text>
@@ -135,6 +145,9 @@ const styles = StyleSheet.create({
   img: {
     ...StyleSheet.absoluteFillObject,
   },
+  imgOOS: {
+    opacity: 0.5,
+  },
   initial: {
     fontFamily: FontFamily.serifItalic,
     fontSize:   52,
@@ -163,6 +176,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   discountChipText: {
+    ...Type.label,
+    fontSize:      10.5,
+    fontWeight:    '800',
+    color:         '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  oosChip: {
+    backgroundColor:   Colors.ink3,
+    borderRadius:      5,
+    paddingVertical:   2,
+    paddingHorizontal: 6,
+  },
+  oosChipText: {
     ...Type.label,
     fontSize:      10.5,
     fontWeight:    '800',

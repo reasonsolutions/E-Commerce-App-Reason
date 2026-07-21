@@ -64,20 +64,7 @@ const FAQ_SECTIONS: FaqSection[] = [
       },
       {
         question: 'Is shipping free?',
-        answer: 'Many products ship free — this is shown on the product page and in your bag before checkout.',
-      },
-    ],
-  },
-  {
-    title: 'Returns & Refunds',
-    items: [
-      {
-        question: 'What is the return policy?',
-        answer: 'Return eligibility and the return window vary by product. Check the product page for return policy details before purchasing.',
-      },
-      {
-        question: 'How do I request a refund?',
-        answer: 'Refunds are processed automatically once a return or cancellation is approved, using your original payment method.',
+        answer: 'It depends on the product and seller — free shipping, when it applies, is shown on the product page and in your bag before checkout.',
       },
     ],
   },

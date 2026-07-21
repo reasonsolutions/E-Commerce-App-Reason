@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../../config/storageKeys';
+import type { VariantInterface } from '../interfaces';
+import { effectivePurchaseLimit } from '../../utils/stock';
 
 export interface GuestCartItem {
   inventoryId:  number;
@@ -11,6 +13,14 @@ export interface GuestCartItem {
   variant:      string;
   image:        string;
   organisationId: string;
+  // Captured at add-to-cart time (ProductScreen still holds the full variant
+  // then) — the guest cart is local AsyncStorage, so this is the only chance
+  // to know the merchant's per-order limit / stock for this item.
+  maxPerOrder?: number | null;
+  stock?:       number | null;
+  // Needed alongside stock: a Stock: 0 item can still be purchasable if the
+  // merchant allows backorder — omitting this makes such items look sold out.
+  backOrder?:   VariantInterface['BackOrder'];
 }
 
 export const getGuestCart = async (): Promise<GuestCartItem[]> => {
@@ -27,9 +37,17 @@ export const addToGuestCart = async (item: GuestCartItem): Promise<GuestCartItem
   const existing = cart.findIndex(i => i.inventoryId === item.inventoryId);
   let updated: GuestCartItem[];
   if (existing >= 0) {
-    updated = cart.map((i, idx) =>
-      idx === existing ? { ...i, quantity: i.quantity + item.quantity } : i,
-    );
+    updated = cart.map((i, idx) => {
+      if (idx !== existing) return i;
+      // Combining two separate "add to cart" actions on the same item must
+      // not silently exceed its per-order/stock limit — same class of bug as
+      // the guest-to-server merge on login (Login.tsx).
+      const combinedQty = i.quantity + item.quantity;
+      const limit = i.maxPerOrder != null || i.stock != null
+        ? effectivePurchaseLimit(i.maxPerOrder, i.stock, i.backOrder)
+        : Infinity;
+      return { ...i, quantity: Math.min(combinedQty, limit) };
+    });
   } else {
     updated = [...cart, item];
   }

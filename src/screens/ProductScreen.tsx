@@ -23,7 +23,7 @@ import {
   ProductInterface,
 } from '../api/interfaces';
 import { ItemCondition } from '../config/enum_files/ItemCondition';
-import { postSaveCartItems } from '../api/cart';
+import { postSaveCartItems, getSavedCartItems } from '../api/cart';
 import { getProductByItemId } from '../api/product';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
 import { addToGuestCart } from '../api/cart';
@@ -68,6 +68,8 @@ import { useAuthGuard } from '../hooks/useAuthGuard';
 import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { wishlistCache } from '../utils/wishlistCache';
+import { discountPct as calcDiscountPct } from '../utils/pricing';
+import { hasBackorderCapacity, effectivePurchaseLimit } from '../utils/stock';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const HERO_H = SCREEN_W; // 1:1 — matches product photo aspect ratio
@@ -118,7 +120,7 @@ function mapRelatedProductToCard(p: ProductDetailInterface): ProductInterface {
     RelatedProducts:       null,
     MinPrice:              price,
     MaxComparePrice:       comparePrice,
-    DiscountPct:           comparePrice > price ? Math.round(((comparePrice - price) / comparePrice) * 100) : 0,
+    DiscountPct:           calcDiscountPct(price, comparePrice),
     Inventory_Id:          variant ? Number(variant.InventoryId) : undefined,
     Variant:               variant?.Variant,
     ComplianceInfo:        p.ComplianceInfo as unknown as ProductInterface['ComplianceInfo'],
@@ -214,11 +216,12 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
             : p.Images,
           MinPrice:        minPrice,
           MaxComparePrice: maxComparePrice,
-          DiscountPct:     maxComparePrice > minPrice
-            ? Math.round(((maxComparePrice - minPrice) / maxComparePrice) * 100)
-            : 0,
+          DiscountPct:     calcDiscountPct(minPrice, maxComparePrice),
           Inventory_Id:    preselect?.InventoryId ?? null,
           CategoryName:    p.CategoryName,
+          Variants:        preselect
+            ? [{ StockStatus: preselect.StockStatus, BackOrder: preselect.BackOrder }]
+            : undefined,
         };
         const next = [snapshot, ...prev.filter((x: any) => x.ItemID !== itemIdNum)].slice(0, 8);
         AsyncStorage.setItem(key, JSON.stringify(next));
@@ -275,14 +278,13 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const activePrice        = selectedVariant?.PriceDetails?.Price ?? 0;
   const activeComparePrice = selectedVariant?.PriceDetails?.ComparePrice ?? 0;
   const hasDiscount        = activeComparePrice > activePrice;
-  const discountPct        = hasDiscount
-    ? Math.round(((activeComparePrice - activePrice) / activeComparePrice) * 100) : 0;
+  const discountPct        = calcDiscountPct(activePrice, activeComparePrice);
 
-  const isOOS       = selectedVariant?.StockStatus?.Description === 'out_of_stock'
-                      && !selectedVariant?.BackOrder?.AllowBackOrder;
   const isBackorder = selectedVariant?.StockStatus?.Description === 'out_of_stock'
-                      && selectedVariant?.BackOrder?.AllowBackOrder === true;
-  const maxQty      = selectedVariant?.MaxPerOrder ?? 10;
+                      && hasBackorderCapacity(selectedVariant?.BackOrder);
+  const isOOS       = selectedVariant?.StockStatus?.Description === 'out_of_stock'
+                      && !isBackorder;
+  const maxQty      = effectivePurchaseLimit(selectedVariant?.MaxPerOrder, selectedVariant?.Stock, selectedVariant?.BackOrder);
 
   const chipOptions: VariantChipOption[] = useMemo(
     () => variantDetails.map(v => ({
@@ -314,9 +316,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     const newVariant = variantDetails.find(v => String(v.InventoryId) === id);
     setSelectedVariantId(id);
     if (newVariant) {
-      const newMax = newVariant.MaxPerOrder ?? 10;
+      const newMax = effectivePurchaseLimit(newVariant.MaxPerOrder, newVariant.Stock, newVariant.BackOrder);
       const newIsOOS = newVariant.StockStatus?.Description === 'out_of_stock'
-                       && !newVariant.BackOrder?.AllowBackOrder;
+                       && !hasBackorderCapacity(newVariant.BackOrder);
       if (newIsOOS) setQuantity(1);
       else setQuantity(q => Math.min(q, newMax));
     }
@@ -336,6 +338,32 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     setAddingToCart(true);
     try {
       if (profileCode) {
+        // The stepper above only clamps against this variant's own limit —
+        // it has no idea how much of this item is already sitting in the
+        // user's cart from a previous visit. Re-check against the live cart
+        // so two separate "Add to Bag" trips can't jointly exceed MaxPerOrder
+        // (or, when the merchant hasn't set one, available stock).
+        const cartRes = await getSavedCartItems(profileCode);
+        const existingQty: number = Array.isArray(cartRes?.result)
+          ? cartRes.result.find((c: { InventoryId: number }) => c.InventoryId === inventoryId)?.Quantity ?? 0
+          : 0;
+        const remaining = maxQty - existingQty;
+        if (remaining <= 0) {
+          haptic.warning();
+          toast.warning({
+            title: 'Limit reached',
+            description: `You already have ${existingQty} in your bag — max ${maxQty} per order for this item.`,
+          });
+          return;
+        }
+        if (quantity > remaining) {
+          haptic.warning();
+          toast.warning({
+            title: 'Limit reached',
+            description: `You already have ${existingQty} in your bag — only ${remaining} more can be added.`,
+          });
+          return;
+        }
         const requestbody: PostCartSaveInterface = {
           CustomerProfileCode: profileCode,
           InventoryId: inventoryId,
@@ -365,6 +393,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
             ? (product.Images as unknown as string[])[0] ?? ''
             : product?.Images?.split(/[,;]/)[0]?.trim() ?? '',
           organisationId: getOrgIdForInventory(inventoryId) ?? '',
+          maxPerOrder:    variantObj?.MaxPerOrder ?? null,
+          stock:          variantObj?.Stock ?? null,
+          backOrder:      variantObj?.BackOrder,
         });
         setCartCount((prev: number) => prev + quantity);
       }
@@ -381,7 +412,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     } finally {
       setAddingToCart(false);
     }
-  }, [profileCode, selectedVariantId, data, quantity, haptic, badgeScale, setCartCount, isOOS, isBackorder, toast]);
+  }, [profileCode, selectedVariantId, data, quantity, haptic, badgeScale, setCartCount, isOOS, isBackorder, maxQty, toast]);
 
   const handleWishlistToggle = useCallback(() => {
     guard(async () => {

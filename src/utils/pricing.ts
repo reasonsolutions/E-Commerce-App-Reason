@@ -11,6 +11,14 @@ export const cartLineGross = (item: SavedCartItemInterface): number =>
 export const cartLineTax = (item: SavedCartItemInterface): number =>
   (item.PriceDetails?.TaxAmount ?? 0) * item.Quantity;
 
+// Single source of truth for discount % — always derived from actual
+// price/comparePrice, never trusted from a backend-supplied DiscountPct
+// field (those have been seen out of sync with the prices on the same row).
+export const discountPct = (price: number, comparePrice: number | null | undefined): number =>
+  comparePrice && comparePrice > price
+    ? Math.round(((comparePrice - price) / comparePrice) * 100)
+    : 0;
+
 export interface TaxGroup {
   taxId: number;
   taxRate: number;

@@ -182,13 +182,10 @@ const OrderCard: React.FC<{
           </Text>
         </View>
 
-        {/* Item count · date · seller(s) — left; status pill — right */}
+        {/* Date · seller(s) — left; status pill — right */}
         <View style={cardStyles.metaRow}>
           <View style={cardStyles.metaCol}>
             <Text style={cardStyles.metaPrimary}>
-              {itemCount} {itemCount === 1 ? 'item' : 'items'}
-            </Text>
-            <Text style={cardStyles.metaSecondary}>
               {formatDate(group.orderedDate)}
               {sellerLabel ? `  ·  ${sellerLabel}` : ''}
             </Text>
