@@ -33,6 +33,7 @@ import { useTactile } from '../hooks/useTactile';
 import { PaymentModes } from '../config/enum_files/PaymentModes';
 import { AddressLabel } from '../config/enum_files/AddressLabel';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { cartLineGross, buildOrderItemDetails } from '../utils/pricing';
 import { Motion } from '../theme/motion';
 
 export interface DeliveryAddress {
@@ -306,7 +307,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     }
 
     const total = items.reduce(
-      (sum: number, item: SavedCartItemInterface) => sum + item.Price * item.Quantity,
+      (sum: number, item: SavedCartItemInterface) => sum + cartLineGross(item),
       0,
     );
 
@@ -344,25 +345,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
 
       const orderDetails = Array.from(orgMap.entries()).map(([orgId, orgItems]) => ({
         OrganisationID: orgId,
-        ItemDetails: orgItems.map((item: SavedCartItemInterface) => ({
-          InventoryId:        item.InventoryId,
-          Quantity:           item.Quantity,
-          Amount:             item.Price * item.Quantity,
-          DeliveryCharges:    0,
-          DeliveryChargesVAT: 0,
-          ItemCharges:        0,
-          ItemChargesVAT:     0,
-          Discount:           0,
-          VAT:                0,
-          OrderStatus:        1,
-          Taxes: (item.PriceDetails?.Taxes ?? []).map(t => ({
-            TaxId:   t.TaxId,
-            TaxName: '',
-            TaxType: t.TaxType,
-            TaxRate: t.TaxRate,
-            Reason:  '',
-          })),
-        })),
+        ItemDetails: buildOrderItemDetails(orgItems),
       }));
 
       const payload: PlaceOrderInterface = {

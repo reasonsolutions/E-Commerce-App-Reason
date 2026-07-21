@@ -445,6 +445,9 @@ export interface VariantInterface {
     PriceDetails: {
         Price:        number;
         ComparePrice: number;
+        NetAmount:    number | null;
+        TaxAmount:    number | null;
+        GrossAmount:  number | null;
     };
     Taxes:              VariantTax[];
     PhysicalAttributes: PhysicalAttributes;
@@ -559,6 +562,9 @@ export interface SavedCartItemInterface {
     PriceDetails: {
         Price: number;
         ComparePrice: number;
+        NetAmount: number | null;
+        TaxAmount: number | null;
+        GrossAmount: number | null;
         Taxes: { VariantTaxConfigurationId: number; TaxId: number; TaxType: TaxType; TaxRate: number; IsActive: boolean; CreatedAt: string }[];
     };
 }
@@ -648,6 +654,9 @@ export interface WishlistItemInterface {
   PriceDetails: {
     Price:        number;
     ComparePrice: number;
+    NetAmount:    number | null;
+    TaxAmount:    number | null;
+    GrossAmount:  number | null;
     Taxes:        any[];
   };
 }
@@ -669,7 +678,7 @@ export interface WishlistApiProduct {
     Stock:         number;
     SKU:           string;
     StockStatus:   { Value: number; Description: string };
-    PriceDetails:  { Price: number; ComparePrice: number; Taxes: any[] };
+    PriceDetails:  { Price: number; ComparePrice: number; NetAmount: number | null; TaxAmount: number | null; GrossAmount: number | null; Taxes: any[] };
     PhysicalAttributes: any;
   }[];
 }

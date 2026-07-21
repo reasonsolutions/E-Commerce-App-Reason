@@ -215,7 +215,7 @@ const ItemCard: React.FC<{
               MUR {(item.Amount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </Text>
             {item.Quantity > 1 ? (
-              <Text style={itemCardStyles.qty}>× {item.Quantity}</Text>
+              <Text style={itemCardStyles.qty}>Qty: {item.Quantity}</Text>
             ) : null}
           </View>
         </View>
@@ -528,12 +528,35 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const delivery = orderDetails.DeliveryDetail[0];
   const orderedDate = items[0]?.OrderedDate ?? displayDate;
 
+  // Group by sub-order (seller/fulfilment partner) — each seller manages their own
+  // portion independently, so items can diverge in status once merchants act on
+  // their part. A sub-order is NOT guaranteed to be a single physical package —
+  // items within it can still ship separately, so avoid "shipment" language here.
+  const sellerGroups: { number: string; items: OrderDetailItemExtendedInterface[] }[] = [];
+  for (const item of items) {
+    const number = item.SubOrder?.Number ?? '';
+    let group = sellerGroups.find(g => g.number === number);
+    if (!group) {
+      group = { number, items: [] };
+      sellerGroups.push(group);
+    }
+    group.items.push(item);
+  }
+  const isMultiSeller = sellerGroups.length > 1;
+
   // TotalAmountBeforeDiscount/Discount are per-item; AmountPaid/DeliveryCharges/isFreeShipping
   // are order-level (same value repeated on every item).
   const orderPayment = items[0]?.PaymentInfo;
   // Amount is already the line total (unit price × qty) — do not multiply by Quantity again.
   const subtotal  = items.reduce((sum, it) => sum + (it.Amount ?? 0), 0);
   const discount  = items.reduce((sum, it) => sum + (it.PaymentInfo?.Discount ?? 0), 0);
+  // Tax isn't returned as its own field on this endpoint — derived from two
+  // backend-recorded totals (AmountPaid, the real charge; Subtotal, the sum of
+  // pre-tax line amounts), not computed from a rate. AmountPaid = Subtotal -
+  // Discount + DeliveryCharges + Tax.
+  const tax = orderPayment
+    ? Math.max(0, orderPayment.AmountPaid - subtotal + discount - (orderPayment.DeliveryCharges ?? 0))
+    : 0;
 
   return (
     <View style={styles.root}>
@@ -557,14 +580,32 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         {/* ── Items ── */}
         <Animated.View style={[styles.section, itemsAnim]}>
           <Text style={styles.sectionEyebrow}>ITEMS</Text>
-          {items.map((item, i) => (
-            <ItemCard
-              key={`${item.Inventory_Id}-${i}`}
-              item={item}
-              onCancel={openCancelSheet}
-              isLast={i === items.length - 1}
-            />
-          ))}
+          {isMultiSeller ? (
+            sellerGroups.map((group, gi) => (
+              <View
+                key={group.number || gi}
+                style={gi > 0 ? styles.subOrderGroup : undefined}
+              >
+                {group.items.map((item, i) => (
+                  <ItemCard
+                    key={`${item.Inventory_Id}-${i}`}
+                    item={item}
+                    onCancel={openCancelSheet}
+                    isLast={i === group.items.length - 1}
+                  />
+                ))}
+              </View>
+            ))
+          ) : (
+            items.map((item, i) => (
+              <ItemCard
+                key={`${item.Inventory_Id}-${i}`}
+                item={item}
+                onCancel={openCancelSheet}
+                isLast={i === items.length - 1}
+              />
+            ))
+          )}
         </Animated.View>
 
         {/* ── Delivery address ── */}
@@ -600,6 +641,9 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             ) : null}
             {orderPayment.CouponAvailed ? (
               <DetailRow label="COUPON" value={orderPayment.CouponAvailed} />
+            ) : null}
+            {tax > 0 ? (
+              <DetailRow label="TAX PAID" value={`MUR ${tax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
             ) : null}
             <DetailRow label="TOTAL PAID" value={`MUR ${orderPayment.AmountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} isLast />
           </Animated.View>
@@ -696,6 +740,12 @@ const styles = StyleSheet.create({
     color:         Colors.ink4,
     paddingTop:    Space[2],
     paddingBottom: Space[1],
+  },
+  subOrderGroup: {
+    marginTop:      Space[6],
+    paddingTop:     Space[4],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.rule,
   },
 
   // ── Skeleton ───────────────────────────────────────────────────────────────────

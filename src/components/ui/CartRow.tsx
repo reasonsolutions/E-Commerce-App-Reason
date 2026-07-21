@@ -77,7 +77,7 @@ export const CartRow = React.memo<{
         <View style={styles.cartPriceRow}>
           <Text style={styles.cartLineTotal}>MUR {lineTotal.toLocaleString('en-IN')}</Text>
           {hasDiscount && (
-            <Text style={styles.cartUnitWas}>MUR {comparePrice.toLocaleString('en-IN')}</Text>
+            <Text style={styles.cartUnitWas}>MUR {(comparePrice * item.Quantity).toLocaleString('en-IN')}</Text>
           )}
         </View>
 

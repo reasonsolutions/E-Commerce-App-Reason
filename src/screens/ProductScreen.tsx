@@ -154,27 +154,6 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const badgeScale  = useRef(new Animated.Value(1)).current;
   const plateAnim   = useRef(new Animated.Value(0)).current;
 
-  // Nav background: transparent over hero, light surface once scrolled past
-  const navBgColor = scrollY.interpolate({
-    inputRange:  [HERO_H - 80, HERO_H],
-    outputRange: ['transparent', Colors.surface],
-    extrapolate: 'clamp',
-  });
-  const pillBg = scrollY.interpolate({
-    inputRange:  [0, HERO_H - 80],
-    outputRange: ['rgba(0,0,0,0.16)', 'rgba(0,0,0,0.0)'],
-    extrapolate: 'clamp',
-  });
-  const navBorderOpacity = scrollY.interpolate({
-    inputRange:  [HERO_H - 80, HERO_H],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const navBorderColor = navBorderOpacity.interpolate({
-    inputRange:  [0, 1],
-    outputRange: ['rgba(0,0,0,0)', Colors.rule],
-  });
-
   // ── Data fetch ───────────────────────────────────────────────────────────────
   const { data, isError, error, run } = useAsyncState<ProductFetch>(null);
 
@@ -457,24 +436,21 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent={false} />
 
-      {/* ── Floating nav bar (over hero) ──────────────────────────────────── */}
-      <Animated.View
-        style={[styles.navBar, { backgroundColor: navBgColor, top: insets.top, borderBottomColor: navBorderColor }]}
-        pointerEvents="box-none"
-      >
-        <Animated.View style={[styles.navPill, { backgroundColor: pillBg }]}>
+      {/* ── Fixed nav bar — always solid, reserves its own space ────────────── */}
+      <View style={[styles.navBar, { paddingTop: insets.top, height: insets.top + NAV_H }]}>
+        <View style={styles.navPill}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Icon name="chevron-back" size={19} color="rgba(255,255,255,0.95)" />
+            <Icon name="chevron-back" size={19} color={Colors.ink1} />
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
         <View style={styles.navRight}>
-          <Animated.View style={[styles.navPill, { backgroundColor: pillBg }]}>
+          <View style={styles.navPill}>
             <TouchableOpacity
               onPress={handleWishlistToggle}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -482,23 +458,23 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               <Icon
                 name={wishlisted ? 'heart' : 'heart-outline'}
                 size={18}
-                color={wishlisted ? Colors.accent : 'rgba(255,255,255,0.95)'}
+                color={wishlisted ? Colors.accent : Colors.ink1}
               />
             </TouchableOpacity>
-          </Animated.View>
+          </View>
 
-          <Animated.View style={[styles.navPill, { backgroundColor: pillBg }]}>
+          <View style={styles.navPill}>
             <TouchableOpacity
               onPress={() => navigation.navigate('Cart')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Animated.View style={{ transform: [{ scale: badgeScale }] }}>
-                <Icon name="bag-outline" size={18} color="rgba(255,255,255,0.95)" />
+                <Icon name="bag-outline" size={18} color={Colors.ink1} />
               </Animated.View>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         </View>
-      </Animated.View>
+      </View>
 
       {/* ── Scrollable content ────────────────────────────────────────────── */}
       <Animated.ScrollView
@@ -781,16 +757,13 @@ const styles = StyleSheet.create({
 
   // ── Nav bar ────────────────────────────────────────────────────────────────
   navBar: {
-    position:          'absolute',
-    left:              0,
-    right:             0,
-    zIndex:            30,
-    height:            NAV_H,
     flexDirection:     'row',
     alignItems:        'center',
     justifyContent:    'space-between',
     paddingHorizontal: 14,
+    backgroundColor:   Colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
   },
   navPill: {
     width: 36,

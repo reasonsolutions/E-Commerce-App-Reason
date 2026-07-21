@@ -61,7 +61,7 @@ import {
   // TrustStrip, — disabled, no longer required (see commented usage below)
 } from '../components/ui';
 import { ErrorState } from '../components/system';
-import { Colors, Space } from '../theme';
+import { Colors, Space, Radius } from '../theme';
 import { Motion } from '../theme/motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -347,8 +347,27 @@ const BannerSlot: React.FC<{
   if (spots === null) {
     return (
       <View style={styles.bannerSlot}>
-        <View style={styles.bannerSkeletonWrap}>
-          <Skeleton height={BANNER_H} radius={20} />
+        <View style={[styles.bannerCard, { height: BANNER_H, marginHorizontal: Space.screenH }]}>
+          <View style={styles.bannerHeaderRow}>
+            <Skeleton width={120} height={10} radius={4} />
+          </View>
+          <View style={styles.bannerBody}>
+            <View style={styles.bannerTextCol}>
+              <Skeleton width="80%" height={21} radius={4} />
+              <View style={{ marginTop: Space[2] }}>
+                <Skeleton width={90} height={14} radius={4} />
+              </View>
+              <View style={{ marginTop: Space[2] }}>
+                <Skeleton width={64} height={20} radius={Radius.pill} />
+              </View>
+            </View>
+            <View style={styles.bannerPlinthCol}>
+              <Skeleton width={142} height={142} radius={16} />
+            </View>
+          </View>
+          <View style={styles.bannerCta}>
+            <Skeleton width={80} height={12} radius={4} />
+          </View>
         </View>
       </View>
     );

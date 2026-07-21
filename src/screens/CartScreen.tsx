@@ -25,6 +25,7 @@ import type { GuestCartItem } from '../api/cart';
 import { addToWishlist } from '../api/wishlist';
 import { isLoggedIn } from '../utils/auth';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { cartLineNet, cartLineGross, cartDisplayWas, cartTaxBreakdown } from '../utils/pricing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -131,17 +132,22 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 
   const subtotal = isGuest
     ? guestItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
-    : cartItems.reduce((sum, item) => sum + item.Price * item.Quantity, 0);
+    : cartItems.reduce((sum, item) => sum + cartLineNet(item), 0);
+  const taxGroups = isGuest ? [] : cartTaxBreakdown(cartItems);
+  const grossTotal = isGuest
+    ? subtotal
+    : cartItems.reduce((sum, item) => sum + cartLineGross(item), 0);
   const itemCount = isGuest
     ? guestItems.reduce((sum, i) => sum + i.quantity, 0)
     : cartItems.reduce((sum, item) => sum + item.Quantity, 0);
   const originalTotal = isGuest
     ? guestItems.reduce((sum, i) => sum + (i.comparePrice > i.price ? i.comparePrice : i.price) * i.quantity, 0)
     : cartItems.reduce((sum, item) => {
-        const compare = item.PriceDetails?.ComparePrice ?? 0;
-        return sum + (compare > item.Price ? compare : item.Price) * item.Quantity;
+        const was = cartDisplayWas(item);
+        const unitGross = item.PriceDetails?.GrossAmount ?? item.Price;
+        return sum + (was ?? unitGross) * item.Quantity;
       }, 0);
-  const totalSavings = originalTotal - subtotal;
+  const totalSavings = originalTotal - grossTotal;
 
   const handleUpdateQuantity = useCallback(async (item: SavedCartItemInterface, quantity: number) => {
     const delta = quantity - item.Quantity;
@@ -404,10 +410,16 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
                 <Text style={styles.savingsValue}>− MUR {totalSavings.toFixed(0)}</Text>
               </View>
             )}
+            {taxGroups.map(group => (
+              <View key={group.taxId} style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Tax ({group.taxRate}%)</Text>
+                <Text style={styles.summaryValue}>MUR {group.amount.toFixed(0)}</Text>
+              </View>
+            ))}
             <View style={styles.summaryRule} />
             <View style={styles.summaryPayableBlock}>
               <Text style={styles.summaryPayableLabel}>PAYABLE NOW</Text>
-              <Text style={styles.summaryPayableAmount}>MUR {subtotal.toLocaleString('en-IN')}</Text>
+              <Text style={styles.summaryPayableAmount}>MUR {grossTotal.toLocaleString('en-IN')}</Text>
             </View>
           </Animated.View>
 
@@ -440,7 +452,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
         <View style={[styles.summaryPanel, { paddingBottom: insets.bottom + Space[4] }]}>
           <View style={styles.footerPayableRow}>
             <Text style={styles.footerPayableLabel}>PAYABLE NOW</Text>
-            <Text style={styles.footerPayableAmount}>MUR {subtotal.toLocaleString('en-IN')}</Text>
+            <Text style={styles.footerPayableAmount}>MUR {grossTotal.toLocaleString('en-IN')}</Text>
           </View>
           <Animated.View style={checkoutTactile.animatedStyle}>
             <TouchableOpacity

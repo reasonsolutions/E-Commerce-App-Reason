@@ -27,6 +27,9 @@ function normalizeWishlist(raw: WishlistApiResponse): WishlistItemInterface[] {
       PriceDetails: {
         Price:        v?.PriceDetails?.Price ?? 0,
         ComparePrice: v?.PriceDetails?.ComparePrice ?? 0,
+        NetAmount:    v?.PriceDetails?.NetAmount ?? null,
+        TaxAmount:    v?.PriceDetails?.TaxAmount ?? null,
+        GrossAmount:  v?.PriceDetails?.GrossAmount ?? null,
         Taxes:        v?.PriceDetails?.Taxes ?? [],
       },
     };

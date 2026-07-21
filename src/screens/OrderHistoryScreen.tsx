@@ -73,7 +73,14 @@ function groupOrders(items: OrderHistoryItemInterface[]): OrderGroup[] {
     }
     const group = map.get(key)!;
     group.items.push(item);
-    group.totalAmount += item.Amount ?? 0;
+  }
+  // AmountPaid is order-level (same value repeated on every item in the
+  // order, via PaymentInfo) — read it once rather than summing each item's
+  // net Amount, which would show the pre-tax subtotal instead of the real
+  // amount charged.
+  for (const group of map.values()) {
+    group.totalAmount = group.items[0]?.PaymentInfo?.AmountPaid
+      ?? group.items.reduce((sum, it) => sum + (it.Amount ?? 0), 0);
   }
   return Array.from(map.values());
 }

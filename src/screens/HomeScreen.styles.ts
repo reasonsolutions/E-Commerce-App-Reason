@@ -149,13 +149,10 @@ const styles = StyleSheet.create({
     elevation:       1,
   },
 
-  // Rounds the bottom corners of the whole dark masthead (logo + categories +
-  // hero) so it reads as one integrated section, with the light page content
-  // beginning cleanly right after — no floating hero card, no gap beneath it.
+  // Flat bottom edge — matches pullBacking behind it so the masthead reads as
+  // one integrated section with no curve/seam, whether at rest or scrolled.
   heroStage: {
-    borderBottomLeftRadius:  28,
-    borderBottomRightRadius: 28,
-    overflow:                'hidden',
+    overflow: 'hidden',
   },
 
   // ── BannerSlot — solid ember panel, the one color break inside the ink

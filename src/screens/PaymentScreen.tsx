@@ -5,11 +5,13 @@ import {
   Alert,
   StyleSheet,
   StatusBar,
+  TouchableOpacity,
 } from 'react-native';
 import WebView from 'react-native-webview';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 import { paymentEndpoints } from '../api/endpoints';
 import { placeOrder } from '../api/order';
@@ -17,6 +19,9 @@ import { useCart } from '../context/CartContext';
 import { PlaceOrderInterface, SavedCartItemInterface } from '../api/interfaces';
 import { getOrgIdForInventory } from '../api/product';
 import { STORAGE_KEYS } from '../config/storageKeys';
+import { buildOrderItemDetails } from '../utils/pricing';
+import { Colors, Space } from '../theme';
+import { FontFamily } from '../theme/fonts';
 import axios from 'axios';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -52,36 +57,55 @@ type PaymentScreenProps = {
 const MIPS_BASE_URL = 'https://maupost.mauritiuspost.mu:8087/api/';
 const INITIAL_DELAY = 15000;
 const POLL_INTERVAL = 5000;
-const MAX_ATTEMPTS  = 60;
-
-const formatTime = (totalSeconds: number): string => {
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
+const MAX_ATTEMPTS = 60;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) => {
+const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
+  route,
+  navigation,
+}) => {
   const { profileCode, cartItems, selectedAddress, orderTotal } = route.params;
   const insets = useSafeAreaInsets();
 
   const { setCartCount } = useCart();
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [mipsUrl,    setMipsUrl]    = React.useState('');
-  const [requestId,  setRequestId]  = React.useState('');
-  const [orderId,    setOrderId]    = React.useState('');
-  const [seconds,    setSeconds]    = React.useState(300);
-  const [count,      setCount]      = React.useState(0);
+  const [mipsUrl, setMipsUrl] = React.useState('');
+  const [requestId, setRequestId] = React.useState('');
+  const [orderId, setOrderId] = React.useState('');
+  const [seconds, setSeconds] = React.useState(300);
+  const [count, setCount] = React.useState(0);
   const [attemptInfo, setAttemptInfo] = React.useState('');
-  const [loadError,  setLoadError]  = React.useState<string | null>(null);
-  const [mipsToken,  setMipsToken]  = React.useState('');
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [mipsToken, setMipsToken] = React.useState('');
 
   // ── Refs ───────────────────────────────────────────────────────────────────
-  const successRef          = React.useRef(false);
-  const innerApiInitiated   = React.useRef(false);
-  const countdownRef        = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const successRef = React.useRef(false);
+  const innerApiInitiated = React.useRef(false);
+  const countdownRef = React.useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+
+  // ── Back navigation — always confirm, payment may be mid-flight ───────────
+  const handleBack = () => {
+    Alert.alert(
+      'Leave payment?',
+      'Your payment may be in progress. If you leave now, it may not complete.',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            successRef.current = true;
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            navigation.goBack();
+          },
+        },
+      ],
+    );
+  };
 
   // ── Step 1 — Fetch MIPS token, then load payment zone on mount ────────────
   React.useEffect(() => {
@@ -89,13 +113,15 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
       try {
         // Fetch MIPS authentication token
         const tokenRes = await axios.post(`${MIPS_BASE_URL}token/create`, {
-          Login:       'mu@postglobal',
-          Password:    '#mu@76*3',
+          Login: 'mu@postglobal',
+          Password: '#mu@76*3',
           MachineName: 'ecom',
         });
         const mipsAuthToken: string = tokenRes.data?.result ?? '';
         if (!mipsAuthToken) {
-          setLoadError('Failed to authenticate with payment gateway. Please try again.');
+          setLoadError(
+            'Failed to authenticate with payment gateway. Please try again.',
+          );
           return;
         }
         setMipsToken(mipsAuthToken);
@@ -103,7 +129,9 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
         // Re-read orderId from storage (set before navigating here)
         const storedOrderId = await AsyncStorage.getItem(STORAGE_KEYS.orderId);
         if (!storedOrderId) {
-          setLoadError('Could not retrieve order reference. Please go back and try again.');
+          setLoadError(
+            'Could not retrieve order reference. Please go back and try again.',
+          );
           return;
         }
         setOrderId(storedOrderId);
@@ -111,48 +139,33 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
         // Build the appData payload — mirrors the placeOrder structure from AddressScreen
         const orgMap = new Map<string, SavedCartItemInterface[]>();
         for (const item of cartItems) {
-          const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId);
+          const orgId =
+            item.OrganisationId || getOrgIdForInventory(item.InventoryId);
           if (!orgMap.has(orgId)) orgMap.set(orgId, []);
           orgMap.get(orgId)!.push(item);
         }
 
-        const orderDetails = Array.from(orgMap.entries()).map(([orgId, items]) => ({
-          OrganisationID: orgId,
-          ItemDetails: items.map((item: SavedCartItemInterface) => ({
-            InventoryId:        item.InventoryId,
-            Quantity:           item.Quantity,
-            Amount:             item.Price * item.Quantity,
-            DeliveryCharges:    0,
-            DeliveryChargesVAT: 0,
-            ItemCharges:        0,
-            ItemChargesVAT:     0,
-            Discount:           0,
-            VAT:                0,
-            OrderStatus:        1,
-            Taxes: (item.PriceDetails?.Taxes ?? []).map(t => ({
-              TaxId:   t.TaxId,
-              TaxName: '',
-              TaxType: t.TaxType,
-              TaxRate: t.TaxRate,
-              Reason:  '',
-            })),
-          })),
-        }));
+        const orderDetails = Array.from(orgMap.entries()).map(
+          ([orgId, items]) => ({
+            OrganisationID: orgId,
+            ItemDetails: buildOrderItemDetails(items),
+          }),
+        );
 
         const appData = {
           transType: 100, // e-commerce order payment
           transData: {
-            isRetry:                   false,
-            transUID:                  storedOrderId,
-            CustomerProfileCode:       profileCode,
-            OrderDeliveryAddressCode:  selectedAddress.OrderDeliveryAddressCode,
-            CartMasterCode:            cartItems[0].CartMasterCode,
+            isRetry: false,
+            transUID: storedOrderId,
+            CustomerProfileCode: profileCode,
+            OrderDeliveryAddressCode: selectedAddress.OrderDeliveryAddressCode,
+            CartMasterCode: cartItems[0].CartMasterCode,
             TotalAmountBeforeDiscount: orderTotal,
-            TotalAmountAfterDiscount:  orderTotal,
-            OrderDetails:              orderDetails,
+            TotalAmountAfterDiscount: orderTotal,
+            OrderDetails: orderDetails,
             PaymentDetails: {
-              PaymentModes:   2, // card / online
-              Remark:         'Online payment via MIPS',
+              PaymentModes: 2, // card / online
+              Remark: 'Online payment via MIPS',
               ModeOfPayments: [],
             },
           },
@@ -161,19 +174,19 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
         const response = await axios.post(
           `${MIPS_BASE_URL}${paymentEndpoints.loadPaymentZone}`,
           {
-            orderID:             storedOrderId,
-            orderAmount:         parseFloat(String(orderTotal)).toFixed(2),
-            orderDesc:           'E-Commerce Order Payment',
-            touchPoint:          'native_app',
-            channel:             1,
+            orderID: storedOrderId,
+            orderAmount: parseFloat(String(orderTotal)).toFixed(2),
+            orderDesc: 'E-Commerce Order Payment',
+            touchPoint: 'native_app',
+            channel: 1,
             customerProfileCode: 136636, //profileCode
             appData,
           },
           {
             headers: {
-              user:     'mplpgPay',
+              user: 'mplpgPay',
               password: '#mpl&2384kewrf',
-              token:    mipsAuthToken,
+              token: mipsAuthToken,
             },
           },
         );
@@ -183,11 +196,17 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
           setMipsUrl(result.result.mipsUrl);
           setRequestId(result.result.requestId);
         } else {
-          setLoadError(result?.userMessage ?? 'Failed to initialise payment. Please go back and try again.');
+          setLoadError(
+            result?.userMessage ??
+              'Failed to initialise payment. Please go back and try again.',
+          );
         }
       } catch (err: any) {
         console.error('MIPS load payment zone error:', err);
-        setLoadError(err?.response?.data?.userMessage ?? 'Failed to initialise payment. Please go back and try again.');
+        setLoadError(
+          err?.response?.data?.userMessage ??
+            'Failed to initialise payment. Please go back and try again.',
+        );
       }
     };
 
@@ -195,6 +214,9 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
   }, []);
 
   // ── Step 2 — 5-minute countdown (starts once requestId + orderId are ready) ─
+  // Runs continuously regardless of focus — this tracks the real MIPS payment
+  // session lifetime, which keeps expiring whether or not the user is looking
+  // at this screen. Only the status polling below pauses on blur.
   React.useEffect(() => {
     if (!requestId || !orderId) return;
     if (successRef.current) return;
@@ -206,13 +228,15 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
           Alert.alert(
             'Payment window expired',
             'The 5-minute payment window has expired. Please go back and try again.',
-            [{
-              text: 'OK',
-              onPress: () => {
-                successRef.current = true;
-                navigation.goBack();
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  successRef.current = true;
+                  navigation.goBack();
+                },
               },
-            }],
+            ],
           );
           return 0;
         }
@@ -246,13 +270,15 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
           Alert.alert(
             'Payment could not be confirmed',
             'Maximum polling attempts reached. Please check your transaction history.',
-            [{
-              text: 'OK',
-              onPress: () => {
-                successRef.current = true;
-                navigation.goBack();
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  successRef.current = true;
+                  navigation.goBack();
+                },
               },
-            }],
+            ],
           );
           return;
         }
@@ -261,21 +287,23 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
         setCount(localCount);
 
         try {
-          const currentOrderId = await AsyncStorage.getItem(STORAGE_KEYS.orderId);
+          const currentOrderId = await AsyncStorage.getItem(
+            STORAGE_KEYS.orderId,
+          );
 
           const statusResponse = await axios.post(
             `${MIPS_BASE_URL}${paymentEndpoints.getPaymentStatus}`,
             {
-              OrderId:   currentOrderId,
+              OrderId: currentOrderId,
               RequestId: requestId,
-              Channel:   1,
+              Channel: 1,
               CallerUrl: '',
             },
             {
               headers: {
-                user:     'mplpgPay',
+                user: 'mplpgPay',
                 password: '#mpl&2384kewrf',
-                token:    mipsToken,
+                token: mipsToken,
               },
             },
           );
@@ -286,8 +314,8 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
           dets.StatusCode = dets.StatusCode ?? dets.statusCode ?? 0;
 
           // Normalise user message
-          const rawMsg    = dets.UserMessage || dets.userMessage || '';
-          const cleanMsg  = rawMsg.replace(/<\/?b>/g, '').trim();
+          const rawMsg = dets.UserMessage || dets.userMessage || '';
+          const cleanMsg = rawMsg.replace(/<\/?b>/g, '').trim();
           if (cleanMsg) setAttemptInfo(cleanMsg);
 
           // Parse result — may be a JSON string or a pre-parsed object
@@ -295,7 +323,11 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
           const rawResult = dets.result || dets.Result;
           if (rawResult != null) {
             if (typeof rawResult === 'string') {
-              try { paymentDetails = JSON.parse(rawResult); } catch { /* ignore */ }
+              try {
+                paymentDetails = JSON.parse(rawResult);
+              } catch {
+                /* ignore */
+              }
             } else if (typeof rawResult === 'object') {
               paymentDetails = rawResult;
             }
@@ -324,11 +356,15 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
 
             Alert.alert(
               'Payment not completed',
-              paymentDetails?.remarks || cleanMsg || 'Your payment was not completed.',
-              [{
-                text: 'OK',
-                onPress: () => navigation.goBack(),
-              }],
+              paymentDetails?.remarks ||
+                cleanMsg ||
+                'Your payment was not completed.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => navigation.goBack(),
+                },
+              ],
             );
           }
         } catch (err: any) {
@@ -359,64 +395,55 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
     try {
       const orgMap = new Map<string, SavedCartItemInterface[]>();
       for (const item of cartItems) {
-        const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId);
+        const orgId =
+          item.OrganisationId || getOrgIdForInventory(item.InventoryId);
         if (!orgMap.has(orgId)) orgMap.set(orgId, []);
         orgMap.get(orgId)!.push(item);
       }
 
-      const orderDetails = Array.from(orgMap.entries()).map(([orgId, items]) => ({
-        OrganisationID: orgId,
-        ItemDetails: items.map((item: SavedCartItemInterface) => ({
-          InventoryId:        item.InventoryId,
-          Quantity:           item.Quantity,
-          Amount:             item.Price * item.Quantity,
-          DeliveryCharges:    0,
-          DeliveryChargesVAT: 0,
-          ItemCharges:        0,
-          ItemChargesVAT:     0,
-          Discount:           0,
-          VAT:                0,
-          OrderStatus:        1,
-          Taxes: (item.PriceDetails?.Taxes ?? []).map(t => ({
-            TaxId:   t.TaxId,
-            TaxName: '',
-            TaxType: t.TaxType,
-            TaxRate: t.TaxRate,
-            Reason:  '',
-          })),
-        })),
-      }));
+      const orderDetails = Array.from(orgMap.entries()).map(
+        ([orgId, items]) => ({
+          OrganisationID: orgId,
+          ItemDetails: buildOrderItemDetails(items),
+        }),
+      );
 
       // Build payment mode from MIPS response — card vs mobile money
       const isCard = paymentDetails.mipsPmtType === 'card';
       const modeOfPayments = isCard
-        ? [{
-            Cards: {
-              Number:             paymentDetails.cardNo ?? '',
-              AuthorizationCode:  paymentDetails.authCode ?? '',
-              CardAmount:         orderTotal,
-              CardProcessingCode: paymentDetails.pgPmtMode ?? '',
+        ? [
+            {
+              Cards: {
+                Number: paymentDetails.cardNo ?? '',
+                AuthorizationCode: paymentDetails.authCode ?? '',
+                CardAmount: orderTotal,
+                CardProcessingCode: paymentDetails.pgPmtMode ?? '',
+              },
             },
-          }]
-        : [{
-            CashOnDelivery: {
-              ExpectedAmount:      orderTotal,
-              CurrencyCode:        'MUR',
-              CollectionReference: currentOrderId,
+          ]
+        : [
+            {
+              CashOnDelivery: {
+                ExpectedAmount: orderTotal,
+                CurrencyCode: 'MUR',
+                CollectionReference: currentOrderId,
+              },
             },
-          }];
+          ];
 
       const payload: PlaceOrderInterface = {
-        CustomerProfileCode:       profileCode,
-        OrderDeliveryAddressCode:  selectedAddress.OrderDeliveryAddressCode,
-        CartMasterCode:            cartItems[0].CartMasterCode,
+        CustomerProfileCode: profileCode,
+        OrderDeliveryAddressCode: selectedAddress.OrderDeliveryAddressCode,
+        CartMasterCode: cartItems[0].CartMasterCode,
         TotalAmountBeforeDiscount: orderTotal,
-        TotalAmountAfterDiscount:  orderTotal,
-        OrderDetails:              orderDetails,
+        TotalAmountAfterDiscount: orderTotal,
+        OrderDetails: orderDetails,
         PaymentDetails: {
-          PaymentModes:   2, //isCard ? 3:16,
-          Remark:         isCard ? 'Card payment via MIPS' : 'Mobile money payment via MIPS',
-          IsPaid:         true,
+          PaymentModes: 2, //isCard ? 3:16,
+          Remark: isCard
+            ? 'Card payment via MIPS'
+            : 'Mobile money payment via MIPS',
+          IsPaid: true,
           ModeOfPayments: modeOfPayments,
         },
       };
@@ -427,7 +454,8 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
         successRef.current = true;
         Alert.alert(
           'Order could not be placed',
-          response?.userMessage ?? 'Payment was received but we could not place your order. Please contact support.',
+          response?.userMessage ??
+            'Payment was received but we could not place your order. Please contact support.',
           [{ text: 'OK', onPress: () => navigation.goBack() }],
         );
         return;
@@ -442,21 +470,23 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
       // both payment methods.
       navigation.pop(1);
       navigation.replace('OrderSuccess', {
-        orderNumber:    response.result?.OrderNumber ?? '',
-        itemCount:      cartItems.length,
+        orderNumber: response.result?.OrderNumber ?? '',
+        itemCount: cartItems.length,
         orderTotal,
-        orderCurrency:  'MUR',
+        orderCurrency: 'MUR',
         orderTimestamp: response.result?.CreatedDate ?? null,
-        orderStatus:    response.result?.OrderStatus ?? null,
+        orderStatus: response.result?.OrderStatus ?? null,
         deliveryAddress: {
-          street: [selectedAddress.Address, selectedAddress.StreetName].filter(Boolean).join(', '),
-          city:   selectedAddress.City ?? '',
+          street: [selectedAddress.Address, selectedAddress.StreetName]
+            .filter(Boolean)
+            .join(', '),
+          city: selectedAddress.City ?? '',
         },
         cartItems: cartItems.map((item: SavedCartItemInterface) => ({
-          name:     item.Name,
+          name: item.Name,
           quantity: item.Quantity,
-          price:    item.Price,
-          image:    item.Images?.split(/[,;]/).filter(Boolean)[0] ?? '',
+          price: item.Price,
+          image: item.Images?.split(/[,;]/).filter(Boolean)[0] ?? '',
         })),
       });
     } catch (err: any) {
@@ -464,42 +494,77 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
       successRef.current = true;
       Alert.alert(
         'Order error',
-        err?.response?.data?.userMessage ?? 'Payment was received but we could not place your order. Please contact support.',
+        err?.response?.data?.userMessage ??
+          'Payment was received but we could not place your order. Please contact support.',
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
     }
   };
 
+  // ── Header — back button, shown on every state ─────────────────────────────
+  const header = (
+    <>
+      <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
+        <TouchableOpacity
+          onPress={handleBack}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Icon name="chevron-back" size={22} color={Colors.ink1} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Payment</Text>
+        <View style={styles.headerRight} />
+      </View>
+      <View style={styles.headerDivider} />
+    </>
+  );
+
   // ── Render — loading state before MIPS URL is ready ───────────────────────
   if (loadError) {
     return (
-      <View style={[styles.centred, { paddingTop: insets.top || (StatusBar.currentHeight ?? 0) }]}>
-        <Text style={styles.errorText}>{loadError}</Text>
+      <View style={styles.root}>
+        <StatusBar barStyle="dark-content" />
+        {header}
+        <View style={styles.centred}>
+          <Text style={styles.errorText}>{loadError}</Text>
+        </View>
       </View>
     );
   }
 
   if (!mipsUrl) {
     return (
-      <View style={[styles.centred, { paddingTop: insets.top || (StatusBar.currentHeight ?? 0) }]}>
-        <Text style={styles.loadingText}>Preparing payment…</Text>
+      <View style={styles.root}>
+        <StatusBar barStyle="dark-content" />
+        {header}
+        <View style={styles.centred}>
+          <Text style={styles.loadingText}>Preparing payment…</Text>
+        </View>
       </View>
     );
   }
 
   // ── Render — WebView + status strip ───────────────────────────────────────
   return (
-    <View style={[styles.root, { paddingTop: insets.top || (StatusBar.currentHeight ?? 0) }]}>
+    <View style={styles.root}>
       <StatusBar barStyle="dark-content" />
+      {header}
 
       {/* Status strip */}
       <View style={styles.strip}>
-        <Text style={styles.stripTimer}>Time remaining: {formatTime(seconds)}</Text>
+        <Text style={styles.stripTimer}>
+          This payment session expires in 5 minutes.
+        </Text>
         <Text style={styles.stripNote}>
           Do not press the back button or close this screen.
         </Text>
         {count > 0 ? (
-          <Text style={styles.stripAttempt}>{`Checking payment… attempt ${count}/${MAX_ATTEMPTS}`}</Text>
+          <Text
+            style={styles.stripAttempt}
+          >{`Checking payment… attempt ${count}/${MAX_ATTEMPTS}`}</Text>
         ) : null}
         {attemptInfo ? (
           <Text style={styles.stripAttemptInfo}>{attemptInfo}</Text>
@@ -520,10 +585,14 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
         setSupportMultipleWindows={false}
         startInLoadingState
         style={styles.webview}
-        onHttpError={e => console.warn('WebView HTTP error:', e.nativeEvent.statusCode)}
+        onHttpError={e =>
+          console.warn('WebView HTTP error:', e.nativeEvent.statusCode)
+        }
         renderError={errorName => (
           <View style={styles.centred}>
-            <Text style={styles.errorText}>Payment page failed to load ({errorName}).</Text>
+            <Text style={styles.errorText}>
+              Payment page failed to load ({errorName}).
+            </Text>
           </View>
         )}
       />
@@ -535,53 +604,84 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({ route, navigation }) 
 
 const styles = StyleSheet.create({
   root: {
-    flex:            1,
+    flex: 1,
     backgroundColor: '#FFFFFF',
   },
   centred: {
-    flex:           1,
-    alignItems:     'center',
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    padding:        24,
+    padding: 24,
     backgroundColor: '#FFFFFF',
   },
   loadingText: {
-    fontSize:   16,
-    color:      '#555',
-    textAlign:  'center',
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
   },
   errorText: {
-    fontSize:   15,
-    color:      '#D32F2F',
-    textAlign:  'center',
+    fontSize: 15,
+    color: '#D32F2F',
+    textAlign: 'center',
     lineHeight: 22,
+  },
+  // ── Header ───────────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Space.screenH,
+    paddingBottom: Space[4],
+    backgroundColor: Colors.surface,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -Space[2],
+  },
+  headerTitle: {
+    flex: 1,
+    fontFamily: FontFamily.sans,
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.ink1,
+    textAlign: 'center',
+    letterSpacing: -0.1,
+  },
+  headerRight: {
+    width: 36,
+  },
+  headerDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
   },
   // ── Status strip ────────────────────────────────────────────────────────────
   strip: {
     backgroundColor: '#F5F5F5',
     paddingHorizontal: 16,
-    paddingVertical:   10,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#DEDEDE',
-    gap:               4,
+    gap: 4,
   },
   stripTimer: {
-    fontSize:   14,
+    fontSize: 14,
     fontWeight: '700',
-    color:      '#1A237E',
+    color: '#1A237E',
   },
   stripNote: {
-    fontSize:  12,
-    color:     '#555',
+    fontSize: 12,
+    color: '#555',
     lineHeight: 17,
   },
   stripAttempt: {
-    fontSize:  11,
-    color:     '#888',
+    fontSize: 11,
+    color: '#888',
   },
   stripAttemptInfo: {
-    fontSize:   11,
-    color:      '#444',
+    fontSize: 11,
+    color: '#444',
     fontWeight: '600',
   },
   webview: {
