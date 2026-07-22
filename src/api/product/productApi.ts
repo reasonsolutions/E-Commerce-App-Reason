@@ -1,6 +1,6 @@
 import axiosInstance from '../axiosInstance';
 import { productEndpoints } from '../endpoints';
-import type { ProductInterface } from '../interfaces';
+import type { ProductInterface, ProductVariant, CategoryFeedProduct } from '../interfaces';
 import { SortBy } from '../../config/enum_files/SortBy';
 
 // InventoryID → OrganisationId — populated on every product fetch, used at checkout
@@ -9,7 +9,7 @@ const _orgByInventory: Map<number, string> = new Map();
 export const getOrgIdForInventory = (inventoryId: number): string =>
   _orgByInventory.get(inventoryId) ?? '';
 
-function cacheOrgIds(products: ProductInterface[]): void {
+function cacheOrgIds(products: { OrganisationId: string; Variants: ProductVariant[] }[]): void {
   for (const p of products) {
     if (!p.OrganisationId) continue;
     for (const v of p.Variants ?? []) {
@@ -60,7 +60,7 @@ export const getProductsByCategory = async (
   pageNumber = 1,
   pageSize = 20,
   sortBy?: SortBy,
-): Promise<ProductInterface[]> => {
+): Promise<CategoryFeedProduct[]> => {
   const response = await axiosInstance.post(productEndpoints.allProducts, {
     brands: [],
     categories: [Number(categoryId)],
@@ -71,7 +71,7 @@ export const getProductsByCategory = async (
     sortBy: sortBy ?? null,
     pagination: { pageNumber, pageSize },
   });
-  const products: ProductInterface[] = response.data?.result?.Products ?? [];
+  const products: CategoryFeedProduct[] = response.data?.result?.Products ?? [];
   cacheOrgIds(products);
   return products;
 };

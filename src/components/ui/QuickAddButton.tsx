@@ -24,11 +24,16 @@ export const QuickAddButton: React.FC<QuickAddButtonProps> = ({ product }) => {
   const [adding, setAdding] = useState(false);
 
   const inventoryId = product.Inventory_Id;
-  const firstVariant = product.Variants?.[0];
+  // Match the variant the card's price/discount actually came from — not
+  // always Variants[0] — so stock/backorder limits agree with the variant
+  // being added. Falls back to Variants[0] if no match (shouldn't happen,
+  // but keeps prior behavior for any caller that hasn't set Inventory_Id).
+  const activeVariant =
+    product.Variants?.find(v => Number(v.InventoryID) === inventoryId) ?? product.Variants?.[0];
   const isOOS = isProductSoldOut(product.Variants);
-  const variantMaxPerOrder = firstVariant?.MaxPerOrder ?? null;
-  const variantStock       = firstVariant?.Stock ?? null;
-  const variantBackOrder   = firstVariant?.BackOrder;
+  const variantMaxPerOrder = activeVariant?.MaxPerOrder ?? null;
+  const variantStock       = activeVariant?.Stock ?? null;
+  const variantBackOrder   = activeVariant?.BackOrder;
 
   const bounce = useCallback(() => {
     Animated.sequence([

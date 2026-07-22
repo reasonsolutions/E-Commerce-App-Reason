@@ -277,6 +277,7 @@ export interface ProductVariant {
         NetAmount:    number | null;
         TaxAmount:    number | null;
         GrossAmount:  number | null;
+        DiscountPct:  number;
         Taxes:        VariantTax[];
     };
     PhysicalAttributes: PhysicalAttributes;
@@ -297,7 +298,7 @@ export interface ProductInterface {
     CategoryID:            string;
     CategoryName:          string;
     CategoryImage:         string;
-    RelatedProducts:       null;
+    RelatedProducts:       string | null;
     MinPrice:              number;
     MaxComparePrice:       number;
     DiscountPct:           number;
@@ -382,7 +383,44 @@ export interface CategoryProductRaw {
     ApprovedOn: string | null;
 }
 
-// raw row from getAllProducts (productEndpoints.allProducts) — full merchant-portal payload
+// raw row from getProductsByCategory (productEndpoints.allProducts, filtered by
+// category) — current backend shape: no root-level MinPrice/MaxComparePrice/
+// DiscountPct, pricing lives only per-variant under Variants[].PriceDetails.
+export interface CategoryFeedProduct {
+    ItemID:                number;
+    Name:                  string;
+    OrganisationName:      string;
+    OrganisationId:        string;
+    Description:           string;
+    SubcategoryID:         string;
+    Images:                string;
+    CreatedDate:           string;
+    BrandID:               string;
+    BrandName:             string;
+    SCName:                string;
+    CategoryID:            string;
+    CategoryName:          string;
+    CategoryImage:         string;
+    RelatedProducts:       string | null;
+    ComplianceInfo:        ProductComplianceInfo;
+    ProductClassification: ProductClassification;
+    Marketing:             ProductMarketing;
+    PolicyInfo:            ProductPolicyInfo;
+    AdditionalInfo: {
+        VideoUrl:            string | null;
+        SizeChart:           string | null;
+        CareInstructions:    string | null;
+        MaterialComposition: string | null;
+        Color:               string | null;
+        Season:              Season | null;
+    };
+    ShippingInfo: ProductShippingInfo;
+    Variants:     ProductVariant[];
+}
+
+// raw row from getAllProducts (productEndpoints.allProducts) — full merchant-portal payload.
+// Current backend shape: no root-level MinPrice/MaxComparePrice/DiscountPct —
+// pricing lives only per-variant under Variants[].PriceDetails.
 export interface AllProductsRawItem {
     ItemID:                number;
     Name:                  string;
@@ -399,9 +437,6 @@ export interface AllProductsRawItem {
     CategoryName:          string;
     CategoryImage:         string;
     RelatedProducts:       string | null;
-    MinPrice:              number;
-    MaxComparePrice:       number;
-    DiscountPct:           number;
     ComplianceInfo:        ProductComplianceInfo;
     ProductClassification: ProductClassification;
     Marketing:             ProductMarketing;
@@ -412,7 +447,7 @@ export interface AllProductsRawItem {
         CareInstructions:    string | null;
         MaterialComposition: string | null;
         Color:               string | null;
-        Season:              { Value: number; Description: string } | null;
+        Season:              Season | null;
     };
     ShippingInfo: ProductShippingInfo;
     Variants:     ProductVariant[];
@@ -445,7 +480,7 @@ export interface ProductByCategoryProductDetails {
         CareInstructions:    string | null;
         MaterialComposition: string | null;
         Color:               string | null;
-        Season:              { Value: number; Description: string } | null;
+        Season:              Season | null;
     };
     ShippingInfo?: ProductShippingInfo;
     RawVariants?:  ProductVariant[];
@@ -619,7 +654,7 @@ export interface SavedCartItemInterface {
         NetAmount: number | null;
         TaxAmount: number | null;
         GrossAmount: number | null;
-        Taxes: { VariantTaxConfigurationId: number; TaxId: number; TaxType: TaxType; TaxRate: number; IsActive: boolean; CreatedAt: string }[];
+        Taxes: { VariantTaxConfigurationId: number; TaxId: number; TaxName?: string; TaxType: TaxType; TaxRate: number; IsActive: boolean; CreatedAt: string }[];
     };
 }
 

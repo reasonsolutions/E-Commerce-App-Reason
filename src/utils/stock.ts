@@ -13,7 +13,7 @@ interface StockCheckVariant {
   BackOrder?:   VariantInterface['BackOrder'];
 }
 
-const isVariantPurchasable = (variant: StockCheckVariant): boolean =>
+export const isVariantPurchasable = (variant: StockCheckVariant): boolean =>
   variant.StockStatus?.Description !== 'out_of_stock' || hasBackorderCapacity(variant.BackOrder);
 
 // A product is sold out only when every one of its variants is out of stock

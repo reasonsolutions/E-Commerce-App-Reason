@@ -24,7 +24,6 @@ import {
   SkeletonRow,
   DarkHeader,
   StatusBadge,
-  OrderProgressBar,
   FadeImage,
   CancelOrderSheet,
 } from '../components/ui';
@@ -37,7 +36,7 @@ import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { formatDate } from '../utils/formatDate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
-import { orderStatusLabel } from '../utils/orderStatus';
+import { orderStatusLabel, currentOrderStatus } from '../utils/orderStatus';
 import type {
   OrderDetailItemExtendedInterface,
   OrderDetailResponseInterface,
@@ -186,9 +185,9 @@ const ItemCard: React.FC<{
   isLast: boolean;
 }> = ({ item, onCancel, isLast }) => {
   const imgUri = resolveImageUrl(item.Images);
-  const status = orderStatusLabel(item.OrderStatus as OrderStatusCode);
-  const isCancellable = CANCELLABLE_STATUSES.includes(item.OrderStatus as OrderStatusCode);
-  const isActive = [1, 2, 3, 4, 5].includes(item.OrderStatus);
+  const derivedStatus = currentOrderStatus(item.OrderStatus, item.Events);
+  const status = orderStatusLabel(derivedStatus);
+  const isCancellable = CANCELLABLE_STATUSES.includes(derivedStatus);
 
   return (
     <View style={[itemCardStyles.card, !isLast && itemCardStyles.cardBorder]}>
@@ -233,12 +232,6 @@ const ItemCard: React.FC<{
           </TouchableOpacity>
         ) : null}
       </View>
-
-      {isActive ? (
-        <View style={itemCardStyles.progressWrap}>
-          <OrderProgressBar status={item.OrderStatus as OrderStatusCode} />
-        </View>
-      ) : null}
 
       {/* Per-item timeline */}
       <ItemTimeline events={item.Events ?? []} />
@@ -308,9 +301,6 @@ const itemCardStyles = StyleSheet.create({
     fontSize:           12,
     color:              Colors.danger,
     textDecorationLine: 'underline',
-  },
-  progressWrap: {
-    marginTop: Space[2],
   },
 });
 

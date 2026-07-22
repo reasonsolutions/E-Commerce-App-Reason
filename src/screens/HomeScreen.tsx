@@ -32,6 +32,7 @@ import {
   CategoryInterface,
   ProductInterface,
   GetBrandItem,
+  CategoryFeedProduct,
 } from '../api/interfaces';
 import {
   getProductsByCategory,
@@ -42,6 +43,7 @@ import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import { homeCache } from '../utils/homeCache';
 import { wishlistCache } from '../utils/wishlistCache';
+import { isVariantPurchasable } from '../utils/stock';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -480,6 +482,27 @@ function useCustomBackHandler(navigation: NavigationProp) {
   );
 }
 
+// Maps a getProductsByCategory raw row (pricing lives only under
+// Variants[].PriceDetails as of the current backend) onto the flat
+// ProductInterface shape the rest of this screen already consumes
+// (MinPrice/MaxComparePrice/DiscountPct/Inventory_Id). Picks the first
+// purchasable variant (in-stock, or out-of-stock-but-backorderable) so the
+// card's price/discount never represents a variant the user can't actually
+// buy; falls back to Variants[0] only when every variant is truly sold out.
+const mapHomeFeedProduct = (p: CategoryFeedProduct): ProductInterface => {
+  const variant =
+    p.Variants?.find(isVariantPurchasable) ?? p.Variants?.[0];
+  const priceDetails = variant?.PriceDetails;
+  return {
+    ...p,
+    MinPrice:        priceDetails?.Price ?? 0,
+    MaxComparePrice: priceDetails?.ComparePrice ?? 0,
+    DiscountPct:     priceDetails?.DiscountPct ?? 0,
+    Inventory_Id:    variant ? Number(variant.InventoryID) : undefined,
+    Variant:         variant?.Variant,
+  };
+};
+
 // Module-level product cache — survives remounts within an app session
 // categories + brands also written to homeCache so SearchScreen can read them
 let _cachedProducts: ProductInterface[] | null = null;
@@ -684,7 +707,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         const results = await Promise.all(
           ids.map(id => getProductsByCategory(id, 1, 10).catch(() => [])),
         );
-        const merged = results.flat() as ProductInterface[];
+        const merged = results.flat().map(mapHomeFeedProduct);
         const seen = new Set<number>();
         const deduped: ProductInterface[] = [];
         for (const p of merged) {
@@ -745,7 +768,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       const results = await Promise.all(
         ids.map(id => getProductsByCategory(id, 1, 10).catch(() => [])),
       );
-      const merged = results.flat() as ProductInterface[];
+      const merged = results.flat().map(mapHomeFeedProduct);
       const seen = new Set<number>();
       const deduped: ProductInterface[] = [];
       for (const p of merged) {

@@ -49,7 +49,7 @@ export const OrderProgressBar: React.FC<OrderProgressBarProps> = ({ status }) =>
               ]}
             />
             {isActive ? (
-              <Text style={styles.stepLabel}>{STEP_LABELS[step]}</Text>
+              <Text style={styles.stepLabel} numberOfLines={1}>{STEP_LABELS[step]}</Text>
             ) : null}
           </View>
         );
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap:           3,
     marginTop:     10,
-    marginBottom:  2,
+    marginBottom:  20,
   },
   stepWrap: {
     flex:       1,
@@ -85,8 +85,12 @@ const styles = StyleSheet.create({
     ...Type.label,
     fontSize:      8,
     letterSpacing: 0.3,
+    lineHeight:    10,
     color:         Colors.brandNavy,
     marginTop:     3,
     textAlign:     'center',
+    width:         100,
+    position:      'absolute',
+    top:           7,
   },
 });

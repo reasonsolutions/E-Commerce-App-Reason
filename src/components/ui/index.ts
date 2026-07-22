@@ -34,7 +34,6 @@ export { RemoveCartItemSheet } from './RemoveCartItemSheet';
 export { LoginPromptSheet } from './LoginPromptSheet';
 export { OrderFilterSheet } from './OrderFilterSheet';
 export type { OrderSortKey } from './OrderFilterSheet';
-export { OrderProgressBar } from './OrderProgressBar';
 export { SectionHead } from './SectionHead';
 export { BrandTile } from './BrandTile';
 export { CategoryTile } from './CategoryTile';

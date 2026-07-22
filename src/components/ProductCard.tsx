@@ -14,7 +14,6 @@ import { QuickAddButton } from './ui/QuickAddButton';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { discountPct as calcDiscountPct } from '../utils/pricing';
 import { isProductSoldOut } from '../utils/stock';
 
 interface ProductCardProps {
@@ -46,7 +45,7 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   // unavailable — not just the first (e.g. one size out of stock shouldn't
   // hide the whole product), and backorderable variants stay purchasable.
   const isOOS = isProductSoldOut(product.Variants);
-  const discountPct = calcDiscountPct(product.MinPrice, product.MaxComparePrice);
+  const discountPct = product.DiscountPct ?? 0;
   const hasDiscount = !isOOS && discountPct > 0;
 
   const isNew = (() => {

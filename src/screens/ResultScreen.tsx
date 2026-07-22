@@ -55,8 +55,7 @@ import {
 import { deduplicateProducts, isFeaturedSpan, toServerSortBy, applySort } from '../utils/resultHelpers';
 import { useWishlist } from '../context/WishlistContext';
 import { wishlistCache } from '../utils/wishlistCache';
-import { discountPct as calcDiscountPct } from '../utils/pricing';
-import { isProductSoldOut } from '../utils/stock';
+import { isProductSoldOut, isVariantPurchasable } from '../utils/stock';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
@@ -81,7 +80,7 @@ const FeaturedCard: React.FC<{
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
   const isOOS = isProductOOS(product);
 
-  const discountPct = calcDiscountPct(product.Price, product.ComparePrice);
+  const discountPct = product.DiscountPct ?? 0;
   const hasDiscount = !isOOS && discountPct > 0;
 
   return (
@@ -144,7 +143,7 @@ const GridTile: React.FC<{
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
   const isOOS = isProductOOS(product);
 
-  const discountPct = calcDiscountPct(product.Price, product.ComparePrice);
+  const discountPct = product.DiscountPct ?? 0;
   const hasDiscount = !isOOS && discountPct > 0;
 
   return (
@@ -209,7 +208,7 @@ const SpanCard: React.FC<{
   const firstImage = product.Images ? resolveImageUrl(product.Images) : null;
   const isOOS = isProductOOS(product);
 
-  const discountPct = calcDiscountPct(product.Price, product.ComparePrice);
+  const discountPct = product.DiscountPct ?? 0;
   const hasDiscount = !isOOS && discountPct > 0;
 
   return (
@@ -482,39 +481,50 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   // fields (ComplianceInfo, ProductClassification, Marketing, PolicyInfo,
   // AdditionalInfo, ShippingInfo, RawVariants) instead of discarding them —
   // cards today still only read the flattened fields below, unchanged.
+  // Pricing (Price/ComparePrice/DiscountPct) no longer comes flattened on the
+  // product root — the backend only sends it per-variant under
+  // Variants[].PriceDetails — so it's read off the first purchasable variant
+  // (in-stock, or out-of-stock-but-backorderable), falling back to Variants[0]
+  // only when every variant is truly sold out. Same variant backs
+  // Inventory_Id/Variant/Count so the card's price and its "add to cart"
+  // target always agree.
   const mapProducts = (raw: AllProductsRawItem[]): ProductByCategoryProductDetails[] =>
-    raw.map(p => ({
-      Item_Id: Number(p.ItemID),
-      Name: p.Name,
-      Price: p.MinPrice,
-      ComparePrice: p.MaxComparePrice,
-      Description: p.Description,
-      SubCategory_Id: Number(p.SubcategoryID),
-      Images: p.Images,
-      Date_Created: p.CreatedDate,
-      Brand_Id: Number(p.BrandID),
-      ApprovedBy: null,
-      ApprovedOn: null,
-      VendorID: 0,
-      Brand_Name: p.BrandName,
-      Category_Id: Number(p.CategoryID),
-      CategoryName: p.CategoryName,
-      CategoryImage: p.CategoryImage,
-      SCName: p.SCName,
-      DiscountPct:  p.DiscountPct ?? 0,
-      Inventory_Id: p.Variants?.[0] ? Number(p.Variants[0].InventoryID) : 0,
-      Variant: p.Variants?.[0]?.Variant ?? '',
-      Count: p.Variants?.[0]?.Stock ?? 0,
-      Date_Updated: p.CreatedDate,
-      RelatedProducts:       p.RelatedProducts,
-      ComplianceInfo:        p.ComplianceInfo,
-      ProductClassification: p.ProductClassification,
-      Marketing:             p.Marketing,
-      PolicyInfo:            p.PolicyInfo,
-      AdditionalInfo:        p.AdditionalInfo,
-      ShippingInfo:          p.ShippingInfo,
-      RawVariants:           p.Variants,
-    }));
+    raw.map(p => {
+      const variant = p.Variants?.find(isVariantPurchasable) ?? p.Variants?.[0];
+      const priceDetails = variant?.PriceDetails;
+      return {
+        Item_Id: Number(p.ItemID),
+        Name: p.Name,
+        Price: priceDetails?.Price ?? 0,
+        ComparePrice: priceDetails?.ComparePrice ?? 0,
+        Description: p.Description,
+        SubCategory_Id: Number(p.SubcategoryID),
+        Images: p.Images,
+        Date_Created: p.CreatedDate,
+        Brand_Id: Number(p.BrandID),
+        ApprovedBy: null,
+        ApprovedOn: null,
+        VendorID: 0,
+        Brand_Name: p.BrandName,
+        Category_Id: Number(p.CategoryID),
+        CategoryName: p.CategoryName,
+        CategoryImage: p.CategoryImage,
+        SCName: p.SCName,
+        DiscountPct:  priceDetails?.DiscountPct ?? 0,
+        Inventory_Id: variant ? Number(variant.InventoryID) : 0,
+        Variant: variant?.Variant ?? '',
+        Count: variant?.Stock ?? 0,
+        Date_Updated: p.CreatedDate,
+        RelatedProducts:       p.RelatedProducts,
+        ComplianceInfo:        p.ComplianceInfo,
+        ProductClassification: p.ProductClassification,
+        Marketing:             p.Marketing,
+        PolicyInfo:            p.PolicyInfo,
+        AdditionalInfo:        p.AdditionalInfo,
+        ShippingInfo:          p.ShippingInfo,
+        RawVariants:           p.Variants,
+      };
+    });
 
   // ── Build allProducts payload from current filter + route state ───────────
   const buildPayload = useCallback(

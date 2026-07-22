@@ -423,7 +423,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             )}
             {taxGroups.map(group => (
               <View key={group.taxId} style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Tax ({group.taxRate}%)</Text>
+                <Text style={styles.summaryLabel}>
+                  {group.taxName ? group.taxName : `Tax (${group.taxRate}%)`}
+                </Text>
                 <Text style={styles.summaryValue}>MUR {group.amount.toFixed(0)}</Text>
               </View>
             ))}

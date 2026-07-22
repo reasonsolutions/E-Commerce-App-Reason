@@ -21,14 +21,16 @@ export const discountPct = (price: number, comparePrice: number | null | undefin
 
 export interface TaxGroup {
   taxId: number;
+  taxName?: string;
   taxRate: number;
   amount: number;
 }
 
 // Groups the cart's total tax by rate — e.g. separate "VAT (15%)" lines if a
 // cart ever mixes rates, instead of one flattened total. Grouping key and
-// summed amount both come straight from the backend (item's own TaxId/TaxRate
-// and TaxAmount); items with no active tax entry are skipped, not zero-grouped.
+// summed amount both come straight from the backend (item's own TaxId/TaxRate/
+// TaxName and TaxAmount); items with no active tax entry are skipped, not
+// zero-grouped.
 export const cartTaxBreakdown = (items: SavedCartItemInterface[]): TaxGroup[] => {
   const groups = new Map<number, TaxGroup>();
   for (const item of items) {
@@ -39,7 +41,7 @@ export const cartTaxBreakdown = (items: SavedCartItemInterface[]): TaxGroup[] =>
     if (existing) {
       existing.amount += taxAmount * item.Quantity;
     } else {
-      groups.set(tax.TaxId, { taxId: tax.TaxId, taxRate: tax.TaxRate, amount: taxAmount * item.Quantity });
+      groups.set(tax.TaxId, { taxId: tax.TaxId, taxName: tax.TaxName, taxRate: tax.TaxRate, amount: taxAmount * item.Quantity });
     }
   }
   return Array.from(groups.values());
@@ -79,7 +81,7 @@ export const buildOrderItemDetails = (items: SavedCartItemInterface[]): PlaceOrd
     OrderStatus:        1,
     Taxes: (item.PriceDetails?.Taxes ?? []).map(t => ({
       TaxId:   t.TaxId,
-      TaxName: '',
+      TaxName: t.TaxName ?? '',
       TaxType: t.TaxType,
       TaxRate: t.TaxRate,
       Reason:  '',
