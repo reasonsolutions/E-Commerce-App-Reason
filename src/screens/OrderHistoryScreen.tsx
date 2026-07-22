@@ -25,7 +25,6 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
 import {
-  StatusBadge,
   FadeImage,
   Skeleton,
   OrderFilterSheet,
@@ -42,7 +41,6 @@ import { useTabRootBackHandler } from '../hooks/useTabRootBackHandler';
 import { useCart } from '../context/CartContext';
 import { formatDate } from '../utils/formatDate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
-import { orderStatusLabel } from '../utils/orderStatus';
 import { OrderStatusCode, type OrderHistoryItemInterface, type OrderDetailItemExtendedInterface } from '../api/interfaces';
 import { LoginPromptSheet } from '../components/ui';
 import { Motion } from '../theme/motion';
@@ -85,46 +83,6 @@ function groupOrders(items: OrderHistoryItemInterface[]): OrderGroup[] {
   return Array.from(map.values());
 }
 
-// Returns the least-progressed active status across all items.
-// Terminal statuses (Cancelled, Returned) are only shown if all items are terminal.
-const STATUS_PRECEDENCE: OrderStatusCode[] = [
-  OrderStatusCode.New,
-  OrderStatusCode.Confirmed,
-  OrderStatusCode.Processing,
-  OrderStatusCode.Fulfilled,
-  OrderStatusCode.Shipped,
-  OrderStatusCode.Delivered,
-  OrderStatusCode.Cancelled,
-  OrderStatusCode.Returned,
-];
-
-function lowestStatus(items: OrderHistoryItemInterface[]): OrderStatusCode {
-  const codes = items.map(it => it.OrderStatus as OrderStatusCode);
-  for (const code of STATUS_PRECEDENCE) {
-    if (codes.includes(code)) return code;
-  }
-  return OrderStatusCode.New;
-}
-
-// Returns null when all items share the same status (use StatusBadge instead).
-// Returns customer-language summary like "2 of 3 delivered · 1 in progress".
-function mixedStatusSummary(items: OrderHistoryItemInterface[]): string | null {
-  const codes = items.map(it => it.OrderStatus as OrderStatusCode);
-  const allSame = codes.every(c => c === codes[0]);
-  if (allSame) return null;
-
-  const total = items.length;
-  const delivered = codes.filter(c => c === OrderStatusCode.Delivered).length;
-  const cancelled = codes.filter(c => c === OrderStatusCode.Cancelled || c === OrderStatusCode.Returned).length;
-  const inProgress = total - delivered - cancelled;
-
-  const parts: string[] = [];
-  if (delivered > 0) parts.push(`${delivered} of ${total} delivered`);
-  if (inProgress > 0) parts.push(`${inProgress} in progress`);
-  if (cancelled > 0) parts.push(`${cancelled} cancelled`);
-  return parts.join(' · ');
-}
-
 const THUMB_SIZE = 44;
 const MAX_THUMBS = 3;
 
@@ -138,8 +96,6 @@ const OrderCard: React.FC<{
   const haptic = useHaptic();
   const entrance = useEntrance(delay);
   const itemCount = group.items.length;
-  const status = orderStatusLabel(lowestStatus(group.items));
-  const mixed = mixedStatusSummary(group.items);
   const visibleThumbs = group.items.slice(0, MAX_THUMBS);
   const overflow = itemCount - MAX_THUMBS;
   const sellerCount = new Set(
@@ -182,7 +138,7 @@ const OrderCard: React.FC<{
           </Text>
         </View>
 
-        {/* Date · seller(s) — left; status pill — right */}
+        {/* Date · seller(s) — status is shown on the order details screen instead */}
         <View style={cardStyles.metaRow}>
           <View style={cardStyles.metaCol}>
             <Text style={cardStyles.metaPrimary}>
@@ -190,14 +146,6 @@ const OrderCard: React.FC<{
               {sellerLabel ? `  ·  ${sellerLabel}` : ''}
             </Text>
           </View>
-          {mixed ? (
-            <View style={cardStyles.mixedCol}>
-              <StatusBadge status="Mixed" />
-              <Text style={cardStyles.mixedSubtitle}>{mixed}</Text>
-            </View>
-          ) : (
-            <StatusBadge status={status} />
-          )}
         </View>
 
         {/* Actions */}
@@ -290,25 +238,6 @@ const cardStyles = StyleSheet.create({
     fontWeight:    '600',
     color:         Colors.ink1,
     letterSpacing: 0.1,
-  },
-  metaSecondary: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      11.5,
-    fontWeight:    '400',
-    color:         Colors.ink4,
-    letterSpacing: 0.1,
-  },
-  mixedCol: {
-    alignItems: 'flex-end',
-    gap:        3,
-  },
-  mixedSubtitle: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      11,
-    color:         Colors.ink4,
-    fontWeight:    '400',
-    letterSpacing: 0.1,
-    textAlign:     'right',
   },
   actions: {
     flexDirection:  'row',

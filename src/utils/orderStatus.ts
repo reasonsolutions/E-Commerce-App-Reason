@@ -1,5 +1,5 @@
 import type { OrderStatus } from '../components/ui';
-import { OrderStatusCode } from '../api/interfaces';
+import { OrderStatusCode, type OrderEventInterface } from '../api/interfaces';
 
 const STATUS_MAP: Record<OrderStatusCode, OrderStatus> = {
   [OrderStatusCode.New]:        'New',

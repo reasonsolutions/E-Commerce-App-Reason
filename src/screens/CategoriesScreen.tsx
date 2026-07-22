@@ -140,10 +140,8 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
   const filtered = useMemo(() => {
     if (!categoriesWithCounts) return null;
     const q = query.trim().toLowerCase();
-    // Once a count has resolved (not null), hide categories with 0 products
-    const nonEmpty = categoriesWithCounts.filter(c => c.productCount === null || c.productCount > 0);
-    if (!q) return nonEmpty;
-    return nonEmpty.filter(c => c.CategoryName.toLowerCase().includes(q));
+    if (!q) return categoriesWithCounts;
+    return categoriesWithCounts.filter(c => c.CategoryName.toLowerCase().includes(q));
   }, [categoriesWithCounts, query]);
 
   const handleRetry = useCallback(() => {

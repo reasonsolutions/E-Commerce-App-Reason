@@ -295,6 +295,8 @@ const ResultSkeleton: React.FC = () => (
 let _cachedCategories: CategoryInterface[] = [];
 let _cachedBrands: { id: number; name: string }[] = [];
 
+let _allProductsCallCount = 0; // TEMP — remove after measuring
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -587,6 +589,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
       setTotalCount(null);
       return run(async () => {
         const payload = buildPayload(1, opts);
+        console.log(`[allProducts] ResultScreen fetchProducts #${++_allProductsCallCount}`); // TEMP — remove after measuring
         const response = await axiosInstance.post(
           productEndpoints.allProducts,
           payload,
@@ -616,6 +619,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     try {
       const nextPage = pageNumber + 1;
       const payload = buildPayload(nextPage);
+      console.log(`[allProducts] ResultScreen loadMore #${++_allProductsCallCount} (page ${nextPage})`); // TEMP — remove after measuring
       const response = await axiosInstance.post(
         productEndpoints.allProducts,
         payload,

@@ -29,6 +29,8 @@ import type { CategoryInterface } from '../api/interfaces';
 
 type Props = { navigation: StackNavigationProp<RootStackParamList> };
 
+let _allProductsCallCount = 0; // TEMP — remove after measuring
+
 const SearchScreen: React.FC<Props> = ({ navigation }) => {
   const insets      = useSafeAreaInsets();
   const inputRef    = useRef<TextInput>(null);
@@ -72,6 +74,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
 
   const fetchSuggestions = useCallback(async (text: string) => {
     try {
+      console.log(`[allProducts] SearchScreen fetchSuggestions #${++_allProductsCallCount} ("${text}")`); // TEMP — remove after measuring
       const response = await axiosInstance.post(productEndpoints.allProducts, {
         brands: [], categories: [], subCategories: [],
         searchQuery: text.trim(),
