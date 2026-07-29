@@ -60,10 +60,12 @@ export const ProductRail: React.FC<ProductRailProps> = ({
         <SkeletonRow gap={Space[4]} style={styles.rail}>
           {[0, 1, 2].map((i) => (
             <View key={i} style={{ width: cardWidth }}>
-              <Skeleton height={cardWidth * 1.25} radius={Radius.md} style={{ marginBottom: Space[2] }} />
-              <Skeleton height={9}  width="50%" style={{ marginBottom: 4 }} />
-              <Skeleton height={12} width="76%" style={{ marginBottom: 4 }} />
-              <Skeleton height={12} width="40%" />
+              <Skeleton height={Math.round(cardWidth * 0.88)} radius={Radius.md} />
+              <View style={{ paddingTop: Space[2] }}>
+                <Skeleton height={13} width="50%" />
+                <Skeleton height={34} width="90%" style={{ marginTop: 2 }} />
+                <Skeleton height={38} width="70%" style={{ marginTop: 6 }} />
+              </View>
             </View>
           ))}
         </SkeletonRow>

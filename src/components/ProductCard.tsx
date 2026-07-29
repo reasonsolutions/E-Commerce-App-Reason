@@ -21,7 +21,6 @@ interface ProductCardProps {
   onPress?: (event: GestureResponderEvent) => void;
   cardWidth?: number;
   showHeart?: boolean;
-  showDelivery?: boolean;
   showQuickAdd?: boolean;
 }
 
@@ -31,7 +30,6 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   onPress,
   cardWidth = 158,
   showHeart = true,
-  showDelivery = true,
   showQuickAdd = false,
 }) => {
   const imgUri = resolveImageUrl(product.Images);
@@ -46,18 +44,8 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
   // hide the whole product), and backorderable variants stay purchasable.
   const isOOS = isProductSoldOut(product.Variants);
   const discountPct = product.DiscountPct ?? 0;
-  const hasDiscount = !isOOS && discountPct > 0;
-
-  const isNew = (() => {
-    if (!product.CreatedDate) return false;
-    const created = new Date(product.CreatedDate);
-    const ageDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
-    return ageDays <= 30;
-  })();
+  const hasDiscount = discountPct > 0;
   const imgH = Math.round(cardWidth * 0.88);
-
-  const freeShipping = product.ShippingInfo?.FreeShipping ?? false;
-  const deliveryDays = product.ShippingInfo?.EstimatedDeliveryDays;
 
   return (
     <TouchableOpacity
@@ -77,12 +65,15 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
           <Text style={styles.initial}>{(product.Name || '?').charAt(0)}</Text>
         )}
 
-        {isNew && (
-          <View style={styles.conditionBadge}>
-            <Text style={styles.conditionBadgeText}>NEW</Text>
+        {isOOS ? (
+          <View style={styles.oosBadge}>
+            <Text style={styles.oosBadgeText} numberOfLines={1}>Sold out</Text>
           </View>
-        )}
-
+        ) : hasDiscount ? (
+          <View style={styles.discountBadge}>
+            <Text style={styles.discountBadgeText} numberOfLines={1}>−{discountPct}%</Text>
+          </View>
+        ) : null}
 
         {showHeart && product.Inventory_Id ? (
           <WishlistHeart inventoryId={product.Inventory_Id} />
@@ -92,37 +83,22 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
       </View>
 
       <View style={styles.info}>
-        {product.BrandName ? (
-          <Text style={styles.brand} numberOfLines={1}>{product.BrandName.toUpperCase()}</Text>
-        ) : null}
+        <Text style={styles.brand} numberOfLines={1}>
+          {product.BrandName ? product.BrandName.toUpperCase() : ' '}
+        </Text>
         <Text style={styles.name} numberOfLines={2}>{product.Name}</Text>
-        <View style={styles.priceRow}>
-          {product.MinPrice > 0 ? (
-            <Text style={styles.price} numberOfLines={1}>MUR {product.MinPrice.toLocaleString('en-IN')}</Text>
-          ) : (
-            <Text style={styles.priceUnavailable} numberOfLines={1}>Price unavailable</Text>
-          )}
-          {hasDiscount && product.MinPrice > 0 && (
+        <View style={styles.priceBlock}>
+          <View style={styles.priceRow}>
+            {product.MinPrice > 0 ? (
+              <Text style={styles.price} numberOfLines={1}>MUR {product.MinPrice.toLocaleString('en-IN')}</Text>
+            ) : (
+              <Text style={styles.priceUnavailable} numberOfLines={1}>Price unavailable</Text>
+            )}
+          </View>
+          {hasDiscount && product.MinPrice > 0 ? (
             <Text style={styles.was} numberOfLines={1}>MUR {product.MaxComparePrice.toLocaleString('en-IN')}</Text>
-          )}
-          {isOOS ? (
-            <View style={styles.oosChip}>
-              <Text style={styles.oosChipText} numberOfLines={1}>Sold Out</Text>
-            </View>
-          ) : hasDiscount ? (
-            <View style={styles.discountChip}>
-              <Text style={styles.discountChipText} numberOfLines={1}>−{discountPct}%</Text>
-            </View>
           ) : null}
         </View>
-        {product.Variant ? (
-          <Text style={styles.variant} numberOfLines={1}>{product.Variant}</Text>
-        ) : null}
-        {showDelivery && freeShipping ? (
-          <Text style={styles.delivery} numberOfLines={1}>
-            Free delivery{deliveryDays ? ` · ${deliveryDays} days` : ''}
-          </Text>
-        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -153,43 +129,34 @@ const styles = StyleSheet.create({
     color:      'rgba(40,32,24,0.18)',
     lineHeight: 56,
   },
-  conditionBadge: {
+  discountBadge: {
     position:          'absolute',
     top:               8,
     left:              8,
     paddingVertical:   3,
     paddingHorizontal: 7,
-    borderRadius:      6,
-    backgroundColor:   Colors.ink1,
-  },
-  conditionBadgeText: {
-    ...Type.label,
-    fontSize:      9,
-    color:         '#FFFFFF',
-    letterSpacing: 1.2,
-  },
-  discountChip: {
+    borderRadius:      Radius.xs,
     backgroundColor:   Colors.accent,
-    borderRadius:      5,
-    paddingVertical:   2,
-    paddingHorizontal: 6,
   },
-  discountChipText: {
+  discountBadgeText: {
     ...Type.label,
-    fontSize:      10.5,
+    fontSize:      9.5,
     fontWeight:    '800',
     color:         '#FFFFFF',
     letterSpacing: 0.2,
   },
-  oosChip: {
+  oosBadge: {
+    position:          'absolute',
+    top:               8,
+    left:              8,
+    paddingVertical:   3,
+    paddingHorizontal: 7,
+    borderRadius:      Radius.xs,
     backgroundColor:   Colors.ink3,
-    borderRadius:      5,
-    paddingVertical:   2,
-    paddingHorizontal: 6,
   },
-  oosChipText: {
+  oosBadgeText: {
     ...Type.label,
-    fontSize:      10.5,
+    fontSize:      9.5,
     fontWeight:    '800',
     color:         '#FFFFFF',
     letterSpacing: 0.2,
@@ -197,12 +164,12 @@ const styles = StyleSheet.create({
   info: {
     paddingTop:        Space[2],
     paddingHorizontal: Space[2],
-    gap:               2,
   },
   brand: {
     ...Type.label,
-    fontSize: 8.5,
-    color:    Colors.ink4,
+    fontSize:  8.5,
+    color:     Colors.heroInkMuted,
+    height:    13,
   },
   name: {
     fontFamily:    FontFamily.sans,
@@ -210,15 +177,18 @@ const styles = StyleSheet.create({
     fontWeight:    '500',
     color:         Colors.ink1,
     lineHeight:    17,
-    minHeight:     34,
+    height:        34,
+    marginTop:     2,
     letterSpacing: -0.1,
+  },
+  priceBlock: {
+    marginTop: 6,
+    height:    38,
   },
   priceRow: {
     flexDirection: 'row',
-    flexWrap:      'wrap',
-    alignItems:    'baseline',
+    alignItems:    'center',
     gap:           Space[1] + 1,
-    marginTop:     1,
   },
   price: {
     fontFamily:    FontFamily.sans,
@@ -226,7 +196,6 @@ const styles = StyleSheet.create({
     fontWeight:    '700',
     color:         Colors.ink1,
     letterSpacing: -0.2,
-    flexShrink:    0,
   },
   priceUnavailable: {
     fontFamily:  FontFamily.sans,
@@ -241,16 +210,7 @@ const styles = StyleSheet.create({
     fontWeight:         '400',
     textDecorationLine: 'line-through',
     color:              Colors.ink4,
-  },
-  variant: {
-    ...Type.caption,
-    color:      Colors.ink4,
-    letterSpacing: 0.1,
-  },
-  delivery: {
-    ...Type.caption,
-    fontSize:   10.5,
-    color:      Colors.brandNavy,
+    marginTop:          3,
   },
 });
 

@@ -75,10 +75,12 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
         <View style={styles.grid}>
           {[0, 1, 2, 3].map((i) => (
             <View key={i} style={{ width: COL_W, marginBottom: Space[5] }}>
-              <Skeleton height={GRID_IMG_H} radius={Radius.md} style={{ marginBottom: Space[2] }} />
-              <Skeleton height={9}  width="50%" style={{ marginBottom: 4 }} />
-              <Skeleton height={12} width="76%" style={{ marginBottom: 4 }} />
-              <Skeleton height={12} width="40%" />
+              <Skeleton height={GRID_IMG_H} radius={Radius.md} />
+              <View style={{ paddingTop: Space[2] }}>
+                <Skeleton height={13} width="50%" />
+                <Skeleton height={34} width="90%" style={{ marginTop: 2 }} />
+                <Skeleton height={38} width="70%" style={{ marginTop: 6 }} />
+              </View>
             </View>
           ))}
         </View>
@@ -91,7 +93,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                   <ProductCard
                     product={row.large}
                     cardWidth={LARGE_W}
-                    showDelivery={false}
                     onPress={() => handlePress(row.large.ItemID)}
                   />
                 </View>
@@ -100,7 +101,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     <ProductCard
                       product={row.small}
                       cardWidth={SMALL_W}
-                      showDelivery={false}
                       onPress={() => handlePress(row.small!.ItemID)}
                     />
                   </View>
@@ -112,7 +112,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                   <ProductCard
                     product={row.left}
                     cardWidth={COL_W}
-                    showDelivery={false}
                     onPress={() => handlePress(row.left.ItemID)}
                   />
                 </View>
@@ -121,7 +120,6 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     <ProductCard
                       product={row.right}
                       cardWidth={COL_W}
-                      showDelivery={false}
                       onPress={() => handlePress(row.right!.ItemID)}
                     />
                   </View>

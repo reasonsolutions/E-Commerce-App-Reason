@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
   // peach ember tint (heroBandTint) reserved exclusively for "Picked for you"
   // — keeps ember scarce per the color-hierarchy restraint pass.
   sectionSurface: {
-    backgroundColor: Colors.heroPageBg,
+    backgroundColor: Colors.surfaceSoft,
     paddingTop:      Space[5],
     paddingBottom:   Space[3],
   },
