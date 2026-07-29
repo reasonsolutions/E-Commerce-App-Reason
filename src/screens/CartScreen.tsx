@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { SavedCartItemInterface } from '../api/interfaces';
+import { SavedCartItemInterface, SavedCartSummaryInterface } from '../api/interfaces';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
@@ -25,7 +25,8 @@ import type { GuestCartItem } from '../api/cart';
 import { addToWishlist } from '../api/wishlist';
 import { isLoggedIn } from '../utils/auth';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
-import { cartLineNet, cartLineGross, cartDisplayWas, cartTaxBreakdown } from '../utils/pricing';
+import { mapCartTaxBreakdown } from '../utils/pricing';
+import { hasBackorderCapacity } from '../utils/stock';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -52,6 +53,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const { setWishlistCode } = useWishlist();
 
   const { data: fetched, loading, isError, error, run } = useAsyncState<SavedCartItemInterface[]>([]);
+  const [summary, setSummary] = useState<SavedCartSummaryInterface | null>(null);
   const [optimistic, setOptimistic] = useState<SavedCartItemInterface[] | null>(null);
   const [guestItems, setGuestItems] = useState<GuestCartItem[]>([]);
   const [clearing, setClearing] = useState(false);
@@ -78,6 +80,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
         ]);
         if (!loggedIn) {
           setIsGuest(true);
+          setSummary(null);
           const items = await getGuestCart();
           setGuestItems(items);
           setHasFetched(true);
@@ -88,7 +91,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
         const code = raw ? JSON.parse(raw).CustomerProfileCode : null;
         if (!code) return [];
         const response = await getSavedCartItems(code);
-        return response.result || [];
+        setSummary(response.result ?? null);
+        return response.result?.Items || [];
       }, cancelled),
     [run, setCartCount],
   );
@@ -133,27 +137,37 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   // Out-of-stock lines stay visible in the list (not silently dropped) but
   // are excluded from totals/checkout — Count is live stock as of the last
   // fetch, so an item added while available can go to 0 by the time the cart
-  // is reopened.
-  const purchasableCartItems = cartItems.filter(item => item.Count > 0);
+  // is reopened. A backorderable item at Count 0 is still purchasable.
+  const purchasableCartItems = cartItems.filter(item => item.Count > 0 || hasBackorderCapacity(item.BackOrder));
+  const unavailableCount = cartItems.length - purchasableCartItems.length;
 
+  // Tax breakdown and the final payable amount are backend-authoritative
+  // (summary.TaxBreakdown/AmountToBePaid) so they can never drift from what
+  // the server will actually charge. Subtotal is the discounted pre-tax
+  // total — summed directly from each item's own PriceDetails.Price, not
+  // from summary.ItemsTotal (which is actually Σ(ComparePrice × Qty), the
+  // pre-discount MRP total, despite the name).
   const subtotal = isGuest
     ? guestItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
-    : purchasableCartItems.reduce((sum, item) => sum + cartLineNet(item), 0);
-  const taxGroups = isGuest ? [] : cartTaxBreakdown(purchasableCartItems);
-  const grossTotal = isGuest
+    : purchasableCartItems.reduce((sum, item) => sum + (item.PriceDetails?.Price ?? item.Price ?? 0) * item.Quantity, 0);
+  const taxGroups = isGuest || !summary ? [] : mapCartTaxBreakdown(summary.TaxBreakdown);
+  // Per-rate rows (taxGroups) cover the common case. When a cart mixes
+  // inclusive and exclusive taxes, also surface the inclusive/exclusive split
+  // — otherwise it's redundant with the single per-rate total already shown.
+  const showInclusiveExclusiveSplit = !isGuest && !!summary && summary.TotalInclusiveTax > 0 && summary.TotalExclusiveTax > 0;
+  const shippingCharge = isGuest ? 0 : summary?.TotalShippingCharge ?? 0;
+  const payableTotal = isGuest
     ? subtotal
-    : purchasableCartItems.reduce((sum, item) => sum + cartLineGross(item), 0);
+    : summary?.AmountToBePaid ?? 0;
   const itemCount = isGuest
     ? guestItems.reduce((sum, i) => sum + i.quantity, 0)
     : purchasableCartItems.reduce((sum, item) => sum + item.Quantity, 0);
-  const originalTotal = isGuest
-    ? guestItems.reduce((sum, i) => sum + (i.comparePrice > i.price ? i.comparePrice : i.price) * i.quantity, 0)
-    : purchasableCartItems.reduce((sum, item) => {
-        const was = cartDisplayWas(item);
-        const unitGross = item.PriceDetails?.GrossAmount ?? item.Price;
-        return sum + (was ?? unitGross) * item.Quantity;
-      }, 0);
-  const totalSavings = originalTotal - grossTotal;
+  // Backend-computed directly (summary.TotalSaved) for logged-in carts — no
+  // client-side MRP-vs-subtotal derivation needed. Guest carts have no
+  // backend summary, so they keep the client-derived MRP-based savings.
+  const totalSavings = isGuest
+    ? guestItems.reduce((sum, i) => sum + Math.max(0, i.comparePrice - i.price) * i.quantity, 0)
+    : summary?.TotalSaved ?? 0;
 
   const handleUpdateQuantity = useCallback(async (item: SavedCartItemInterface, quantity: number) => {
     const delta = quantity - item.Quantity;
@@ -165,11 +179,15 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     );
     setCartCount((prev: number) => prev + delta);
     try {
-      await updateCartItemQuantity(item.CartDetailsCode, item.InventoryId, quantity);
+      const res = await updateCartItemQuantity(item.CartDetailsCode, item.InventoryId, quantity);
+      if (res?.statusCode !== 1) {
+        fetchCart();
+        toast.error({ title: 'Error', description: res?.userMessage ?? "Couldn't update quantity." });
+      }
     } catch {
       fetchCart();
     }
-  }, [setCartCount, fetchCart, fetched]);
+  }, [setCartCount, fetchCart, fetched, toast]);
 
   const handleUpdateGuestQuantity = useCallback(async (inventoryId: number, oldQty: number, newQty: number) => {
     const delta = newQty - oldQty;
@@ -185,11 +203,15 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     );
     setCartCount((prev: number) => Math.max(0, prev - item.Quantity));
     try {
-      await postDeleteCartItem(item.CartDetailsCode);
+      const res = await postDeleteCartItem(item.CartDetailsCode);
+      if (res?.statusCode !== 1) {
+        fetchCart();
+        toast.error({ title: 'Error', description: res?.userMessage ?? "Couldn't remove item." });
+      }
     } catch {
       fetchCart();
     }
-  }, [setCartCount, fetchCart, fetched]);
+  }, [setCartCount, fetchCart, fetched, toast]);
 
   const removeGuestItem = useCallback(async (inventoryId: number, qty: number) => {
     const updated = await removeFromGuestCart(inventoryId);
@@ -249,8 +271,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   }, [removeTarget, removeSavedItem, setWishlistCode, toast]);
 
   const handleCheckout = useCallback(() => {
-    guard(() => navigation.navigate('Address', { cartItems: purchasableCartItems }));
-  }, [guard, navigation, purchasableCartItems]);
+    guard(() => navigation.navigate('Address', { cartItems: purchasableCartItems, amountToBePaid: payableTotal }));
+  }, [guard, navigation, purchasableCartItems, payableTotal]);
 
   // Guest carts aren't re-validated against live stock (their stock field is
   // only a snapshot from add-time), so only the logged-in cart's OOS lines
@@ -341,7 +363,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             <TouchableOpacity
               style={styles.emptyCTA}
               activeOpacity={0.88}
-              onPress={() => navigation.navigate('Home')}
+              onPress={() => (navigation.navigate as (screen: string, params?: Record<string, unknown>) => void)('MainTabs', { screen: 'Home' })}
               accessibilityRole="button"
               accessibilityLabel="Start shopping"
             >
@@ -350,7 +372,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             <TouchableOpacity
               style={styles.emptySecondary}
               activeOpacity={0.7}
-              onPress={() => navigation.navigate('Wishlist')}
+              onPress={() => (navigation.navigate as (screen: string, params?: Record<string, unknown>) => void)('MainTabs', { screen: 'Wishlist' })}
               accessibilityRole="button"
               accessibilityLabel="View wishlist"
             >
@@ -429,11 +451,34 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
                 <Text style={styles.summaryValue}>MUR {group.amount.toFixed(0)}</Text>
               </View>
             ))}
+            {showInclusiveExclusiveSplit && summary && (
+              <>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summarySubLabel}>Tax (exclusive)</Text>
+                  <Text style={styles.summarySubValue}>MUR {summary.TotalExclusiveTax.toFixed(0)}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summarySubLabel}>Tax (inclusive)</Text>
+                  <Text style={styles.summarySubValue}>MUR {summary.TotalInclusiveTax.toFixed(0)}</Text>
+                </View>
+              </>
+            )}
+            {shippingCharge > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Shipping</Text>
+                <Text style={styles.summaryValue}>MUR {shippingCharge.toFixed(0)}</Text>
+              </View>
+            )}
             <View style={styles.summaryRule} />
             <View style={styles.summaryPayableBlock}>
               <Text style={styles.summaryPayableLabel}>PAYABLE NOW</Text>
-              <Text style={styles.summaryPayableAmount}>MUR {grossTotal.toLocaleString('en-IN')}</Text>
+              <Text style={styles.summaryPayableAmount}>MUR {payableTotal.toLocaleString('en-IN')}</Text>
             </View>
+            {!isGuest && unavailableCount > 0 && (
+              <Text style={styles.unavailableNote}>
+                {unavailableCount} item{unavailableCount > 1 ? 's' : ''} unavailable — not included in total
+              </Text>
+            )}
           </Animated.View>
 
           {/* ── Trust strip ────────────────────────────────────────────── */}
@@ -453,7 +498,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           {/* ── Continue shopping ──────────────────────────────────────── */}
           <TouchableOpacity
             style={[styles.continueShoppingBtn, { marginHorizontal: Space.screenH, marginTop: Space[3] }]}
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => (navigation.navigate as (screen: string, params?: Record<string, unknown>) => void)('MainTabs', { screen: 'Home' })}
             activeOpacity={0.7}
             accessibilityRole="button"
           >
@@ -465,7 +510,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
         <View style={[styles.summaryPanel, { paddingBottom: insets.bottom + Space[4] }]}>
           <View style={styles.footerPayableRow}>
             <Text style={styles.footerPayableLabel}>PAYABLE NOW</Text>
-            <Text style={styles.footerPayableAmount}>MUR {grossTotal.toLocaleString('en-IN')}</Text>
+            <Text style={styles.footerPayableAmount}>MUR {payableTotal.toLocaleString('en-IN')}</Text>
           </View>
           <Animated.View style={checkoutTactile.animatedStyle}>
             <TouchableOpacity
@@ -748,6 +793,16 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: Colors.ink2,
   },
+  summarySubLabel: {
+    ...Type.caption,
+    color:    Colors.ink4,
+    fontSize: 12,
+  },
+  summarySubValue: {
+    ...Type.caption,
+    color:    Colors.ink4,
+    fontSize: 12,
+  },
   savingsLabel: {
     ...Type.caption,
     color: '#226B3C',
@@ -795,6 +850,11 @@ const styles = StyleSheet.create({
     color:         Colors.ink1,
     letterSpacing: -0.4,
     lineHeight:    34,
+  },
+  unavailableNote: {
+    ...Type.caption,
+    color:     Colors.ink4,
+    marginTop: Space[2],
   },
 
   // ── Trust strip — plain icon row, no card ─────────────────────────────────

@@ -1,6 +1,6 @@
 import axiosInstance from '../axiosInstance';
 import { cartEndpoints } from '../endpoints';
-import type { PostCartSaveInterface, CartQuantityRequest, deleteCartInterface } from '../interfaces';
+import type { PostCartSaveInterface, CartQuantityRequest, deleteCartInterface, SavedCartSummaryInterface } from '../interfaces';
 
 export const updateCartItemQuantity = async (cartDetailsCode: number, inventoryId: number, quantity: number) => {
   const response = await axiosInstance.post(cartEndpoints.updateCartItem, {
@@ -12,7 +12,7 @@ export const updateCartItemQuantity = async (cartDetailsCode: number, inventoryI
 };
 
 export const getSavedCartItems = async (customerprofilecode: number) => {
-  const response = await axiosInstance.get(
+  const response = await axiosInstance.get<{ statusCode: number; result?: SavedCartSummaryInterface; userMessage: string }>(
     `${cartEndpoints.getSavedCartItems}?CustomerProfileCode=${customerprofilecode}`,
   );
   return response.data;

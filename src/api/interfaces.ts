@@ -9,6 +9,7 @@ import { WarrantyType }       from '../config/enum_files/WarrantyType';
 import { ProductDemographic } from '../config/enum_files/ProductDemographic';
 import { Season }             from '../config/enum_files/Season';
 import { AddressLabel }       from '../config/enum_files/AddressLabel';
+import { InventoryStockFilter } from '../config/enum_files/InventoryStockFilter';
 
 export interface PostCartSaveInterface {
   CustomerProfileCode: number;
@@ -95,6 +96,7 @@ export interface postCreateDeliveryAddressInterface {
     Zipcode: string;
     IsPrimary: string;
     CustomerProfileCode: number;
+    CountryCode: number;
     AddressLabel?: AddressLabel;
 }
 
@@ -109,6 +111,7 @@ export interface postUpdateDeliveryAddressInterface {
     Landmark: string;
     Zipcode: number;
     IsPrimary: number;
+    CountryCode: number;
     AddressLabel?: AddressLabel;
 }
 
@@ -262,7 +265,7 @@ export interface ProductVariant {
     Remarks:           string;
     DateCreated:       string;
     DateUpdated:       string;
-    StockStatus:       { Value: number; Description: string };
+    StockStatus:       { Value: InventoryStockFilter; Description: string };
     BackOrder: {
         AllowBackOrder:        boolean;
         BackOrderLimit:        number | null;
@@ -506,6 +509,11 @@ export interface ProductByCategoryInterface {
 export interface SubCategoryInterface {
     SubCategory_Id: number;
     Name: string;
+    Category_Id: number;
+    CreatedDate: string;
+    MerchantID: number;
+    SubCategoryImage: string;
+    MerchantStaffID: number | null;
 }
 
 // result of getProductByItemId api
@@ -521,7 +529,7 @@ export interface VariantInterface {
     Remarks:            string;
     Status:             string;
     VerificationStatus: string;
-    StockStatus:        { Value: number; Description: string };
+    StockStatus:        { Value: InventoryStockFilter; Description: string };
     BackOrder: {
         AllowBackOrder:        boolean;
         BackOrderLimit:        number | null;
@@ -646,47 +654,57 @@ export interface SavedCartItemInterface {
     BrandName: string;
     OrganisationId: string;
     OrganisationName: string;
-    Price: number;
+    Price?: number;
     MaxPerOrder: number | null;
+    BackOrder?: {
+        AllowBackOrder:        boolean;
+        BackOrderLimit:        number | null;
+        SupplierLeadTime:      number | null;
+        BackOrderUsedQuantity: number;
+        BackOrderUpdatedBy:    string | null;
+        BackOrderUpdatedOn:    string | null;
+    };
     PriceDetails: {
         Price: number;
         ComparePrice: number;
         NetAmount: number | null;
         TaxAmount: number | null;
         GrossAmount: number | null;
-        Taxes: { VariantTaxConfigurationId: number; TaxId: number; TaxName?: string; TaxType: TaxType; TaxRate: number; IsActive: boolean; CreatedAt: string }[];
+        TotalSaved?: number;
+        Taxes: { VariantTaxConfigurationId: number; TaxId: number; TaxName?: string; TaxType: TaxType; TaxTypeDescription?: string; TaxRate: number; IsInclusive?: boolean; IsActive: boolean; CreatedAt: string; UpdatedAt?: string }[];
     };
+}
+
+// Cart-level tax breakdown row from getSaveCartItems — same shape as a per-item
+// tax entry but pre-summed by the backend across the whole cart.
+export interface CartTaxBreakdownItem {
+    TaxId:              number;
+    TaxName:            string;
+    TaxRate:            number;
+    TaxType:            TaxType;
+    TaxTypeDescription: string;
+    TaxAmount:          number;
+    IsInclusive:        boolean;
+}
+
+// result of getSaveCartItems — root-level cart summary alongside Items[]
+export interface SavedCartSummaryInterface {
+    AmountToBePaid:       number;
+    TotalInclusiveTax:    number;
+    TotalExclusiveTax:    number;
+    TotalDiscount:        number;
+    // Backend-computed total savings (Σ ComparePrice-Price across items) —
+    // use this directly rather than deriving from ItemsTotal, which is the
+    // pre-discount MRP total despite its name, not a discounted subtotal.
+    TotalSaved:           number;
+    TotalShippingCharge:  number;
+    ItemsTotal:           number;
+    Items:                SavedCartItemInterface[];
+    TaxBreakdown:         CartTaxBreakdownItem[];
 }
 
 
 // ─── Place order (/api/ecomm/placeOrder) ──────────────────────────────────────
-
-export interface PlaceOrderTax {
-  TaxId:   number;
-  TaxName: string;
-  TaxType: number;
-  TaxRate: number;
-  Reason:  string;
-}
-
-export interface PlaceOrderItemDetail {
-  InventoryId:        number;
-  Quantity:           number;
-  Amount:             number;
-  DeliveryCharges:    number;
-  DeliveryChargesVAT: number;
-  ItemCharges:        number;
-  ItemChargesVAT:     number;
-  Discount:           number;
-  VAT:                number;
-  OrderStatus:        number;
-  Taxes?:             PlaceOrderTax[];
-}
-
-export interface PlaceOrderDetail {
-  OrganisationID: string;
-  ItemDetails:    PlaceOrderItemDetail[];
-}
 
 export interface PlaceOrderPaymentCard {
   Number:             string;
@@ -717,10 +735,8 @@ export interface PlaceOrderInterface {
   CustomerProfileCode:         number;
   OrderDeliveryAddressCode:    number;
   CartMasterCode?:             number;
-  TotalAmountBeforeDiscount:   number;
-  TotalAmountAfterDiscount:    number;
+  AmountPaid:                  number;
   CouponCode?:                 string;
-  OrderDetails:                PlaceOrderDetail[];
   PaymentDetails:              PlaceOrderPaymentDetails;
 }
 
@@ -766,7 +782,7 @@ export interface WishlistApiProduct {
     Variant:       string;
     Stock:         number;
     SKU:           string;
-    StockStatus:   { Value: number; Description: string };
+    StockStatus:   { Value: InventoryStockFilter; Description: string };
     PriceDetails:  { Price: number; ComparePrice: number; NetAmount: number | null; TaxAmount: number | null; GrossAmount: number | null; Taxes: any[] };
     PhysicalAttributes: any;
   }[];
@@ -827,16 +843,18 @@ export interface OrderHistoryItemInterface {
 export interface OrderHistoryApiResponse {
     TotalRecords: number;
     Orders:       {
-        OrderMasterCode: number;
-        OrderNumber:     string;
-        OrderedDate:     string;
-        Items:           Record<string, unknown>[];
+        OrderMasterCode:  number;
+        OrderNumber:      string;
+        OrderedDate:      string;
+        OrderPaymentInfo: OrderPaymentInfoInterface;
+        Items:            Record<string, unknown>[];
     }[];
 }
 
 export interface OrderDetailItemExtendedInterface extends OrderHistoryItemInterface {
-    CreatedDate: string;
-    Events:      OrderEventInterface[];
+    CreatedDate:     string;
+    Events:          OrderEventInterface[];
+    PricingDetails?: OrderPricingDetailsInterface;
 }
 
 export interface SubOrderDetail {
@@ -844,14 +862,43 @@ export interface SubOrderDetail {
     Number: string;
 }
 
+export interface OrderTaxInterface {
+    TaxID:           number | null;
+    TaxName:         string;
+    // Sent as a numeric string (e.g. "2") on this endpoint — not the numeric
+    // TaxType enum used by cart/product pricing. Compare via Number(TaxType).
+    TaxType:         string;
+    TaxValue:        number | null;
+    IncludedInPrice: boolean | null;
+    TaxedAmount:     number | null;
+}
+
+export interface OrderPricingDetailsInterface {
+    GrossAmount:   number;
+    TotalDiscount: number;
+    Taxes:         OrderTaxInterface[];
+}
+
+export interface OrderCashOnDeliveryDetail {
+    ExpectedAmount:      string;
+    CurrencyCode:        string;
+    CollectionReference: string;
+}
+
 export interface OrderPaymentInfoInterface {
     AmountPaid:                  number;
-    TotalAmountBeforeDiscount:   number;
-    TotalAmountAfterDiscount:    number;
-    Discount:                    number;
+    GrossAmount?:                number;
+    TotalDiscount?:              number;
+    NetAmount?:                  number;
+    FinalAmount?:                number;
+    TotalAmountBeforeDiscount?:  number;
+    TotalAmountAfterDiscount?:   number;
+    Discount?:                   number;
     CouponAvailed:               string | null;
     DeliveryCharges:             number;
     isFreeShipping:              boolean;
+    PaymentMode?:                { Code: number; Description: string };
+    PaymentDetails?:             { CashOnDelivery?: OrderCashOnDeliveryDetail[] } & Record<string, unknown>;
 }
 
 export interface OrderEventInterface {

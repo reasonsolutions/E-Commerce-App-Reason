@@ -1,4 +1,5 @@
 import type { SavedCartItemInterface, OrderDetailItemExtendedInterface } from '../api/interfaces';
+import type { SortKey } from '../components/ui';
 
 interface DeliveryAddress {
   OrderDeliveryAddressCode: number;
@@ -13,6 +14,8 @@ interface DeliveryAddress {
   Landmark:       string | null;
   Zipcode:        string | null;
   IsPrimary:      boolean;
+  AddressLabel?:  number | null;
+  CountryCode:    number | null;
 }
 
 interface OrderSuccessCartItem {
@@ -42,14 +45,16 @@ export type RootStackParamList = {
   Product:            { product?: string };
   Cart:               undefined;
   Result: {
-    categoryId?:    string;
-    brandId?:       number;
-    searchQuery?:   string;
-    categoryName?:  string;
-    flashDeals?:    boolean;
-    itemIds?:       number[];
+    categoryId?:      string;
+    brandId?:         number;
+    searchQuery?:     string;
+    categoryName?:    string;
+    flashDeals?:      boolean;
+    itemIds?:         number[];
+    initialSort?:     SortKey;
+    initialDiscount?: boolean;
   };
-  Address:            { cartItems?: SavedCartItemInterface[] };
+  Address:            { cartItems?: SavedCartItemInterface[]; amountToBePaid?: number };
   OrderSuccess: {
     orderNumber?:              string;
     itemCount?:                number;
@@ -70,6 +75,7 @@ export type RootStackParamList = {
   Profile:            undefined;
   Wishlist:           undefined;
   AddressManagement:  undefined;
+  AddAddress:         { editAddress?: DeliveryAddress } | undefined;
   Search:             undefined;
   EcomPayment: {
     profileCode:      number;

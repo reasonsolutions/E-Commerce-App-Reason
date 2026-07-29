@@ -325,6 +325,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     categoryName = 'Browse',
     flashDeals: isFlashDeals = false,
     itemIds,
+    initialSort,
+    initialDiscount,
   } = route.params as {
     categoryId?: string;
     brandId?: number;
@@ -332,6 +334,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
     categoryName?: string;
     flashDeals?: boolean;
     itemIds?: number[];
+    initialSort?: SortKey;
+    initialDiscount?: boolean;
   };
 
   // Curated ID list (e.g. Home's "Picked for you → See all") — a fixed set,
@@ -375,8 +379,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const [filterBrands, setFilterBrands] = useState<number[]>([]);
   const [filterPriceMin, setFilterPriceMin] = useState('');
   const [filterPriceMax, setFilterPriceMax] = useState('');
-  const [filterDiscount, setFilterDiscount] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>('default');
+  const [filterDiscount, setFilterDiscount] = useState(initialDiscount ?? false);
+  const [sortKey, setSortKey] = useState<SortKey>(initialSort ?? 'default');
   const [sheetCategories, setSheetCategories] =
     useState<CategoryInterface[]>(_cachedCategories);
   const [sheetBrands, setSheetBrands] =
@@ -389,8 +393,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const [draftBrands, setDraftBrands] = useState<number[]>([]);
   const [draftPriceMin, setDraftPriceMin] = useState('');
   const [draftPriceMax, setDraftPriceMax] = useState('');
-  const [draftDiscount, setDraftDiscount] = useState(false);
-  const [draftSortKey, setDraftSortKey] = useState<SortKey>('default');
+  const [draftDiscount, setDraftDiscount] = useState(initialDiscount ?? false);
+  const [draftSortKey, setDraftSortKey] = useState<SortKey>(initialSort ?? 'default');
 
   const activeFilterCount =
     filterCategories.length +

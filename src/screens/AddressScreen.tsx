@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,19 +13,18 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { EmptyState, FloatingLabelInput, ErrorBanner, Skeleton, TrustLine } from '../components/ui';
+import { EmptyState, ErrorBanner, Skeleton, TrustLine } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { getDeliveryAddresses, postCreateDeliveryAddress } from '../api/address';
+import { getDeliveryAddresses } from '../api/address';
 import { userFacingMessage } from '../api/apiError';
 import { placeOrder } from '../api/order';
 import { useCart } from '../context/CartContext';
 import { SavedCartItemInterface, PlaceOrderInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/storageKeys';
-import { getOrgIdForInventory } from '../api/product';
+import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
 import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
@@ -33,7 +32,7 @@ import { useTactile } from '../hooks/useTactile';
 import { PaymentModes } from '../config/enum_files/PaymentModes';
 import { AddressLabel } from '../config/enum_files/AddressLabel';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
-import { cartLineGross, buildOrderItemDetails } from '../utils/pricing';
+import { cartLineGross } from '../utils/pricing';
 import { Motion } from '../theme/motion';
 
 export interface DeliveryAddress {
@@ -49,7 +48,9 @@ export interface DeliveryAddress {
   Landmark: string | null;
   Zipcode: string | null;
   IsPrimary: boolean;
+  DeletedDate?: string | null;
   AddressLabel?: AddressLabel | null;
+  CountryCode: number | null;
 }
 
 type AddressScreenProps = {
@@ -67,12 +68,10 @@ type AddressScreenProps = {
   route: {
     params?: {
       cartItems?: SavedCartItemInterface[];
+      amountToBePaid?: number;
     };
   };
 };
-
-const EMPTY_FORM = { CustomerName: '', MobileNumber: '', Address: '', StreetName: '', City: '', Landmark: '', Zipcode: '' };
-const EMPTY_ERRORS = { CustomerName: '', MobileNumber: '', Address: '', StreetName: '', City: '', Landmark: '', Zipcode: '' };
 
 const LABEL_ICON: Record<AddressLabel, string> = {
   [AddressLabel.Home]:  'home-outline',
@@ -84,7 +83,6 @@ const LABEL_TEXT: Record<AddressLabel, string> = {
   [AddressLabel.Work]:  'WORK',
   [AddressLabel.Other]: 'OTHER',
 };
-const LABEL_OPTIONS = [AddressLabel.Home, AddressLabel.Work, AddressLabel.Other];
 
 // ── Single address row ────────────────────────────────────────────────────────
 const AddressRow: React.FC<{
@@ -181,18 +179,18 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
     useAsyncState<DeliveryAddress[]>([]);
 
   const [selectedAddressCode, setSelectedAddressCode] = useState<number | null>(null);
-  const [showForm, setShowForm]   = useState(false);
-  const [form, setForm]           = useState(EMPTY_FORM);
-  const [formErrors, setFormErrors] = useState(EMPTY_ERRORS);
-  const [addressLabel, setAddressLabel] = useState<AddressLabel | null>(null);
   const [profileCode, setProfileCode] = useState<number | null>(null);
-  const [savingAddress, setSavingAddress] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderError, setOrderError]     = useState<string | null>(null);
-  const [addError, setAddError]         = useState<string | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<'card' | 'cod'>('card');
 
   const footerAnim = useEntrance(120);
+
+  // Tracks address codes seen on the previous fetch — lets us tell "a brand
+  // new address just appeared" (e.g. returning from AddAddressScreen) apart
+  // from "just re-focused with nothing new," so a newly-added address is
+  // auto-selected even after the user already had one picked.
+  const knownCodesRef = useRef<Set<number> | null>(null);
 
   const fetchAddresses = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -204,10 +202,30 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         const response = await getDeliveryAddresses(user.CustomerProfileCode);
         if (response.statusCode === 1) {
           const list: DeliveryAddress[] = response.result || [];
-          // Auto-select most recent on first load
           if (list.length > 0) {
+            const prevKnown = knownCodesRef.current;
+            const hasNewAddress =
+              prevKnown !== null && list.some(a => !prevKnown.has(a.OrderDeliveryAddressCode));
+            knownCodesRef.current = new Set(list.map(a => a.OrderDeliveryAddressCode));
+
+            // An explicit pick just made in this checkout flow (e.g. via
+            // DeliverToRow's sheet on the product page) takes precedence;
+            // otherwise default to whichever address is marked primary, and
+            // finally to most-recently-created if none is.
+            const savedRaw = await AsyncStorage.getItem(
+              scopedKey('selectedDeliveryAddress', user.CustomerProfileCode),
+            );
+            const savedCode = savedRaw ? Number(savedRaw) : null;
+            const savedStillExists =
+              savedCode != null && list.some(a => a.OrderDeliveryAddressCode === savedCode);
+            const primaryCode = list.find(a => a.IsPrimary)?.OrderDeliveryAddressCode;
+            const mostRecentCode = [...list].sort(
+              (a, b) => new Date(b.CreatedDate).getTime() - new Date(a.CreatedDate).getTime(),
+            )[0].OrderDeliveryAddressCode;
             setSelectedAddressCode(prev =>
-              prev === null ? list[list.length - 1].OrderDeliveryAddressCode : prev,
+              prev === null || hasNewAddress
+                ? (savedStillExists ? savedCode! : (primaryCode ?? mostRecentCode))
+                : prev,
             );
           }
           return list;
@@ -224,64 +242,6 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       return () => { cancelled.current = true; };
     }, [fetchAddresses]),
   );
-
-  const handleChange = (name: string, value: string) => {
-    setForm(prev => ({ ...prev, [name]: value }));
-    // Clear field error on edit
-    if (formErrors[name as keyof typeof formErrors]) {
-      setFormErrors(prev => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const errors = {
-      CustomerName: form.CustomerName.trim() ? '' : 'Name is required',
-      MobileNumber: form.MobileNumber.trim() ? '' : 'Mobile number is required',
-      Address:      form.Address.trim()      ? '' : 'Address is required',
-      StreetName:   form.StreetName.trim()   ? '' : 'Street name is required',
-      City:         form.City.trim()         ? '' : 'City is required',
-      Landmark:     '',
-      Zipcode:      form.Zipcode.trim()      ? '' : 'Zipcode is required',
-    };
-    setFormErrors(errors);
-    return !Object.values(errors).some(Boolean);
-  };
-
-  const handleAddAddress = async () => {
-    if (!validateForm() || !profileCode) return;
-    setAddError(null);
-    setSavingAddress(true);
-    try {
-      const response = await postCreateDeliveryAddress({
-        CustomerName:        form.CustomerName.trim(),
-        MobileNumber:        form.MobileNumber.trim(),
-        Address:             form.Address.trim(),
-        StreetName:          form.StreetName.trim(),
-        City:                form.City.trim(),
-        Landmark:            form.Landmark.trim(),
-        Zipcode:             form.Zipcode.trim(),
-        IsPrimary:           '0',
-        CustomerProfileCode: profileCode,
-        AddressLabel:        addressLabel ?? undefined,
-      });
-      if (response.statusCode === 1) {
-        const list: DeliveryAddress[] = response.result || [];
-        run(async () => list);
-        if (list.length > 0) {
-          setSelectedAddressCode(list[list.length - 1].OrderDeliveryAddressCode);
-        }
-        setForm(EMPTY_FORM);
-        setFormErrors(EMPTY_ERRORS);
-        setAddressLabel(null);
-      } else {
-        setAddError('Failed to save address. Please try again.');
-      }
-    } catch {
-      setAddError("Couldn't save your address. Tap retry to try again.");
-    } finally {
-      setSavingAddress(false);
-    }
-  };
 
   const buyProducts = async () => {
     if (orderSubmitting) return;
@@ -306,7 +266,12 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       return;
     }
 
-    const total = items.reduce(
+    // amountToBePaid comes straight from getSaveCartItems (CartScreen passes
+    // it through) — the backend-authoritative payable total, including
+    // shipping/discount adjustments a per-line client sum would miss. The
+    // client-side sum is only a fallback for the (unexpected) case where it
+    // wasn't passed.
+    const total = route.params?.amountToBePaid ?? items.reduce(
       (sum: number, item: SavedCartItemInterface) => sum + cartLineGross(item),
       0,
     );
@@ -336,25 +301,11 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
 
     // COD — place order directly
     try {
-      const orgMap = new Map<string, SavedCartItemInterface[]>();
-      for (const item of items) {
-        const orgId = item.OrganisationId || getOrgIdForInventory(item.InventoryId);
-        if (!orgMap.has(orgId)) orgMap.set(orgId, []);
-        orgMap.get(orgId)!.push(item);
-      }
-
-      const orderDetails = Array.from(orgMap.entries()).map(([orgId, orgItems]) => ({
-        OrganisationID: orgId,
-        ItemDetails: buildOrderItemDetails(orgItems),
-      }));
-
       const payload: PlaceOrderInterface = {
         CustomerProfileCode:       profileCode,
         OrderDeliveryAddressCode:  selectedAddressCode,
         CartMasterCode:            items[0].CartMasterCode,
-        TotalAmountBeforeDiscount: total,
-        TotalAmountAfterDiscount:  total,
-        OrderDetails:              orderDetails,
+        AmountPaid:                total,
         PaymentDetails: {
           PaymentModes:   PaymentModes.CashOnDelivery,
           Remark:         'Cash on delivery',
@@ -395,7 +346,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         cartItems: items.map((item: SavedCartItemInterface) => ({
           name:         item.Name,
           quantity:     item.Quantity,
-          price:        item.Price,
+          price:        item.PriceDetails?.Price ?? item.Price,
           comparePrice: item.PriceDetails?.ComparePrice ?? 0,
           image:        resolveImageUrl(item.Images),
         })),
@@ -409,104 +360,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
 
   const addressList = addresses ?? [];
   const showSkeleton = fetchLoading && addressList.length === 0;
-  const showEmptyState = !fetchLoading && !fetchError && addressList.length === 0 && !showForm;
-
-  // ── Address form — shown when user taps "Add Address" or has existing addresses ─
-  const AddressForm = (
-    <View style={styles.formSection}>
-      <Text style={styles.sectionEyebrow}>ADD NEW ADDRESS</Text>
-      <View style={styles.labelPickerRow}>
-        {LABEL_OPTIONS.map(opt => {
-          const selected = addressLabel === opt;
-          return (
-            <TouchableOpacity
-              key={opt}
-              onPress={() => setAddressLabel(opt)}
-              style={[styles.labelPill, selected && styles.labelPillSelected]}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.labelPillText, selected && styles.labelPillTextSelected]}>
-                {LABEL_TEXT[opt]}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      <View style={styles.formFields}>
-        <FloatingLabelInput
-          label="Full name"
-          value={form.CustomerName}
-          onChangeText={text => handleChange('CustomerName', text)}
-          error={formErrors.CustomerName || null}
-          autoCapitalize="words"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Mobile number"
-          value={form.MobileNumber}
-          onChangeText={text => handleChange('MobileNumber', text)}
-          error={formErrors.MobileNumber || null}
-          keyboardType="numeric"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Address"
-          value={form.Address}
-          onChangeText={text => handleChange('Address', text)}
-          error={formErrors.Address || null}
-          autoCapitalize="sentences"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Street name"
-          value={form.StreetName}
-          onChangeText={text => handleChange('StreetName', text)}
-          error={formErrors.StreetName || null}
-          autoCapitalize="sentences"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="City"
-          value={form.City}
-          onChangeText={text => handleChange('City', text)}
-          error={formErrors.City || null}
-          autoCapitalize="words"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Landmark (optional)"
-          value={form.Landmark}
-          onChangeText={text => handleChange('Landmark', text)}
-          autoCapitalize="sentences"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Zipcode"
-          value={form.Zipcode}
-          onChangeText={text => handleChange('Zipcode', text)}
-          error={formErrors.Zipcode || null}
-          keyboardType="numeric"
-          returnKeyType="done"
-        />
-      </View>
-      {addError ? (
-        <ErrorBanner
-          body={addError}
-          onRetry={() => setAddError(null)}
-        />
-      ) : null}
-      <TouchableOpacity
-        style={[styles.saveBtn, savingAddress && styles.saveBtnDisabled]}
-        onPress={handleAddAddress}
-        disabled={savingAddress}
-        activeOpacity={0.82}
-      >
-        <Text style={styles.saveBtnText}>
-          {savingAddress ? 'Saving…' : 'Save Address'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const showEmptyState = !fetchLoading && !fetchError && addressList.length === 0;
 
   // ── List sections ─────────────────────────────────────────────────────────
   const ListHeader = (
@@ -541,7 +395,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
   );
 
   const ListFooter = showEmptyState ? (
-    // Empty state — form hidden, outline CTA reveals it
+    // Empty state — no inline form; CTA routes to the dedicated add-address screen
     <View style={styles.emptyStateWrap}>
       <EmptyState
         icon={<Icon name="location-outline" size={22} color={Colors.ink4} />}
@@ -551,7 +405,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         action={
           <TouchableOpacity
             style={styles.emptyAddBtn}
-            onPress={() => setShowForm(true)}
+            onPress={() => navigation.navigate('AddAddress')}
             activeOpacity={0.88}
             accessibilityRole="button"
             accessibilityLabel="Add address"
@@ -561,8 +415,17 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
         }
       />
     </View>
-  ) : showForm || addressList.length > 0 ? (
-    AddressForm
+  ) : addressList.length > 0 ? (
+    <TouchableOpacity
+      style={styles.addNewRow}
+      onPress={() => navigation.navigate('AddAddress')}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel="Add a new address"
+    >
+      <Icon name="add-circle-outline" size={20} color={Colors.brandNavy} />
+      <Text style={styles.addNewRowText}>Add a new address</Text>
+    </TouchableOpacity>
   ) : null;
 
   return (
@@ -601,7 +464,15 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
             <AddressRow
               item={item}
               isSelected={selectedAddressCode === item.OrderDeliveryAddressCode}
-              onPress={() => setSelectedAddressCode(item.OrderDeliveryAddressCode)}
+              onPress={() => {
+                setSelectedAddressCode(item.OrderDeliveryAddressCode);
+                if (profileCode) {
+                  AsyncStorage.setItem(
+                    scopedKey('selectedDeliveryAddress', profileCode),
+                    String(item.OrderDeliveryAddressCode),
+                  );
+                }
+              }}
               isLast={index === addressList.length - 1}
               delay={Motion.stagger.delay(index)}
             />
@@ -802,57 +673,17 @@ const styles = StyleSheet.create({
     marginLeft:      Space[2] + 2, // indent past left rule
   },
 
-  // ── Add address form ──────────────────────────────────────────────────────────
-  formSection: {
-    marginTop:  Space[8],
-    paddingTop: Space[6],
+  // ── Add a new address (routes to dedicated screen) ───────────────────────────
+  addNewRow: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             Space[2],
+    marginTop:       Space[8],
+    paddingTop:      Space[6],
     borderTopWidth:  StyleSheet.hairlineWidth,
     borderTopColor:  Colors.rule,
   },
-  labelPickerRow: {
-    flexDirection: 'row',
-    gap:           Space[2],
-    marginTop:     Space[3],
-    marginBottom:  Space[5],
-  },
-  labelPill: {
-    flex:              1,
-    alignItems:        'center',
-    justifyContent:    'center',
-    paddingVertical:   Space[2] + 2,
-    borderRadius:      Radius.pill,
-    borderWidth:       1.5,
-    borderColor:       Colors.rule,
-    backgroundColor:   Colors.surface,
-  },
-  labelPillSelected: {
-    backgroundColor: Colors.brandNavy,
-    borderColor:     Colors.brandNavy,
-  },
-  labelPillText: {
-    ...Type.label,
-    color: Colors.ink1,
-  },
-  labelPillTextSelected: {
-    color: '#FFFFFF',
-  },
-  formFields: {
-    gap: Space[6],
-    marginBottom: Space[5],
-  },
-  // Secondary navy pill — lighter weight than Place Order CTA
-  saveBtn: {
-    borderWidth:      1.5,
-    borderColor:      Colors.brandNavy,
-    borderRadius:     Radius.pill,
-    paddingVertical:  Space[3] + 2,
-    alignItems:       'center',
-    marginTop:        Space[3],
-  },
-  saveBtnDisabled: {
-    opacity: 0.35,
-  },
-  saveBtnText: {
+  addNewRowText: {
     ...Type.bodyStrong,
     color: Colors.brandNavy,
   },

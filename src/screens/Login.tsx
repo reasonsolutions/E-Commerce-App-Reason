@@ -215,7 +215,7 @@ const Login: React.FC = () => {
           getSavedCartItems(userData.CustomerProfileCode).catch(() => null),
         ]);
         const existingItems: any[] =
-          existingCartRes?.statusCode === 1 ? existingCartRes.result ?? [] : [];
+          existingCartRes?.statusCode === 1 ? existingCartRes.result?.Items ?? [] : [];
         if (guestItems.length > 0) {
           let mergeFailures = 0;
           let mergeTrimmed  = 0;
@@ -270,7 +270,7 @@ const Login: React.FC = () => {
             : existingCartRes;
         if (cartRes?.statusCode === 1) {
           setCartCount(
-            (cartRes.result ?? []).reduce(
+            (cartRes.result?.Items ?? []).reduce(
               (sum: number, item: any) => sum + item.Quantity,
               0,
             ),

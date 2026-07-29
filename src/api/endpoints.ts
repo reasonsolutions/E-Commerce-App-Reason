@@ -21,7 +21,7 @@ export const productEndpoints = {
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
 export const cartEndpoints = {
-  postSaveCartItems:  'ecomm/postSaveCartItems',
+  postSaveCartItems:  'ecomm/addToCart',
   deleteCartItem:    'ecomm/deleteCartItem',
   getSavedCartItems: 'ecomm/getSaveCartItems',
   quantityIncrement: 'ecomm/quantityIncrement',

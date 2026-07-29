@@ -21,7 +21,7 @@ export const TrustCardRow: React.FC<TrustCardRowProps> = ({ policy }) => {
 
   if (policy.HasWarranty) {
     const warrantyLabel = policy.WarrantyPeriod
-      ? `${policy.WarrantyPeriod}${policy.WarrantyType ? ' ' + policy.WarrantyType : ''} Warranty`
+      ? `${policy.WarrantyPeriod}-Day${policy.WarrantyType ? ' ' + policy.WarrantyType : ''} Warranty`
       : 'Warranty Included';
     cards.push({ icon: 'shield-checkmark-outline', label: warrantyLabel });
   }

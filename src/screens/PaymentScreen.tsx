@@ -17,9 +17,8 @@ import { paymentEndpoints } from '../api/endpoints';
 import { placeOrder } from '../api/order';
 import { useCart } from '../context/CartContext';
 import { PlaceOrderInterface, SavedCartItemInterface } from '../api/interfaces';
-import { getOrgIdForInventory } from '../api/product';
 import { STORAGE_KEYS } from '../config/storageKeys';
-import { buildOrderItemDetails } from '../utils/pricing';
+import { PaymentModes } from '../config/enum_files/PaymentModes';
 import { Colors, Space } from '../theme';
 import { FontFamily } from '../theme/fonts';
 import axios from 'axios';
@@ -137,21 +136,6 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
         setOrderId(storedOrderId);
 
         // Build the appData payload — mirrors the placeOrder structure from AddressScreen
-        const orgMap = new Map<string, SavedCartItemInterface[]>();
-        for (const item of cartItems) {
-          const orgId =
-            item.OrganisationId || getOrgIdForInventory(item.InventoryId);
-          if (!orgMap.has(orgId)) orgMap.set(orgId, []);
-          orgMap.get(orgId)!.push(item);
-        }
-
-        const orderDetails = Array.from(orgMap.entries()).map(
-          ([orgId, items]) => ({
-            OrganisationID: orgId,
-            ItemDetails: buildOrderItemDetails(items),
-          }),
-        );
-
         const appData = {
           transType: 100, // e-commerce order payment
           transData: {
@@ -160,9 +144,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
             CustomerProfileCode: profileCode,
             OrderDeliveryAddressCode: selectedAddress.OrderDeliveryAddressCode,
             CartMasterCode: cartItems[0].CartMasterCode,
-            TotalAmountBeforeDiscount: orderTotal,
-            TotalAmountAfterDiscount: orderTotal,
-            OrderDetails: orderDetails,
+            AmountPaid: orderTotal,
             PaymentDetails: {
               PaymentModes: 2, // card / online
               Remark: 'Online payment via MIPS',
@@ -393,21 +375,6 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
     paymentDetails: Record<string, any>,
   ) => {
     try {
-      const orgMap = new Map<string, SavedCartItemInterface[]>();
-      for (const item of cartItems) {
-        const orgId =
-          item.OrganisationId || getOrgIdForInventory(item.InventoryId);
-        if (!orgMap.has(orgId)) orgMap.set(orgId, []);
-        orgMap.get(orgId)!.push(item);
-      }
-
-      const orderDetails = Array.from(orgMap.entries()).map(
-        ([orgId, items]) => ({
-          OrganisationID: orgId,
-          ItemDetails: buildOrderItemDetails(items),
-        }),
-      );
-
       // Build payment mode from MIPS response — card vs mobile money
       const isCard = paymentDetails.mipsPmtType === 'card';
       const modeOfPayments = isCard
@@ -435,11 +402,11 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
         CustomerProfileCode: profileCode,
         OrderDeliveryAddressCode: selectedAddress.OrderDeliveryAddressCode,
         CartMasterCode: cartItems[0].CartMasterCode,
-        TotalAmountBeforeDiscount: orderTotal,
-        TotalAmountAfterDiscount: orderTotal,
-        OrderDetails: orderDetails,
+        AmountPaid: orderTotal,
         PaymentDetails: {
-          PaymentModes: 2, //isCard ? 3:16,
+          PaymentModes: isCard
+            ? PaymentModes.Cards
+            : PaymentModes.MobileMoneyCollections,
           Remark: isCard
             ? 'Card payment via MIPS'
             : 'Mobile money payment via MIPS',
@@ -485,7 +452,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
         cartItems: cartItems.map((item: SavedCartItemInterface) => ({
           name: item.Name,
           quantity: item.Quantity,
-          price: item.Price,
+          price: item.PriceDetails?.Price ?? item.Price,
           image: item.Images?.split(/[,;]/).filter(Boolean)[0] ?? '',
         })),
       });

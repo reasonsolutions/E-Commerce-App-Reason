@@ -21,7 +21,7 @@ export async function postCnfOrderDetail(
   const rawRes = await real.postCnfOrderDetail(orderNumber, customerProfileCode);
   const result = rawRes.result ?? { OrderDetails: [], DeliveryDetail: [] };
   result.OrderDetails = (result.OrderDetails ?? []).map((item: OrderDetailItemExtendedInterface) => {
-    const raw = item as OrderDetailItemExtendedInterface & { InventoryID?: number; ItemID?: number; BrandName?: string; BrandID?: number; SubOrder?: { Code: number; Number: string }; PaymentInfo?: any; Events?: any[] };
+    const raw = item as OrderDetailItemExtendedInterface & { InventoryID?: number; ItemID?: number; BrandName?: string; BrandID?: number; SubOrder?: { Code: number; Number: string }; PaymentInfo?: any; Events?: any[]; PricingDetails?: { GrossAmount?: number } };
     return {
       ...item,
       Inventory_Id: item.Inventory_Id ?? raw.InventoryID ?? 0,
@@ -29,6 +29,10 @@ export async function postCnfOrderDetail(
       SubOrder:     item.SubOrder     ?? raw.SubOrder    ?? { Code: 0, Number: '' },
       Brand_Name:   item.Brand_Name   ?? raw.BrandName   ?? '',
       Brand_Id:     item.Brand_Id     ?? raw.BrandID     ?? 0,
+      // Gross (pre-discount) line total — never net, so the discount line in the
+      // payment summary stays visible instead of being silently baked in.
+      // Backend's flat Amount field is deprecated in favor of PricingDetails.
+      Amount:       raw.PricingDetails?.GrossAmount ?? 0,
       PaymentInfo:  raw.PaymentInfo   ?? undefined,
       Events:       raw.Events        ?? [],
     };

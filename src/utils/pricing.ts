@@ -1,10 +1,10 @@
-import type { SavedCartItemInterface, PlaceOrderItemDetail } from '../api/interfaces';
+import type { SavedCartItemInterface, CartTaxBreakdownItem } from '../api/interfaces';
 
 export const cartLineNet = (item: SavedCartItemInterface): number =>
-  item.Price * item.Quantity;
+  (item.PriceDetails?.Price ?? item.Price) * item.Quantity;
 
 export const cartLineGross = (item: SavedCartItemInterface): number =>
-  (item.PriceDetails?.GrossAmount ?? item.Price) * item.Quantity;
+  (item.PriceDetails?.GrossAmount ?? item.PriceDetails?.Price ?? item.Price) * item.Quantity;
 
 // TaxAmount must come directly from the backend — no derived/fallback math.
 // If the backend didn't send a tax amount for this line, it contributes 0.
@@ -47,6 +47,13 @@ export const cartTaxBreakdown = (items: SavedCartItemInterface[]): TaxGroup[] =>
   return Array.from(groups.values());
 };
 
+// Backend-authoritative equivalent of cartTaxBreakdown — maps getSaveCartItems'
+// root-level TaxBreakdown (already summed across the cart) onto the same
+// TaxGroup shape the summary UI renders, so no JSX change is needed at the
+// call site when switching from client-derived to backend-derived totals.
+export const mapCartTaxBreakdown = (breakdown: CartTaxBreakdownItem[]): TaxGroup[] =>
+  breakdown.map(tax => ({ taxId: tax.TaxId, taxName: tax.TaxName, taxRate: tax.TaxRate, amount: tax.TaxAmount }));
+
 // True when the backend's tax-inclusive GrossAmount exceeds the legally
 // tax-inclusive MRP (ComparePrice) — a backend data bug, not a client one.
 export const grossExceedsMrp = (item: SavedCartItemInterface): boolean => {
@@ -58,32 +65,9 @@ export const grossExceedsMrp = (item: SavedCartItemInterface): boolean => {
 // The "was" unit price to show for strikethrough purposes, or undefined if
 // showing it would be misleading (no real discount, or MRP violated).
 export const cartDisplayWas = (item: SavedCartItemInterface): number | undefined => {
-  const gross = item.PriceDetails?.GrossAmount ?? item.Price;
+  const gross = item.PriceDetails?.GrossAmount ?? item.PriceDetails?.Price ?? item.Price;
   const compare = item.PriceDetails?.ComparePrice;
   if (!compare || compare <= gross) return undefined;
   if (grossExceedsMrp(item)) return undefined;
   return compare;
 };
-
-// Builds the ItemDetails[] block shared by AddressScreen's COD payload and
-// PaymentScreen's two payload sites (MIPS transData + finaliseOrder).
-export const buildOrderItemDetails = (items: SavedCartItemInterface[]): PlaceOrderItemDetail[] =>
-  items.map(item => ({
-    InventoryId:        item.InventoryId,
-    Quantity:           item.Quantity,
-    Amount:             item.Price * item.Quantity,
-    DeliveryCharges:    0,
-    DeliveryChargesVAT: 0,
-    ItemCharges:        0,
-    ItemChargesVAT:     0,
-    Discount:           0,
-    VAT:                cartLineTax(item),
-    OrderStatus:        1,
-    Taxes: (item.PriceDetails?.Taxes ?? []).map(t => ({
-      TaxId:   t.TaxId,
-      TaxName: t.TaxName ?? '',
-      TaxType: t.TaxType,
-      TaxRate: t.TaxRate,
-      Reason:  '',
-    })),
-  }));

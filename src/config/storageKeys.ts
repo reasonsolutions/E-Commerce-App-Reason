@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   orderId: 'orderId',
   /** Set to '1' after a user's first wishlist fetch returns empty — distinguishes FTU from returning empty. */
   wishlistSeen: 'wishlist_seen',
+  /** Last delivery address the user picked in the PDP "Deliver to" sheet — OrderDeliveryAddressCode as a string. No backend IsPrimary exists to fall back on. */
+  selectedDeliveryAddress: 'selectedDeliveryAddress',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
@@ -36,7 +38,7 @@ export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
  * Guest:      `recentlyViewed_guest`
  */
 export function scopedKey(
-  base: 'recentlyViewed' | 'recentSearches' | 'wishlistSeen',
+  base: 'recentlyViewed' | 'recentSearches' | 'wishlistSeen' | 'selectedDeliveryAddress',
   profileCode: number | null | undefined,
 ): string {
   return `${STORAGE_KEYS[base]}_${profileCode ?? 'guest'}`;

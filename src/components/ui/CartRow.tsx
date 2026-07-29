@@ -17,7 +17,7 @@ import { Motion } from '../../theme/motion';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useAppToast } from '../../hooks/useAppToast';
-import { effectiveMaxPerOrder, effectivePurchaseLimit } from '../../utils/stock';
+import { effectivePurchaseLimit, hasBackorderCapacity } from '../../utils/stock';
 
 // ── Logged-in cart row ────────────────────────────────────────────────────────
 export const CartRow = React.memo<{
@@ -39,12 +39,14 @@ export const CartRow = React.memo<{
   const anim      = { opacity: animOpacity, transform: [{ translateY: animTranslateY }] };
 
   const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
-  const lineTotal    = item.Price * item.Quantity;
-  const hasDiscount  = comparePrice > item.Price;
+  const unitPrice    = item.PriceDetails?.Price ?? item.Price;
+  const lineTotal    = unitPrice * item.Quantity;
+  const hasDiscount  = comparePrice > unitPrice;
   // Count is live stock at fetch time — an item added while in stock can go
   // to 0 by the time the cart is reopened. Kept visible (not silently
   // dropped) so the user isn't confused by a total that changed on its own.
-  const isOOS = item.Count <= 0;
+  // A backorderable item at Count 0 is still purchasable, so it isn't OOS.
+  const isOOS = item.Count <= 0 && !hasBackorderCapacity(item.BackOrder);
 
   const handleDecrement = useCallback(() => {
     haptic.light();
@@ -55,15 +57,16 @@ export const CartRow = React.memo<{
   // Count doubles as available stock on this endpoint (confirmed against
   // getAllProducts' Stock for the same InventoryId) — same rule ProductScreen
   // applies pre-cart: no merchant-set MaxPerOrder means the cap is whatever
-  // stock is actually available, not unlimited.
+  // stock is actually available, or remaining backorder capacity if Count is 0.
+  const limit = effectivePurchaseLimit(item.MaxPerOrder, item.Count, item.BackOrder);
+
   const handleIncrement = useCallback(() => {
-    if (isOOS) return;
-    const limit = effectiveMaxPerOrder(item.MaxPerOrder, item.Count);
+    if (isOOS && limit <= 0) return;
     if (item.Quantity >= limit) {
       haptic.warning();
       toast.warning({
         title: 'Limit reached',
-        description: item.MaxPerOrder != null && item.MaxPerOrder <= item.Count
+        description: item.MaxPerOrder != null && item.MaxPerOrder <= limit
           ? `Max ${item.MaxPerOrder} per order for this item.`
           : 'No more stock available.',
       });
@@ -71,7 +74,7 @@ export const CartRow = React.memo<{
     }
     haptic.light();
     onUpdateQuantity(item, item.Quantity + 1);
-  }, [haptic, toast, item, onUpdateQuantity, isOOS]);
+  }, [haptic, toast, item, onUpdateQuantity, isOOS, limit]);
 
   const handleRemove = useCallback(() => {
     haptic.light();

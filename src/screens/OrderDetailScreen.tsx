@@ -354,6 +354,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const [cancelTarget, setCancelTarget]             = useState<OrderDetailItemExtendedInterface | null>(null);
   const [selectedReason, setSelectedReason]         = useState<CustomerCancellationReason | null>(null);
   const [selectedRefundMode, setSelectedRefundMode] = useState<RefundMode | null>(null);
+  const [remarks, setRemarks]                       = useState('');
   const [cancelLoading, setCancelLoading]           = useState(false);
   const [cancelError, setCancelError]               = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess]           = useState(false);
@@ -388,6 +389,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     setCancelError(null);
     setSelectedReason(null);
     setSelectedRefundMode(null);
+    setRemarks('');
     haptic.light();
     setShowCancelSheet(true);
   };
@@ -413,7 +415,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         }],
         CustomerCancellationReason: selectedReason,
         RefundMode:                 selectedRefundMode,
-        Remarks:                    CancellationReasonLabel[selectedReason],
+        Remarks:                    remarks.trim() || CancellationReasonLabel[selectedReason],
       });
       if (response?.statusCode !== 1) {
         setCancelError(response?.userMessage ?? 'Could not cancel. Please try again.');
@@ -676,10 +678,12 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           itemName={cancelTarget?.Name}
           selectedReason={selectedReason}
           selectedRefundMode={selectedRefundMode}
+          remarks={remarks}
           cancelError={cancelError}
           cancelLoading={cancelLoading}
           onSelectReason={(reason) => { haptic.light(); setSelectedReason(reason); }}
           onSelectRefundMode={(mode) => { haptic.light(); setSelectedRefundMode(mode); }}
+          onChangeRemarks={setRemarks}
           onConfirm={handleConfirmCancel}
           onClose={() => setShowCancelSheet(false)}
         />

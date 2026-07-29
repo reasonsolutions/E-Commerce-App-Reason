@@ -18,6 +18,7 @@ import OTPVerificationScreen from '../screens/OTPVerificationScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import WishlistScreen from '../screens/WishlistScreen';
 import AddressManagementScreen from '../screens/AddressManagementScreen';
+import AddAddressScreen from '../screens/AddAddressScreen';
 import SearchScreen from '../screens/SearchScreen';
 import { getInitialRoute } from '../utils/auth';
 import { Colors } from '../theme';
@@ -89,6 +90,7 @@ const AppNavigator = () => {
         <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="OrderDetails" component={OrderDetailScreen} options={{ animation: 'none' }} />
         <Stack.Screen name="AddressManagement" component={AddressManagementScreen} />
+        <Stack.Screen name="AddAddress" component={AddAddressScreen} />
         <Stack.Screen name="Search" component={SearchScreen} options={{ animation: 'fade' }} />
         <Stack.Screen name="EcomPayment" component={EcomPaymentScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />

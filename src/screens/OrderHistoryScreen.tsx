@@ -392,22 +392,37 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
       if (!code) return;
       setReorderError(null);
 
-      try {
-        await Promise.all(
-          group.items.map(item =>
-            postSaveCartItems({
-              CustomerProfileCode: code,
-              InventoryId: item.Inventory_Id,
-              Quantity: item.Quantity ?? 1,
-              IsPurchased: false,
-            }),
-          ),
-        );
+      const results = await Promise.allSettled(
+        group.items.map(item =>
+          postSaveCartItems({
+            CustomerProfileCode: code,
+            InventoryId: item.Inventory_Id,
+            Quantity: item.Quantity ?? 1,
+            IsPurchased: false,
+          }),
+        ),
+      );
+
+      const succeeded = results.filter(
+        r => r.status === 'fulfilled' && r.value?.statusCode === 1,
+      ).length;
+      const failed = group.items.length - succeeded;
+
+      if (succeeded > 0) {
         haptic.success();
-        setCartCount((prev: number) => prev + group.items.length);
+        setCartCount((prev: number) => prev + succeeded);
+      }
+
+      if (failed === 0) {
         toastEmitter.emit('success', 'Added to bag');
-      } catch (e) {
-        setReorderError(userFacingMessage(e));
+      } else if (succeeded > 0) {
+        toastEmitter.emit(
+          'warning',
+          `${succeeded} of ${group.items.length} items added`,
+          `${failed} couldn't be added — check availability.`,
+        );
+      } else {
+        setReorderError("Couldn't add these items to your bag. Please try again.");
       }
     });
   }, [guard, haptic, setCartCount]);
@@ -645,9 +660,6 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
       <View style={[styles.header, { paddingTop: insets.top + Space[3] }]}>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>My Orders</Text>
-          {groupCount > 0 ? (
-            <Text style={styles.headerCount}>{groupCount} order{groupCount !== 1 ? 's' : ''}</Text>
-          ) : null}
         </View>
 
         <TouchableOpacity

@@ -5,25 +5,18 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   Animated,
   StatusBar,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { EmptyState, FloatingLabelInput, ErrorBanner, ConfirmSheet } from '../components/ui';
+import { EmptyState, ConfirmSheet, Skeleton } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import {
-  getDeliveryAddresses,
-  postCreateDeliveryAddress,
-  postUpdateDeliveryAddress,
-  postDeleteDeliveryAddress,
-} from '../api/address';
+import { getDeliveryAddresses, postDeleteDeliveryAddress, postUpdateDeliveryAddress } from '../api/address';
 import { userFacingMessage } from '../api/apiError';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -35,20 +28,13 @@ import { useAppToast } from '../hooks/useAppToast';
 import { DeliveryAddress } from './AddressScreen';
 import { Motion } from '../theme/motion';
 import { AddressLabel } from '../config/enum_files/AddressLabel';
+import { COUNTRY_OPTIONS } from '../config/countries';
 
 type Props = {
   navigation: {
     goBack: () => void;
+    navigate: (screen: string, params?: Record<string, any>) => void;
   };
-};
-
-const EMPTY_FORM = {
-  CustomerName: '', MobileNumber: '', Address: '',
-  StreetName: '', City: '', Landmark: '', Zipcode: '',
-};
-const EMPTY_ERRORS = {
-  CustomerName: '', MobileNumber: '', Address: '',
-  StreetName: '', City: '', Landmark: '', Zipcode: '',
 };
 
 const LABEL_ICON: Record<AddressLabel, string> = {
@@ -61,16 +47,16 @@ const LABEL_TEXT: Record<AddressLabel, string> = {
   [AddressLabel.Work]:  'WORK',
   [AddressLabel.Other]: 'OTHER',
 };
-const LABEL_OPTIONS = [AddressLabel.Home, AddressLabel.Work, AddressLabel.Other];
 
 // ── Single address row ────────────────────────────────────────────────────────
 const AddressRow: React.FC<{
   item: DeliveryAddress;
   onEdit: () => void;
   onDelete: () => void;
+  onSetPrimary: () => void;
   isLast: boolean;
   delay: number;
-}> = ({ item, onEdit, onDelete, isLast, delay }) => {
+}> = ({ item, onEdit, onDelete, onSetPrimary, isLast, delay }) => {
   const haptic   = useHaptic();
   const entrance = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
@@ -115,6 +101,15 @@ const AddressRow: React.FC<{
               <Text style={styles.addressLineMuted}>{item.Landmark}</Text>
             ) : null}
             <Text style={styles.addressMobile}>{String(item.MobileNumber)}</Text>
+            {!item.IsPrimary ? (
+              <TouchableOpacity
+                onPress={() => { haptic.light(); onSetPrimary(); }}
+                hitSlop={{ top: 6, bottom: 6, left: 0, right: 6 }}
+                style={styles.setPrimaryBtn}
+              >
+                <Text style={styles.setPrimaryText}>Set as default</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           <View style={styles.addressActions}>
@@ -146,13 +141,6 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
   const { data: addresses, loading: fetchLoading, isError: fetchError, error: fetchErrorMsg, run } =
     useAsyncState<DeliveryAddress[]>([]);
 
-  const [profileCode, setProfileCode]   = useState<number | null>(null);
-  const [form, setForm]                 = useState(EMPTY_FORM);
-  const [formErrors, setFormErrors]     = useState(EMPTY_ERRORS);
-  const [addressLabel, setAddressLabel] = useState<AddressLabel | null>(null);
-  const [submitting, setSubmitting]     = useState(false);
-  const [formError, setFormError]       = useState<string | null>(null);
-  const [editingCode, setEditingCode]   = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const toast = useAppToast();
 
@@ -162,7 +150,6 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
         if (!userData) return [];
         const user = JSON.parse(userData);
-        setProfileCode(user.CustomerProfileCode);
         const response = await getDeliveryAddresses(user.CustomerProfileCode);
         return response.statusCode === 1 ? (response.result as DeliveryAddress[]) : [];
       }, cancelled),
@@ -177,100 +164,29 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
     }, [fetchAddresses]),
   );
 
-  const handleChange = (name: string, value: string) => {
-    setForm(prev => ({ ...prev, [name]: value }));
-    if (formErrors[name as keyof typeof formErrors]) {
-      setFormErrors(prev => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const errors = {
-      CustomerName: form.CustomerName.trim() ? '' : 'Name is required',
-      MobileNumber: form.MobileNumber.trim() ? '' : 'Mobile number is required',
-      Address:      form.Address.trim()      ? '' : 'Address is required',
-      StreetName:   form.StreetName.trim()   ? '' : 'Street name is required',
-      City:         form.City.trim()         ? '' : 'City is required',
-      Landmark:     '',
-      Zipcode:      form.Zipcode.trim()      ? '' : 'Zipcode is required',
-    };
-    setFormErrors(errors);
-    return !Object.values(errors).some(Boolean);
-  };
-
-  const startEdit = (item: DeliveryAddress) => {
-    setEditingCode(item.OrderDeliveryAddressCode);
-    setForm({
-      CustomerName: item.CustomerName,
-      MobileNumber: String(item.MobileNumber),
-      Address:      item.Address      ?? '',
-      StreetName:   item.StreetName   ?? '',
-      City:         item.City         ?? '',
-      Landmark:     item.Landmark     ?? '',
-      Zipcode:      item.Zipcode      ?? '',
-    });
-    setAddressLabel(item.AddressLabel ?? null);
-    setFormErrors(EMPTY_ERRORS);
-    setFormError(null);
-  };
-
-  const cancelEdit = () => {
-    setEditingCode(null);
-    setForm(EMPTY_FORM);
-    setAddressLabel(null);
-    setFormErrors(EMPTY_ERRORS);
-    setFormError(null);
-  };
-
-  const handleSave = async () => {
-    if (!validateForm() || !profileCode) return;
-    setFormError(null);
-    setSubmitting(true);
+  const setAsPrimary = async (item: DeliveryAddress) => {
     try {
-      if (editingCode !== null) {
-        const response = await postUpdateDeliveryAddress({
-          OrderDeliveryAddressCode: editingCode,
-          CustomerProfileCode:      profileCode,
-          CustomerName:             form.CustomerName.trim(),
-          MobileNumber:             Number(form.MobileNumber.trim()),
-          Address:                  form.Address.trim(),
-          StreetName:               form.StreetName.trim(),
-          City:                     form.City.trim(),
-          Landmark:                 form.Landmark.trim(),
-          Zipcode:                  Number(form.Zipcode.trim()),
-          IsPrimary:                0,
-          AddressLabel:             addressLabel ?? undefined,
-        });
-        if (response.statusCode === 1) {
-          await fetchAddresses();
-          cancelEdit();
-        } else {
-          setFormError(response.userMessage || 'Failed to update address.');
-        }
+      const response = await postUpdateDeliveryAddress({
+        OrderDeliveryAddressCode: item.OrderDeliveryAddressCode,
+        CustomerProfileCode:      item.CustomerProfileCode,
+        CustomerName:             item.CustomerName,
+        MobileNumber:             Number(item.MobileNumber),
+        Address:                  item.Address    ?? '',
+        StreetName:               item.StreetName ?? '',
+        City:                     item.City       ?? '',
+        Landmark:                 item.Landmark   ?? '',
+        Zipcode:                  Number(item.Zipcode),
+        IsPrimary:                1,
+        CountryCode:              item.CountryCode ?? COUNTRY_OPTIONS[0].code,
+        AddressLabel:             item.AddressLabel ?? undefined,
+      });
+      if (response.statusCode === 1) {
+        await fetchAddresses();
       } else {
-        const response = await postCreateDeliveryAddress({
-          CustomerName:        form.CustomerName.trim(),
-          MobileNumber:        form.MobileNumber.trim(),
-          Address:             form.Address.trim(),
-          StreetName:          form.StreetName.trim(),
-          City:                form.City.trim(),
-          Landmark:            form.Landmark.trim(),
-          Zipcode:             form.Zipcode.trim(),
-          IsPrimary:           '0',
-          CustomerProfileCode: profileCode,
-          AddressLabel:        addressLabel ?? undefined,
-        });
-        if (response.statusCode === 1) {
-          await fetchAddresses();
-          cancelEdit();
-        } else {
-          setFormError(response.userMessage || 'Failed to save address.');
-        }
+        toast.error({ title: 'Could not set default address', description: response.userMessage || undefined });
       }
-    } catch {
-      setFormError('Something went wrong. Please try again.');
-    } finally {
-      setSubmitting(false);
+    } catch (err) {
+      toast.error({ title: 'Could not set default address', description: userFacingMessage(err) });
     }
   };
 
@@ -284,7 +200,6 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
       const response = await postDeleteDeliveryAddress(code);
       if (response.statusCode === 1) {
         await fetchAddresses();
-        if (editingCode === code) cancelEdit();
       } else {
         toast.error({ title: 'Could not delete address', description: response.userMessage || undefined });
       }
@@ -294,111 +209,7 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const addressList = addresses ?? [];
-
-  const FormSection = (
-    <View style={styles.formSection}>
-      <View style={styles.formHeader}>
-        <Text style={styles.sectionEyebrow}>
-          {editingCode !== null ? 'EDIT ADDRESS' : 'ADD NEW ADDRESS'}
-        </Text>
-        {editingCode !== null ? (
-          <TouchableOpacity onPress={cancelEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-      <View style={styles.labelPickerRow}>
-        {LABEL_OPTIONS.map(opt => {
-          const selected = addressLabel === opt;
-          return (
-            <TouchableOpacity
-              key={opt}
-              onPress={() => setAddressLabel(opt)}
-              style={[styles.labelPill, selected && styles.labelPillSelected]}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.labelPillText, selected && styles.labelPillTextSelected]}>
-                {LABEL_TEXT[opt]}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      <View style={styles.formFields}>
-        <FloatingLabelInput
-          label="Full name"
-          value={form.CustomerName}
-          onChangeText={t => handleChange('CustomerName', t)}
-          error={formErrors.CustomerName || null}
-          autoCapitalize="words"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Mobile number"
-          value={form.MobileNumber}
-          onChangeText={t => handleChange('MobileNumber', t)}
-          error={formErrors.MobileNumber || null}
-          keyboardType="numeric"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Address"
-          value={form.Address}
-          onChangeText={t => handleChange('Address', t)}
-          error={formErrors.Address || null}
-          autoCapitalize="sentences"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Street name"
-          value={form.StreetName}
-          onChangeText={t => handleChange('StreetName', t)}
-          error={formErrors.StreetName || null}
-          autoCapitalize="sentences"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="City"
-          value={form.City}
-          onChangeText={t => handleChange('City', t)}
-          error={formErrors.City || null}
-          autoCapitalize="words"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Landmark (optional)"
-          value={form.Landmark}
-          onChangeText={t => handleChange('Landmark', t)}
-          autoCapitalize="sentences"
-          returnKeyType="next"
-        />
-        <FloatingLabelInput
-          label="Zipcode"
-          value={form.Zipcode}
-          onChangeText={t => handleChange('Zipcode', t)}
-          error={formErrors.Zipcode || null}
-          keyboardType="numeric"
-          returnKeyType="done"
-          onSubmitEditing={handleSave}
-        />
-      </View>
-      {formError ? (
-        <ErrorBanner body={formError} onRetry={() => setFormError(null)} />
-      ) : null}
-      <TouchableOpacity
-        style={[styles.saveBtn, submitting && styles.saveBtnDisabled]}
-        onPress={handleSave}
-        disabled={submitting}
-        activeOpacity={0.82}
-      >
-        <Text style={styles.saveBtnText}>
-          {submitting
-            ? editingCode !== null ? 'Updating…' : 'Saving…'
-            : editingCode !== null ? 'Update Address' : 'Save Address'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const showSkeleton = fetchLoading && addressList.length === 0;
 
   return (
     <View style={styles.root}>
@@ -414,53 +225,83 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
           <Icon name="chevron-back" size={22} color={Colors.ink1} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Addresses</Text>
-        <View style={styles.headerRight} />
+        <TouchableOpacity
+          onPress={() => navigation.navigate('AddAddress')}
+          style={styles.addBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel="Add a new address"
+        >
+          <Icon name="add" size={22} color={Colors.brandNavy} />
+        </TouchableOpacity>
       </View>
       <View style={styles.headerDivider} />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}
-        keyboardVerticalOffset={0}
-      >
-        {fetchError ? (
-          <ErrorState
-            title="Couldn't load addresses"
-            message={fetchErrorMsg ?? 'Tap retry to try again.'}
-            onRetry={() => fetchAddresses()}
-            retryLoading={fetchLoading}
-          />
-        ) : (
-          <FlatList
-            data={addressList}
-            keyExtractor={item => String(item.OrderDeliveryAddressCode)}
-            contentContainerStyle={[
-              styles.listContent,
-              { paddingBottom: insets.bottom + Space[8] },
-            ]}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              !fetchLoading ? (
-                <EmptyState
-                  icon={<Icon name="location-outline" size={26} color={Colors.ink4} />}
-                  title="No saved addresses."
-                  body="Add a delivery address below."
-                />
-              ) : null
-            }
-            renderItem={({ item, index }) => (
-              <AddressRow
-                item={item}
-                onEdit={() => startEdit(item)}
-                onDelete={() => requestDelete(item.OrderDeliveryAddressCode)}
-                isLast={index === addressList.length - 1}
-                delay={Motion.stagger.delay(index)}
+      {fetchError ? (
+        <ErrorState
+          title="Couldn't load addresses"
+          message={fetchErrorMsg ?? 'Tap retry to try again.'}
+          onRetry={() => fetchAddresses()}
+          retryLoading={fetchLoading}
+        />
+      ) : (
+        <FlatList
+          data={addressList}
+          keyExtractor={item => String(item.OrderDeliveryAddressCode)}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: insets.bottom + Space[8] },
+          ]}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            showSkeleton ? (
+              <View style={styles.skeletonWrap}>
+                {[0, 1].map(i => (
+                  <View key={i} style={styles.skeletonRow}>
+                    <Skeleton width={20} height={20} radius={10} />
+                    <View style={styles.skeletonLines}>
+                      <Skeleton width="55%" height={11} />
+                      <Skeleton width="85%" height={9} style={styles.skeletonLine} />
+                      <Skeleton width="70%" height={9} style={styles.skeletonLine} />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null
+          }
+          ListEmptyComponent={
+            !fetchLoading ? (
+              <EmptyState
+                icon={<Icon name="location-outline" size={26} color={Colors.ink4} />}
+                title="No saved addresses."
+                body="Add a delivery address to get started."
+                action={
+                  <TouchableOpacity
+                    style={styles.emptyAddBtn}
+                    onPress={() => navigation.navigate('AddAddress')}
+                    activeOpacity={0.88}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add address"
+                  >
+                    <Text style={styles.emptyAddBtnText}>Add Address</Text>
+                  </TouchableOpacity>
+                }
               />
-            )}
-            ListFooterComponent={FormSection}
-          />
-        )}
-      </KeyboardAvoidingView>
+            ) : null
+          }
+          renderItem={({ item, index }) => (
+            <AddressRow
+              item={item}
+              onEdit={() => navigation.navigate('AddAddress', { editAddress: item })}
+              onDelete={() => requestDelete(item.OrderDeliveryAddressCode)}
+              onSetPrimary={() => setAsPrimary(item)}
+              isLast={index === addressList.length - 1}
+              delay={Motion.stagger.delay(index)}
+            />
+          )}
+        />
+      )}
 
       {deleteTarget !== null && (
         <ConfirmSheet
@@ -481,7 +322,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.surface,
   },
-  flex: { flex: 1 },
 
   // ── Header ───────────────────────────────────────────────────────────────────
   header: {
@@ -506,7 +346,13 @@ const styles = StyleSheet.create({
     color:       Colors.ink1,
     letterSpacing: -0.1,
   },
-  headerRight: { width: 36 },
+  addBtn: {
+    width:          36,
+    height:         36,
+    alignItems:     'center',
+    justifyContent: 'center',
+    marginRight:    -Space[2],
+  },
   headerDivider: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
@@ -583,6 +429,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     marginTop:     2,
   },
+  setPrimaryBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  setPrimaryText: {
+    ...Type.caption,
+    color:              Colors.brandNavy,
+    textDecorationLine: 'underline',
+  },
   primaryBadge: {
     backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.xs,
@@ -610,68 +465,41 @@ const styles = StyleSheet.create({
     marginLeft:      Space[2] + 6,
   },
 
-  // ── Form ─────────────────────────────────────────────────────────────────────
-  formSection: {
-    marginTop:      Space[8],
-    paddingTop:     Space[6],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.rule,
+  // ── Address fetch skeleton ────────────────────────────────────────────────────
+  skeletonWrap: {
+    gap: Space[1],
+    marginBottom: Space[2],
   },
-  formHeader: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    marginBottom:   Space[3],
-  },
-  sectionEyebrow: {
-    ...Type.label,
-    color: Colors.ink4,
-  },
-  cancelText: {
-    ...Type.caption,
-    color: Colors.brandNavy,
-  },
-  labelPickerRow: {
+  skeletonRow: {
     flexDirection: 'row',
-    gap:           Space[2],
-    marginBottom:  Space[5],
+    alignItems:    'center',
+    gap:           Space[3],
+    paddingVertical: Space[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
   },
-  labelPill: {
-    flex:              1,
-    alignItems:        'center',
-    justifyContent:    'center',
-    paddingVertical:   Space[2] + 2,
-    borderRadius:      Radius.pill,
-    borderWidth:       1.5,
-    borderColor:       Colors.rule,
-    backgroundColor:   Colors.surface,
+  skeletonLines: {
+    flex: 1,
+    gap:  Space[1],
   },
-  labelPillSelected: {
-    backgroundColor: Colors.brandNavy,
+  skeletonLine: {
+    marginTop: Space[1],
+  },
+
+  // ── Empty state ──────────────────────────────────────────────────────────────
+  emptyAddBtn: {
+    height:          44,
+    borderWidth:     1.5,
     borderColor:     Colors.brandNavy,
-  },
-  labelPillText: {
-    ...Type.label,
-    color: Colors.ink1,
-  },
-  labelPillTextSelected: {
-    color: '#FFFFFF',
-  },
-  formFields: {
-    gap:          Space[6],
-    marginBottom: Space[5],
-  },
-  saveBtn: {
-    backgroundColor: Colors.brandNavy,
     borderRadius:    Radius.pill,
-    paddingVertical: Space[3] + 2,
+    paddingHorizontal: Space[6],
     alignItems:      'center',
-    marginTop:       Space[3],
+    justifyContent:  'center',
+    marginTop:       Space[2],
   },
-  saveBtnDisabled: { opacity: 0.35 },
-  saveBtnText: {
+  emptyAddBtnText: {
     ...Type.bodyStrong,
-    color: '#FFFFFF',
+    color: Colors.brandNavy,
   },
 });
 

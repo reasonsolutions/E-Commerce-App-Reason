@@ -6,6 +6,7 @@ import type {
   OrderDetailRequest,
   CancelOrderInterface,
   OrderHistoryApiResponse,
+  OrderPaymentInfoInterface,
 } from '../interfaces';
 
 interface RawOrderHistoryItem {
@@ -13,23 +14,28 @@ interface RawOrderHistoryItem {
   ItemID:          number;
   BrandID:         number;
   BrandName:       string;
+  CompanyName?:    string;
   SubOrderID?:     number;
   SubOrderNumber?: string;
-  Price:           number;
-  ComparePrice?:   number;
   Quantity:        number;
   Name:            string;
   Variant:         string;
   Images:          string;
   OrderStatus:     number;
+  ItemPriceInfo:   {
+    GrossAmount:   number;
+    TotalDiscount: number;
+    Taxes:         unknown[];
+  };
   [key: string]: unknown;
 }
 
 interface RawOrderHistoryGroup {
-  OrderMasterCode: number;
-  OrderNumber:     string;
-  OrderedDate:     string;
-  Items:           RawOrderHistoryItem[];
+  OrderMasterCode:  number;
+  OrderNumber:      string;
+  OrderedDate:      string;
+  OrderPaymentInfo: OrderPaymentInfoInterface;
+  Items:            RawOrderHistoryItem[];
 }
 
 export interface OrderHistoryFilters {
@@ -47,15 +53,23 @@ export const placeOrder = async (data: PlaceOrderInterface) => {
 // Kept so AddressScreen compiles without changes — delegates to placeOrder
 export const postPlacedMultipleOrder = placeOrder;
 
+// Status isn't a backend filter param on this endpoint (see OrderHistoryRequest) —
+// it's applied client-side in OrderHistoryScreen. When a status filter is active,
+// fetch the full history in one page rather than 10 at a time, otherwise the
+// filter only ever sees whichever page(s) happen to be loaded.
+const UNFILTERED_PAGE_SIZE = 10;
+const STATUS_FILTERED_PAGE_SIZE = 500;
+
 export const postOrderHistory = async (
   customerprofilecode: number,
   page: number = 1,
   filters: OrderHistoryFilters = {},
 ): Promise<{ items: any[]; hasMore: boolean; totalRecords: number }> => {
+  const isStatusFiltered = !!filters.status && filters.status !== 'all';
   const payload: OrderHistoryRequest = {
     CustomerProfileCode: customerprofilecode,
-    PageNumber:          page,
-    PageSize:            10,
+    PageNumber:          isStatusFiltered ? 1 : page,
+    PageSize:            isStatusFiltered ? STATUS_FILTERED_PAGE_SIZE : UNFILTERED_PAGE_SIZE,
     SortBy:              filters.sortBy ?? 'desc',
     DateFrom:            filters.dateFrom ?? null,
     DateTo:              filters.dateTo ?? null,
@@ -81,8 +95,14 @@ export const postOrderHistory = async (
       SubOrder:        { Code: item.SubOrderID ?? 0, Number: item.SubOrderNumber ?? '' },
       Brand_Id:        item.BrandID,
       Brand_Name:      item.BrandName,
-      Amount:          item.Price ?? 0,
-      ComparePrice:    item.ComparePrice,
+      // Per-item display price — tax-inclusive gross amount.
+      Amount:          item.ItemPriceInfo?.GrossAmount ?? 0,
+      PaymentInfo: {
+        ...order.OrderPaymentInfo,
+        // Discount moved from order-level to per-item (ItemPriceInfo.TotalDiscount)
+        // in this response — surface it per item so existing sum(Discount) math holds.
+        Discount: item.ItemPriceInfo?.TotalDiscount ?? 0,
+      },
     })),
   );
 

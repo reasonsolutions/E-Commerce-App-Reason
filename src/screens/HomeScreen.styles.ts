@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { Colors, Space, Radius } from '../theme';
+import { Colors, Space, Radius, Shadow } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 
@@ -255,10 +255,14 @@ const styles = StyleSheet.create({
     color:             'rgba(255,255,255,0.55)',
     textDecorationLine: 'line-through',
   },
+  // Solid white, same as the CTA pill — was a translucent white-on-white
+  // pill that barely registered against the mid-tone gradient. The discount
+  // is one of the two numbers meant to jump out here, so it gets the same
+  // high-contrast treatment instead of the weakest one.
   bannerDiscountPill: {
     alignSelf:         'flex-start',
     marginTop:         Space[2],
-    backgroundColor:   'rgba(255,255,255,0.2)',
+    backgroundColor:   '#FFFFFF',
     paddingVertical:   4,
     paddingHorizontal: 10,
     borderRadius:      Radius.pill,
@@ -267,12 +271,10 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sans,
     fontSize:   11,
     fontWeight: '700',
-    color:      '#FFFFFF',
+    color:      Colors.ink1,
   },
   // Fixed square (not a % of card width) so the card's total height is
-  // deterministic — BannerSlot's BANNER_H is sized against this. No longer a
-  // boxed "plinth" — just the product photo floating on the card's own
-  // gradient, grounded by the shadow below.
+  // deterministic — BannerSlot's BANNER_H is sized against this.
   bannerPlinthCol: {
     width:          142,
     height:         142,
@@ -281,37 +283,58 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position:       'relative',
   },
-  // Soft grounded shadow — the only depth cue under the product now that
-  // there's no boxed backdrop. A translucent blurred oval standing in for a
-  // CSS blur filter (RN has no blur-filter primitive).
+  // Soft grounded shadow, cast directly beneath the plinth — narrower and
+  // closer than a generic ambient shadow so it reads as this card's own
+  // shadow, not a separate floating element. A translucent blurred oval
+  // standing in for a CSS blur filter (RN has no blur-filter primitive).
   bannerGroundShadow: {
     position:        'absolute',
-    bottom:           2,
-    width:            '70%',
-    height:           16,
+    bottom:           15,
+    width:            84,
+    height:           12,
     borderRadius:     Radius.pill,
-    backgroundColor:  'rgba(0,0,0,0.24)',
+    backgroundColor:  'rgba(0,0,0,0.22)',
   },
-  // Product photo sits directly on the card's own gradient — no separate
-  // solid/tinted box behind it. Same photo-first language as the category
-  // circles elsewhere on the page, not a boxed "media card" that reads as a
-  // different design system.
+  // Product photos from the API are opaque white-background shots, not
+  // cutouts — floating them directly on the gradient just shows a hard white
+  // square. Made intentional instead: a smaller, lifted white card (rounded +
+  // real shadow) reads as a deliberate product plinth. Sized below the full
+  // 142 plinth column so the gradient still shows around it.
+  bannerPlinth: {
+    width:            108,
+    height:           108,
+    borderRadius:     Radius.md,
+    backgroundColor:  '#FFFFFF',
+    alignItems:       'center',
+    justifyContent:   'center',
+    padding:          Space[2],
+    ...Shadow.md,
+  },
   bannerImg: {
     width:  '100%',
     height: '100%',
   },
+  // Solid white pill — same weight as the wishlist heart's solid-white
+  // treatment elsewhere in this card, so the CTA reads as a real button
+  // instead of text floating on the busy gradient. Not its own touch
+  // target — the whole card already handles the tap — so no press state
+  // of its own, just the visual affordance.
   bannerCta: {
-    alignSelf:     'flex-start',
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           6,
-    marginTop:     Space[3],
+    alignSelf:         'flex-start',
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               6,
+    marginTop:         Space[3],
+    backgroundColor:   '#FFFFFF',
+    borderRadius:       Radius.pill,
+    paddingVertical:   Space[2],
+    paddingHorizontal: Space[4],
   },
   bannerCtaText: {
     fontFamily: FontFamily.sans,
     fontSize:   13.5,
     fontWeight: '700',
-    color:      '#FFFFFF',
+    color:      Colors.ink1,
   },
   // Dots sit on the same dark masthead as the rest of the hero content.
   // Bottom padding kept tight — sectionSurface below already adds its own
@@ -324,10 +347,10 @@ const styles = StyleSheet.create({
     paddingBottom:  Space[3],
   },
   bannerDot: {
-    width:           6,
-    height:          6,
-    borderRadius:    3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    width:           7,
+    height:          7,
+    borderRadius:    3.5,
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
   bannerDotActive: {
     width:           24,

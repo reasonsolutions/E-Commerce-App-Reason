@@ -23,6 +23,7 @@ import {
   ProductInterface,
 } from '../api/interfaces';
 import { ItemCondition } from '../config/enum_files/ItemCondition';
+import { InventoryStockFilter } from '../config/enum_files/InventoryStockFilter';
 import { postSaveCartItems, getSavedCartItems } from '../api/cart';
 import { getProductByItemId } from '../api/product';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
@@ -36,6 +37,7 @@ import {
   PrimaryButton,
   BreadcrumbRow,
   DeliveryBand,
+  DeliverToRow,
   VariantChipGrid,
   type VariantChipOption,
   TrustCardRow,
@@ -182,7 +184,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       easing: Motion.easing.out, useNativeDriver: true,
     }).start();
     const variants = data.product?.Variants ?? [];
-    const firstInStock = variants.find(v => v.StockStatus?.Description !== 'out_of_stock');
+    const firstInStock = variants.find(v => v.StockStatus?.Value !== InventoryStockFilter.OutOfStock);
     const preselect = firstInStock ?? variants[0];
     if (preselect) setSelectedVariantId(String(preselect.InventoryId));
   }, [data, plateAnim]);
@@ -197,7 +199,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     const p = data.product;
     const itemIdNum = parseInt(p.ItemId, 10);
     const preselect = p.Variants?.find(v => String(v.InventoryId) === selectedVariantId)
-      ?? p.Variants?.find(v => v.StockStatus?.Description !== 'out_of_stock')
+      ?? p.Variants?.find(v => v.StockStatus?.Value !== InventoryStockFilter.OutOfStock)
       ?? p.Variants?.[0];
     AsyncStorage.getItem(STORAGE_KEYS.userData).then(userRaw => {
       const code: number | null = userRaw ? (JSON.parse(userRaw).CustomerProfileCode ?? null) : null;
@@ -280,9 +282,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const hasDiscount        = activeComparePrice > activePrice;
   const discountPct        = calcDiscountPct(activePrice, activeComparePrice);
 
-  const isBackorder = selectedVariant?.StockStatus?.Description === 'out_of_stock'
+  const isBackorder = selectedVariant?.StockStatus?.Value === InventoryStockFilter.OutOfStock
                       && hasBackorderCapacity(selectedVariant?.BackOrder);
-  const isOOS       = selectedVariant?.StockStatus?.Description === 'out_of_stock'
+  const isOOS       = selectedVariant?.StockStatus?.Value === InventoryStockFilter.OutOfStock
                       && !isBackorder;
   const maxQty      = effectivePurchaseLimit(selectedVariant?.MaxPerOrder, selectedVariant?.Stock, selectedVariant?.BackOrder);
 
@@ -290,16 +292,10 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     () => variantDetails.map(v => ({
       id:         String(v.InventoryId),
       label:      v.Variant,
-      outOfStock: v.StockStatus?.Description === 'out_of_stock',
-      lowStock:   v.StockStatus?.Description !== 'out_of_stock' && v.Stock <= v.Threshold,
+      outOfStock: v.StockStatus?.Value === InventoryStockFilter.OutOfStock,
     })),
     [variantDetails],
   );
-
-  const selectedChip = chipOptions.find(c => c.id === selectedVariantId);
-  const lowStockLabel = selectedChip?.lowStock && selectedVariant
-    ? `Only ${selectedVariant.Stock} left in ${selectedVariant.Variant}`
-    : null;
 
   const conditionLabel = selectedVariant?.PhysicalAttributes?.Condition?.Value != null
     ? CONDITION_LABELS[selectedVariant.PhysicalAttributes.Condition.Value] ?? null
@@ -317,7 +313,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     setSelectedVariantId(id);
     if (newVariant) {
       const newMax = effectivePurchaseLimit(newVariant.MaxPerOrder, newVariant.Stock, newVariant.BackOrder);
-      const newIsOOS = newVariant.StockStatus?.Description === 'out_of_stock'
+      const newIsOOS = newVariant.StockStatus?.Value === InventoryStockFilter.OutOfStock
                        && !hasBackorderCapacity(newVariant.BackOrder);
       if (newIsOOS) setQuantity(1);
       else setQuantity(q => Math.min(q, newMax));
@@ -344,8 +340,8 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         // so two separate "Add to Bag" trips can't jointly exceed MaxPerOrder
         // (or, when the merchant hasn't set one, available stock).
         const cartRes = await getSavedCartItems(profileCode);
-        const existingQty: number = Array.isArray(cartRes?.result)
-          ? cartRes.result.find((c: { InventoryId: number }) => c.InventoryId === inventoryId)?.Quantity ?? 0
+        const existingQty: number = Array.isArray(cartRes?.result?.Items)
+          ? cartRes.result.Items.find((c: { InventoryId: number }) => c.InventoryId === inventoryId)?.Quantity ?? 0
           : 0;
         const remaining = maxQty - existingQty;
         if (remaining <= 0) {
@@ -639,6 +635,10 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           )}
         </Animated.View>
 
+        {/* Deliver to — independent of ShippingInfo/ETA data, so it still
+            renders even when the API omits EstimatedDeliveryDays */}
+        <DeliverToRow onAddAddress={() => navigation.navigate('AddAddress')} />
+
         {/* Delivery band */}
         {productDetails ? (
           <DeliveryBand
@@ -656,7 +656,6 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
             selectedId={selectedVariantId}
             onSelect={handleVariantSelect}
             sizeChartUrl={productDetails?.AdditionalInfo?.SizeChart}
-            lowStockLabel={lowStockLabel}
           />
         </Animated.View>
 

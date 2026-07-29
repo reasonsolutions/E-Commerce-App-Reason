@@ -326,7 +326,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         <TouchableOpacity
           style={styles.emptySecondary}
           activeOpacity={0.7}
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => (navigation.navigate as (screen: string, params?: Record<string, unknown>) => void)('MainTabs', { screen: 'Home' })}
           accessibilityRole="button"
           accessibilityLabel="Continue shopping"
         >
@@ -352,7 +352,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
             <TouchableOpacity
               style={styles.emptyCTA}
               activeOpacity={0.88}
-              onPress={() => navigation.navigate('Home')}
+              onPress={() => (navigation.navigate as (screen: string, params?: Record<string, unknown>) => void)('MainTabs', { screen: 'Home' })}
               accessibilityRole="button"
               accessibilityLabel="Start shopping"
             >
@@ -375,7 +375,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
           <TouchableOpacity
             style={styles.emptyCTA}
             activeOpacity={0.88}
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => (navigation.navigate as (screen: string, params?: Record<string, unknown>) => void)('MainTabs', { screen: 'Home' })}
             accessibilityRole="button"
             accessibilityLabel="Start shopping"
           >

@@ -35,9 +35,9 @@ function CartHydrator(): null {
       }
       if (!profileCode) return;
       getSavedCartItems(profileCode)
-        .then((res: { result?: Array<{ Quantity: number }> }) => {
+        .then(res => {
           if (cancelled) return;
-          const items: Array<{ Quantity: number }> = res.result || [];
+          const items = res.result?.Items ?? [];
           const total = items.reduce((sum, item) => sum + item.Quantity, 0);
           setCartCount(total);
         })

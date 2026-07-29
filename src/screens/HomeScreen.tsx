@@ -8,6 +8,7 @@ import React, {
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   StatusBar,
@@ -44,6 +45,7 @@ import { clearSession } from '../utils/auth';
 import { homeCache } from '../utils/homeCache';
 import { wishlistCache } from '../utils/wishlistCache';
 import { isVariantPurchasable } from '../utils/stock';
+import { InventoryStockFilter } from '../config/enum_files/InventoryStockFilter';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -60,6 +62,7 @@ import {
   ProductRail,
   ProductGrid,
   WishlistHeart,
+  EasycomPromiseCard,
   // TrustStrip, — disabled, no longer required (see commented usage below)
 } from '../components/ui';
 import { ErrorState } from '../components/system';
@@ -87,7 +90,7 @@ interface RecentlyViewedItem {
   Inventory_Id?: number | null;
   CategoryName?: string;
   Variants?: {
-    StockStatus?: { Value: number; Description: string };
+    StockStatus?: { Value: InventoryStockFilter; Description: string };
     BackOrder?:   { AllowBackOrder?: boolean };
   }[];
 }
@@ -262,27 +265,32 @@ const BannerCard: React.FC<{
               </View>
             ) : null}
           </View>
-          {/* Product photo floats directly on the card's own gradient — no
-              boxed backdrop. Grounded by the soft shadow beneath it, same
-              photo-first language as the category circles elsewhere on the
-              page. */}
+          {/* Product photos from the API are opaque white-background shots,
+              not cutouts — a plain floating Image still shows a hard white
+              square against the gradient. Made intentional instead: a
+              smaller, lifted white plinth (rounded + shadow) reads as a
+              deliberate product card rather than a rendering mistake. */}
           <View style={styles.bannerPlinthCol}>
             <View style={styles.bannerGroundShadow} pointerEvents="none" />
             {spot.imageUri ? (
-              <Animated.Image
-                source={{ uri: spot.imageUri }}
+              <Animated.View
                 style={[
-                  styles.bannerImg,
+                  styles.bannerPlinth,
                   { transform: [{ translateY: floatTranslateY }] },
                 ]}
-                resizeMode="contain"
-              />
+              >
+                <Image
+                  source={{ uri: spot.imageUri }}
+                  style={styles.bannerImg}
+                  resizeMode="contain"
+                />
+              </Animated.View>
             ) : null}
           </View>
         </View>
         <View style={styles.bannerCta}>
           <Text style={styles.bannerCtaText}>{spot.cta}</Text>
-          <Icon name="arrow-forward" size={12} color="#FFFFFF" />
+          <Icon name="arrow-forward" size={12} color={Colors.ink1} />
         </View>
       </LinearGradient>
     </TouchableOpacity>
@@ -1250,12 +1258,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               cardWidth={148}
               actionLabel="See all"
               onSeeAll={() =>
-                navigation.navigate('Result', { categoryName: 'New Arrivals' })
+                navigation.navigate('Result', {
+                  categoryName: 'New Arrivals',
+                  initialSort: 'newest',
+                })
               }
               onPress={itemId =>
                 navigation.navigate('Product', { product: String(itemId) })
               }
             />
+          </View>
+        )}
+        {/* Easycom brand/trust banner — static, breaks up consecutive product-grid rhythm.
+            No paddingTop: continues the same cream band as New arrivals above it, which
+            already closes with its own sectionSurface paddingBottom. */}
+        {!feedError && (
+          <View
+            style={[
+              styles.sectionSurface,
+              { paddingTop: 0, paddingHorizontal: Space.screenH },
+            ]}
+          >
+            <EasycomPromiseCard />
           </View>
         )}
         {/* 2. Picked for you — peach ember tint, only with real category signal */}
@@ -1289,7 +1313,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               title="Best deals"
               items={smartBuys}
               onSeeAll={() =>
-                navigation.navigate('Result', { categoryName: 'Deals' })
+                navigation.navigate('Result', {
+                  categoryName: 'Deals',
+                  initialDiscount: true,
+                })
               }
               onPress={itemId =>
                 navigation.navigate('Product', { product: String(itemId) })
@@ -1308,6 +1335,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               actionLabel="See all"
               onSeeAll={() =>
                 navigation.navigate('Result', {
+                  categoryId: featuredCategoryProducts[0].CategoryID,
                   categoryName: featuredCategoryName ?? 'All Products',
                 })
               }

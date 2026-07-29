@@ -14,7 +14,6 @@ export interface VariantChipOption {
   id: string;
   label: string;
   outOfStock: boolean;
-  lowStock: boolean;
 }
 
 interface VariantChipGridProps {
@@ -22,7 +21,6 @@ interface VariantChipGridProps {
   selectedId: string;
   onSelect: (id: string) => void;
   sizeChartUrl?: string | null;
-  lowStockLabel?: string | null;
   label?: string | null;
 }
 
@@ -44,7 +42,6 @@ export const VariantChipGrid: React.FC<VariantChipGridProps> = ({
   selectedId,
   onSelect,
   sizeChartUrl,
-  lowStockLabel,
   label,
 }) => {
   if (!options.length) return null;
@@ -68,41 +65,30 @@ export const VariantChipGrid: React.FC<VariantChipGridProps> = ({
         {options.map(opt => {
           const isSelected = opt.id === selectedId;
           return (
-            <View key={opt.id} style={{ position: 'relative' }}>
-              <TouchableOpacity
-                onPress={() => !opt.outOfStock && onSelect(opt.id)}
-                activeOpacity={opt.outOfStock ? 1 : 0.7}
+            <TouchableOpacity
+              key={opt.id}
+              onPress={() => !opt.outOfStock && onSelect(opt.id)}
+              activeOpacity={opt.outOfStock ? 1 : 0.7}
+              style={[
+                styles.chip,
+                isSelected && styles.chipSelected,
+                !isSelected && !opt.outOfStock && styles.chipInStock,
+                opt.outOfStock && styles.chipOOS,
+              ]}
+            >
+              <Text
                 style={[
-                  styles.chip,
-                  isSelected && styles.chipSelected,
-                  !isSelected && !opt.outOfStock && styles.chipInStock,
-                  opt.outOfStock && styles.chipOOS,
+                  styles.chipLabel,
+                  isSelected && styles.chipLabelSelected,
+                  opt.outOfStock && styles.chipLabelOOS,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    isSelected && styles.chipLabelSelected,
-                    opt.outOfStock && styles.chipLabelOOS,
-                  ]}
-                >
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-              {opt.lowStock && !isSelected && !opt.outOfStock ? (
-                <View style={styles.lowStockDot} />
-              ) : null}
-            </View>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
           );
         })}
       </View>
-
-      {lowStockLabel ? (
-        <View style={styles.lowStockRow}>
-          <View style={styles.lowStockDotInline} />
-          <Text style={styles.lowStockText}>{lowStockLabel}</Text>
-        </View>
-      ) : null}
     </View>
   );
 };
@@ -174,34 +160,5 @@ const styles = StyleSheet.create({
   chipLabelOOS: {
     color:              Colors.ink4,
     textDecorationLine: 'line-through',
-  },
-  lowStockDot: {
-    position:        'absolute',
-    top:             3,
-    right:           3,
-    width:           6,
-    height:          6,
-    borderRadius:    3,
-    backgroundColor: Colors.accent,
-    borderWidth:     1.5,
-    borderColor:     Colors.surface,
-  },
-  lowStockRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           Space[2],
-    marginTop:     Space[3],
-  },
-  lowStockDotInline: {
-    width:           6,
-    height:          6,
-    borderRadius:    3,
-    backgroundColor: Colors.accent,
-  },
-  lowStockText: {
-    fontFamily:  FontFamily.sans,
-    fontSize:    11,
-    fontWeight:  '500',
-    color:       Colors.accent,
   },
 });

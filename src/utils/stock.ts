@@ -1,20 +1,28 @@
 import type { VariantInterface } from '../api/interfaces';
+import { InventoryStockFilter } from '../config/enum_files/InventoryStockFilter';
+
+// BackOrderUpdatedBy is nullable on the wire (null when AllowBackOrder is
+// false) even though VariantInterface types it as a plain string — widen
+// here so this helper accepts any caller's BackOrder shape (e.g. cart items).
+type BackOrderInfo = Omit<NonNullable<VariantInterface['BackOrder']>, 'BackOrderUpdatedBy'> & {
+  BackOrderUpdatedBy: string | null;
+};
 
 // BackOrderLimit === null means unlimited backorder capacity; otherwise
 // capacity is exhausted once BackOrderUsedQuantity reaches the limit.
-export const hasBackorderCapacity = (backOrder?: VariantInterface['BackOrder']): boolean => {
+export const hasBackorderCapacity = (backOrder?: BackOrderInfo): boolean => {
   if (!backOrder?.AllowBackOrder) return false;
   if (backOrder.BackOrderLimit == null) return true;
   return backOrder.BackOrderUsedQuantity < backOrder.BackOrderLimit;
 };
 
 interface StockCheckVariant {
-  StockStatus?: { Description: string };
-  BackOrder?:   VariantInterface['BackOrder'];
+  StockStatus?: { Value: InventoryStockFilter };
+  BackOrder?:   BackOrderInfo;
 }
 
 export const isVariantPurchasable = (variant: StockCheckVariant): boolean =>
-  variant.StockStatus?.Description !== 'out_of_stock' || hasBackorderCapacity(variant.BackOrder);
+  variant.StockStatus?.Value !== InventoryStockFilter.OutOfStock || hasBackorderCapacity(variant.BackOrder);
 
 // A product is sold out only when every one of its variants is out of stock
 // (and none has backorder capacity) — checking just the first/representative
@@ -28,15 +36,14 @@ export const isProductSoldOut = (variants?: StockCheckVariant[]): boolean =>
 // arbitrary hardcoded number, and not unlimited either.
 // Does NOT account for backorder capacity — use effectivePurchaseLimit when
 // BackOrder data is available (e.g. a Stock: 0, backorderable item should
-// not be clamped to 0 here). Kept for call sites that never had BackOrder
-// data to begin with (SavedCartItemInterface has no BackOrder field today).
+// not be clamped to 0 here). Kept for call sites with no BackOrder data.
 export const effectiveMaxPerOrder = (maxPerOrder: number | null | undefined, stock: number): number =>
   maxPerOrder ?? stock;
 
 // Remaining backorder capacity: null (or AllowBackOrder false) means none;
 // null BackOrderLimit means unlimited (returns Infinity); otherwise the
 // difference between the limit and what's already been used.
-const remainingBackorderCapacity = (backOrder?: VariantInterface['BackOrder']): number => {
+const remainingBackorderCapacity = (backOrder?: BackOrderInfo): number => {
   if (!backOrder?.AllowBackOrder) return 0;
   if (backOrder.BackOrderLimit == null) return Infinity;
   return Math.max(0, backOrder.BackOrderLimit - backOrder.BackOrderUsedQuantity);
@@ -54,7 +61,7 @@ const remainingBackorderCapacity = (backOrder?: VariantInterface['BackOrder']): 
 export const effectivePurchaseLimit = (
   maxPerOrder: number | null | undefined,
   stock: number | null | undefined,
-  backOrder?: VariantInterface['BackOrder'],
+  backOrder?: BackOrderInfo,
 ): number => {
   if (maxPerOrder != null) return maxPerOrder;
   if (stock == null) return Infinity;
