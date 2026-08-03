@@ -199,7 +199,11 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
   // OrderSuccess in the stack, and swiping back from Orders/Home lands back
   // on the (already-used) order confirmation screen.
   const handleTrackOrder = useCallback(
-    () => navigation.replace('MainTabs', { screen: 'Orders', params: { refresh: true } }),
+    () =>
+      navigation.replace('MainTabs', {
+        screen: 'Orders',
+        params: { refresh: true },
+      }),
     [navigation],
   );
   const handleContinueShopping = useCallback(
@@ -319,7 +323,11 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
         {showAddress ? (
           <Animated.View style={[s.card, fade(addressAnim)]}>
             <View style={s.addrHeader}>
-              <Icon name="location-outline" size={15} color={Colors.brandNavy} />
+              <Icon
+                name="location-outline"
+                size={15}
+                color={Colors.brandNavy}
+              />
               <Text style={s.addrHeaderText}>Delivering To</Text>
             </View>
             {addrLines.map((line, i) => (
