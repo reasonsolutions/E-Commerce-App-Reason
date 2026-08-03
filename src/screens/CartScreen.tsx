@@ -141,20 +141,15 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const purchasableCartItems = cartItems.filter(item => item.Count > 0 || hasBackorderCapacity(item.BackOrder));
   const unavailableCount = cartItems.length - purchasableCartItems.length;
 
-  // Tax breakdown and the final payable amount are backend-authoritative
-  // (summary.TaxBreakdown/AmountToBePaid) so they can never drift from what
-  // the server will actually charge. Subtotal is the discounted pre-tax
-  // total — summed directly from each item's own PriceDetails.Price, not
-  // from summary.ItemsTotal (which is actually Σ(ComparePrice × Qty), the
-  // pre-discount MRP total, despite the name).
+  // Tax breakdown, subtotal, and the final payable amount are all
+  // backend-authoritative (summary.TaxBreakdown/SubTotal/AmountToBePaid) so
+  // they can never drift from what the server will actually charge. Do not
+  // use summary.ItemsTotal for subtotal — it's actually Σ(ComparePrice × Qty),
+  // the pre-discount MRP total, despite the name.
   const subtotal = isGuest
     ? guestItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
-    : purchasableCartItems.reduce((sum, item) => sum + (item.PriceDetails?.Price ?? item.Price ?? 0) * item.Quantity, 0);
+    : summary?.SubTotal ?? 0;
   const taxGroups = isGuest || !summary ? [] : mapCartTaxBreakdown(summary.TaxBreakdown);
-  // Per-rate rows (taxGroups) cover the common case. When a cart mixes
-  // inclusive and exclusive taxes, also surface the inclusive/exclusive split
-  // — otherwise it's redundant with the single per-rate total already shown.
-  const showInclusiveExclusiveSplit = !isGuest && !!summary && summary.TotalInclusiveTax > 0 && summary.TotalExclusiveTax > 0;
   const shippingCharge = isGuest ? 0 : summary?.TotalShippingCharge ?? 0;
   const payableTotal = isGuest
     ? subtotal
@@ -181,12 +176,15 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     try {
       const res = await updateCartItemQuantity(item.CartDetailsCode, item.InventoryId, quantity);
       if (res?.statusCode !== 1) {
-        fetchCart();
         toast.error({ title: 'Error', description: res?.userMessage ?? "Couldn't update quantity." });
       }
     } catch {
-      fetchCart();
+      // fall through — fetchCart() below re-syncs regardless of outcome
     }
+    // Re-sync with the server-authoritative cart (totals/tax may shift, not
+    // just this line item's quantity) instead of trusting the optimistic
+    // patch indefinitely.
+    fetchCart();
   }, [setCartCount, fetchCart, fetched, toast]);
 
   const handleUpdateGuestQuantity = useCallback(async (inventoryId: number, oldQty: number, newQty: number) => {
@@ -205,12 +203,14 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     try {
       const res = await postDeleteCartItem(item.CartDetailsCode);
       if (res?.statusCode !== 1) {
-        fetchCart();
         toast.error({ title: 'Error', description: res?.userMessage ?? "Couldn't remove item." });
       }
     } catch {
-      fetchCart();
+      // fall through — fetchCart() below re-syncs regardless of outcome
     }
+    // Re-sync with the server-authoritative cart, same reasoning as
+    // handleUpdateQuantity above.
+    fetchCart();
   }, [setCartCount, fetchCart, fetched, toast]);
 
   const removeGuestItem = useCallback(async (inventoryId: number, qty: number) => {
@@ -425,7 +425,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             <View style={styles.savingsBanner}>
               <Icon name="gift-outline" size={16} color="#226B3C" />
               <Text style={styles.savingsBannerText}>
-                You're saving MUR {totalSavings.toFixed(0)} on this order
+                You're saving MUR {totalSavings.toLocaleString('en-IN')} on this order
               </Text>
             </View>
           )}
@@ -435,12 +435,12 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             <Text style={styles.summaryCardLabel}>ORDER SUMMARY</Text>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>MUR {subtotal.toFixed(0)}</Text>
+              <Text style={styles.summaryValue}>MUR {subtotal.toLocaleString('en-IN')}</Text>
             </View>
             {totalSavings > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={styles.savingsLabel}>Savings</Text>
-                <Text style={styles.savingsValue}>− MUR {totalSavings.toFixed(0)}</Text>
+                <Text style={styles.savingsValue}>− MUR {totalSavings.toLocaleString('en-IN')}</Text>
               </View>
             )}
             {taxGroups.map(group => (
@@ -448,25 +448,13 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
                 <Text style={styles.summaryLabel}>
                   {group.taxName ? group.taxName : `Tax (${group.taxRate}%)`}
                 </Text>
-                <Text style={styles.summaryValue}>MUR {group.amount.toFixed(0)}</Text>
+                <Text style={styles.summaryValue}>MUR {group.amount.toLocaleString('en-IN')}</Text>
               </View>
             ))}
-            {showInclusiveExclusiveSplit && summary && (
-              <>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summarySubLabel}>Tax (exclusive)</Text>
-                  <Text style={styles.summarySubValue}>MUR {summary.TotalExclusiveTax.toFixed(0)}</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summarySubLabel}>Tax (inclusive)</Text>
-                  <Text style={styles.summarySubValue}>MUR {summary.TotalInclusiveTax.toFixed(0)}</Text>
-                </View>
-              </>
-            )}
             {shippingCharge > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Shipping</Text>
-                <Text style={styles.summaryValue}>MUR {shippingCharge.toFixed(0)}</Text>
+                <Text style={styles.summaryValue}>MUR {shippingCharge.toLocaleString('en-IN')}</Text>
               </View>
             )}
             <View style={styles.summaryRule} />
@@ -792,16 +780,6 @@ const styles = StyleSheet.create({
   summaryValue: {
     ...Type.caption,
     color: Colors.ink2,
-  },
-  summarySubLabel: {
-    ...Type.caption,
-    color:    Colors.ink4,
-    fontSize: 12,
-  },
-  summarySubValue: {
-    ...Type.caption,
-    color:    Colors.ink4,
-    fontSize: 12,
   },
   savingsLabel: {
     ...Type.caption,

@@ -141,32 +141,41 @@ export const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     lineHeight:         11 * 1.2,
   },
-  // Filled chip — matches ProductCard.tsx's (Home) discount badge, so
-  // discount styling reads consistently between Home and Result.
-  discountChip: {
+  // Absolute overlay badge, pinned to the image's top-left corner — matches
+  // ProductCard.tsx's (Home) discount badge exactly, so it never competes
+  // with the price row for horizontal space (the old inline chip could wrap
+  // or bleed the card wider when price + comparePrice + chip all sat in the
+  // same row).
+  discountBadge: {
+    position:          'absolute',
+    top:               8,
+    left:              8,
+    paddingVertical:   3,
+    paddingHorizontal: 7,
+    borderRadius:      Radius.xs,
     backgroundColor:   Colors.accent,
-    borderRadius:      5,
-    paddingVertical:   2,
-    paddingHorizontal: 6,
   },
-  discountChipText: {
+  discountBadgeText: {
     ...Type.label,
-    fontSize:      10.5,
+    fontSize:      9.5,
     fontWeight:    '800',
     color:         '#FFFFFF',
     letterSpacing: 0.2,
   },
-  // Muted variant of discountChip — out-of-stock label, takes priority
+  // Muted variant of discountBadge — out-of-stock label, takes priority
   // over the discount badge when both would otherwise apply.
-  oosChip: {
+  oosBadge: {
+    position:          'absolute',
+    top:               8,
+    left:              8,
+    paddingVertical:   3,
+    paddingHorizontal: 7,
+    borderRadius:      Radius.xs,
     backgroundColor:   Colors.ink3,
-    borderRadius:      5,
-    paddingVertical:   2,
-    paddingHorizontal: 6,
   },
-  oosChipText: {
+  oosBadgeText: {
     ...Type.label,
-    fontSize:      10.5,
+    fontSize:      9.5,
     fontWeight:    '800',
     color:         '#FFFFFF',
     letterSpacing: 0.2,

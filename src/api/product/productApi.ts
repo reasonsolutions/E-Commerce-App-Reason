@@ -1,36 +1,31 @@
 import axiosInstance from '../axiosInstance';
 import { productEndpoints } from '../endpoints';
-import type { ProductInterface, ProductVariant, CategoryFeedProduct } from '../interfaces';
+import type { ProductInterface, CategoryFeedProduct } from '../interfaces';
 import { SortBy } from '../../config/enum_files/SortBy';
 
-// InventoryID → OrganisationId — populated on every product fetch, used at checkout
-const _orgByInventory: Map<number, string> = new Map();
+// Shared "on sale" range for the allProducts discount filter — 40% off or
+// more, so it actually reads as a deal. Home's Best Deals shelf and
+// ResultScreen's "On sale" filter chip both send this same range so
+// "on sale" means one consistent thing across the app.
+export const ON_SALE_DISCOUNT_RANGE = '40-100';
 
-export const getOrgIdForInventory = (inventoryId: number): string =>
-  _orgByInventory.get(inventoryId) ?? '';
-
-function cacheOrgIds(products: { OrganisationId: string; Variants: ProductVariant[] }[]): void {
-  for (const p of products) {
-    if (!p.OrganisationId) continue;
-    for (const v of p.Variants ?? []) {
-      _orgByInventory.set(Number(v.InventoryID), p.OrganisationId);
-    }
-  }
-}
-
-export const getAllProducts = async (sortBy?: SortBy) => {
+export const getAllProducts = async (
+  sortBy?: SortBy,
+  discount?: string,
+  pageNumber = 1,
+  pageSize = 10,
+) => {
   const response = await axiosInstance.post(productEndpoints.allProducts, {
     brands: [],
     categories: [],
     subCategories: [],
     searchQuery: '%',
     priceRange: { from: null, to: null },
-    discount: null,
+    discount: discount ?? null,
     sortBy: sortBy ?? null,
-    pagination: { pageNumber: 1, pageSize: 10 },
+    pagination: { pageNumber, pageSize },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];
-  cacheOrgIds(products);
   return products;
 };
 
@@ -72,7 +67,6 @@ export const getProductsByCategory = async (
     pagination: { pageNumber, pageSize },
   });
   const products: CategoryFeedProduct[] = response.data?.result?.Products ?? [];
-  cacheOrgIds(products);
   return products;
 };
 
@@ -93,7 +87,6 @@ export const getProductsByBrand = async (
     pagination: { pageNumber, pageSize },
   });
   const products: ProductInterface[] = response.data?.result?.Products ?? [];
-  cacheOrgIds(products);
   return products;
 };
 

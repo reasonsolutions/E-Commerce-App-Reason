@@ -12,7 +12,6 @@ export interface GuestCartItem {
   brandName:    string;
   variant:      string;
   image:        string;
-  organisationId: string;
   // Captured at add-to-cart time (ProductScreen still holds the full variant
   // then) — the guest cart is local AsyncStorage, so this is the only chance
   // to know the merchant's per-order limit / stock for this item.

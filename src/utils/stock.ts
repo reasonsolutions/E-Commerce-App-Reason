@@ -31,6 +31,20 @@ export const isVariantPurchasable = (variant: StockCheckVariant): boolean =>
 export const isProductSoldOut = (variants?: StockCheckVariant[]): boolean =>
   !!variants && variants.length > 0 && variants.every(v => !isVariantPurchasable(v));
 
+// Stable partition — sold-out items sink to the end without disturbing the
+// relative order within each group (e.g. a caller's own recency/relevance
+// sort survives for the in-stock items, and again separately for the OOS ones).
+export const sortOutOfStockLast = <T extends { Variants?: StockCheckVariant[] }>(
+  items: T[],
+): T[] => {
+  const inStock: T[] = [];
+  const outOfStock: T[] = [];
+  for (const item of items) {
+    (isProductSoldOut(item.Variants) ? outOfStock : inStock).push(item);
+  }
+  return inStock.concat(outOfStock);
+};
+
 // MaxPerOrder is a merchant-set cap; when they haven't set one (null), the
 // real ceiling is however many units are actually in stock — not an
 // arbitrary hardcoded number, and not unlimited either.

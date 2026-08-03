@@ -5,3 +5,8 @@ export const homeCache: {
   categories: CategoryInterface[] | null;
   brands:     GetBrandItem[]      | null;
 } = { categories: null, brands: null };
+
+export function clearHomeCache(): void {
+  homeCache.categories = null;
+  homeCache.brands = null;
+}

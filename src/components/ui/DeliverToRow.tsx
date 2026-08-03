@@ -17,6 +17,7 @@ import { STORAGE_KEYS, scopedKey } from '../../config/storageKeys';
 import { getDeliveryAddresses } from '../../api/address';
 import { AddressLabel } from '../../config/enum_files/AddressLabel';
 import type { DeliveryAddress } from '../../screens/AddressScreen';
+import { parseServerDate } from '../../utils/parseServerDate';
 
 const LABEL_TEXT: Record<AddressLabel, string> = {
   [AddressLabel.Home]:  'HOME',
@@ -33,7 +34,7 @@ const mostRecent = (list: DeliveryAddress[]): DeliveryAddress | null =>
   list.length === 0
     ? null
     : [...list].sort(
-        (a, b) => new Date(b.CreatedDate).getTime() - new Date(a.CreatedDate).getTime(),
+        (a, b) => parseServerDate(b.CreatedDate) - parseServerDate(a.CreatedDate),
       )[0];
 
 const defaultAddress = (list: DeliveryAddress[]): DeliveryAddress | null =>

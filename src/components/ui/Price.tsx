@@ -10,6 +10,10 @@ interface PriceProps {
   was?: number;
   size?: PriceSize;
   currency?: string;
+  // Overrides the discount % shown — for callers that already computed one
+  // (e.g. to also drive a badge elsewhere on the card) so it isn't derived
+  // twice. Falls back to deriving from value/was when omitted.
+  discountOverride?: number;
 }
 
 const mainFontSize: Record<PriceSize, number> = {
@@ -28,20 +32,22 @@ export const Price: React.FC<PriceProps> = ({
   was,
   size = 'base',
   currency = 'MUR ',
+  discountOverride,
 }) => {
   const fs = mainFontSize[size];
   const strikeFs = Math.max(FontSize.xs, fs - strikeSizeOffset);
-  const discount = was && was > value ? Math.round((1 - value / was) * 100) : 0;
+  const discount = discountOverride ??
+    (was && was > value ? Math.round((1 - value / was) * 100) : 0);
 
   return (
     <View style={styles.row}>
       <Text style={[styles.main, { fontSize: fs }]}>
-        {currency}{value.toFixed(0)}
+        {currency}{value.toLocaleString('en-IN')}
       </Text>
 
       {was && was > value ? (
         <Text style={[styles.strike, { fontSize: strikeFs }]}>
-          {currency}{was.toFixed(0)}
+          {currency}{was.toLocaleString('en-IN')}
         </Text>
       ) : null}
 

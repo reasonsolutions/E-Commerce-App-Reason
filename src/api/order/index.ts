@@ -20,6 +20,10 @@ export async function postCnfOrderDetail(
 ): Promise<OrderDetailResponseInterface> {
   const rawRes = await real.postCnfOrderDetail(orderNumber, customerProfileCode);
   const result = rawRes.result ?? { OrderDetails: [], DeliveryDetail: [] };
+  // PaymentInfo can arrive at the top level (sibling of OrderDetails/DeliveryDetail)
+  // instead of duplicated on every item — fall back to it so orders using that
+  // shape (e.g. COD) still populate the per-item PaymentInfo the screen reads.
+  const orderLevelPaymentInfo = (rawRes.result as { PaymentInfo?: unknown } | undefined)?.PaymentInfo;
   result.OrderDetails = (result.OrderDetails ?? []).map((item: OrderDetailItemExtendedInterface) => {
     const raw = item as OrderDetailItemExtendedInterface & { InventoryID?: number; ItemID?: number; BrandName?: string; BrandID?: number; SubOrder?: { Code: number; Number: string }; PaymentInfo?: any; Events?: any[]; PricingDetails?: { GrossAmount?: number } };
     return {
@@ -33,7 +37,7 @@ export async function postCnfOrderDetail(
       // payment summary stays visible instead of being silently baked in.
       // Backend's flat Amount field is deprecated in favor of PricingDetails.
       Amount:       raw.PricingDetails?.GrossAmount ?? 0,
-      PaymentInfo:  raw.PaymentInfo   ?? undefined,
+      PaymentInfo:  raw.PaymentInfo   ?? orderLevelPaymentInfo ?? undefined,
       Events:       raw.Events        ?? [],
     };
   });

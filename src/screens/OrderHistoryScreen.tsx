@@ -112,40 +112,38 @@ const OrderCard: React.FC<{
         activeOpacity={0.88}
         onPress={() => { haptic.light(); onPress(group); }}
       >
-        {/* Thumbnails + total on one row */}
-        <View style={cardStyles.topRow}>
-          <View style={cardStyles.thumbRow}>
-            {visibleThumbs.map((item, i) => (
-              <View key={`${item.Inventory_Id}-${i}`} style={cardStyles.thumbWrap}>
-                <FadeImage
-                  uri={resolveImageUrl(item.Images)}
-                  width={THUMB_SIZE}
-                  height={THUMB_SIZE}
-                  borderRadius={Radius.sm}
-                  resizeMode="contain"
-                  showSkeleton
-                />
-              </View>
-            ))}
-            {overflow > 0 && (
-              <View style={cardStyles.overflowBadge}>
-                <Text style={cardStyles.overflowText}>+{overflow}</Text>
-              </View>
-            )}
-          </View>
-          <Text style={cardStyles.total} numberOfLines={1}>
-            MUR {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-          </Text>
+        {/* Thumbnails */}
+        <View style={cardStyles.thumbRow}>
+          {visibleThumbs.map((item, i) => (
+            <View key={`${item.Inventory_Id}-${i}`} style={cardStyles.thumbWrap}>
+              <FadeImage
+                uri={resolveImageUrl(item.Images)}
+                width={THUMB_SIZE}
+                height={THUMB_SIZE}
+                borderRadius={Radius.sm}
+                resizeMode="contain"
+                showSkeleton
+              />
+            </View>
+          ))}
+          {overflow > 0 && (
+            <View style={cardStyles.overflowBadge}>
+              <Text style={cardStyles.overflowText}>+{overflow}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Date · seller(s) — status is shown on the order details screen instead */}
+        {/* Date · seller(s) on the left, total on the right — status is shown on the order details screen instead */}
         <View style={cardStyles.metaRow}>
           <View style={cardStyles.metaCol}>
-            <Text style={cardStyles.metaPrimary}>
+            <Text style={cardStyles.metaPrimary} numberOfLines={1}>
               {formatDate(group.orderedDate)}
               {sellerLabel ? `  ·  ${sellerLabel}` : ''}
             </Text>
           </View>
+          <Text style={cardStyles.total} numberOfLines={1}>
+            MUR {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          </Text>
         </View>
 
         {/* Actions */}
@@ -183,17 +181,11 @@ const cardStyles = StyleSheet.create({
     paddingVertical:   Space[4],
     ...Shadow.sm,
   },
-  topRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    gap:            Space[3],
-    marginBottom:   Space[3],
-  },
   thumbRow: {
     flexDirection: 'row',
     flexShrink:    1,
     gap:           Space[2],
+    marginBottom:  Space[4],
   },
   thumbWrap: {
     backgroundColor: Colors.surfaceSoft,
@@ -221,10 +213,11 @@ const cardStyles = StyleSheet.create({
     color:         Colors.ink1,
     letterSpacing: -0.2,
     flexShrink:    0,
+    marginLeft:    Space[3],
   },
   metaRow: {
     flexDirection:  'row',
-    alignItems:     'flex-start',
+    alignItems:     'center',
     justifyContent: 'space-between',
     gap:            Space[3],
   },

@@ -1,6 +1,7 @@
 import { SortBy } from '../config/enum_files/SortBy';
 import type { ProductByCategoryProductDetails } from '../api/interfaces';
 import type { SortKey } from '../components/ui';
+import { parseServerDate } from './parseServerDate';
 
 export function deduplicateProducts(
   products: ProductByCategoryProductDetails[],
@@ -29,7 +30,7 @@ export function applySort(
 ): ProductByCategoryProductDetails[] {
   if (sortKey === 'newest') {
     return [...products].sort((a, b) =>
-      new Date(b.Date_Created).getTime() - new Date(a.Date_Created).getTime(),
+      parseServerDate(b.Date_Created) - parseServerDate(a.Date_Created),
     );
   }
   return products;

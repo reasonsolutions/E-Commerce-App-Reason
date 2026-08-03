@@ -78,17 +78,17 @@ export function logRequest(config: TimedAxiosRequestConfig): void {
 
   _pending.set(id, { method, url: shortUrl(url), payload: payloadStr });
 
-  const headers = config.headers
-    ? maskSensitive(Object.fromEntries(Object.entries(config.headers)))
-    : undefined;
+  // const headers = config.headers
+  //   ? maskSensitive(Object.fromEntries(Object.entries(config.headers)))
+  //   : undefined;
 
-  console.log(
-    `\n─────────────────────────────────────────\n` +
-      `🚀  ${method} ${shortUrl(url)}\n` +
-      (payloadStr ? `📤  Payload  : ${payloadStr}\n` : '') +
-      (headers ? `🔑  Headers  : ${truncate(headers)}\n` : '') +
-      `─────────────────────────────────────────`,
-  );
+  // console.log(
+  //   `\n─────────────────────────────────────────\n` +
+  //     `🚀  ${method} ${shortUrl(url)}\n` +
+  //     (payloadStr ? `📤  Payload  : ${payloadStr}\n` : '') +
+  //     (headers ? `🔑  Headers  : ${truncate(headers)}\n` : '') +
+  //     `─────────────────────────────────────────`,
+  // );
 }
 
 // ── Response logger ───────────────────────────────────────────────────────────
@@ -108,14 +108,14 @@ export function logResponse(response: AxiosResponse): void {
     : '–';
   const status = response.status;
 
-  console.log(
-    `\n─────────────────────────────────────────\n` +
-      `  ${method} ${url}\n` +
-      (pending?.payload ? `  Payload  : ${pending.payload}\n` : '') +
-      ` Status   : ${status} · ${duration}\n` +
-      ` Response : ${truncate(response.data)}\n` +
-      `─────────────────────────────────────────`,
-  );
+  // console.log(
+  //   `\n─────────────────────────────────────────\n` +
+  //     `  ${method} ${url}\n` +
+  //     (pending?.payload ? `  Payload  : ${pending.payload}\n` : '') +
+  //     ` Status   : ${status} · ${duration}\n` +
+  //     ` Response : ${truncate(response.data)}\n` +
+  //     `─────────────────────────────────────────`,
+  // );
 }
 
 // ── Error logger ──────────────────────────────────────────────────────────────
@@ -136,15 +136,15 @@ export function logError(error: unknown): void {
     ? `${Date.now() - config._startTime}ms`
     : '–';
 
-  console.log(
-    `\n─────────────────────────────────────────\n` +
-      `  ${method} ${url}\n` +
-      (pending?.payload ? ` Payload  : ${pending.payload}\n` : '') +
-      `  Status   : ${status} · ${duration}\n` +
-      `  Message  : ${err?.message ?? 'unknown error'}\n` +
-      (err?.response?.data
-        ? ` Response : ${truncate(err.response.data)}\n`
-        : '') +
-      `─────────────────────────────────────────`,
-  );
+  // console.log(
+  //   `\n─────────────────────────────────────────\n` +
+  //     `  ${method} ${url}\n` +
+  //     (pending?.payload ? ` Payload  : ${pending.payload}\n` : '') +
+  //     `  Status   : ${status} · ${duration}\n` +
+  //     `  Message  : ${err?.message ?? 'unknown error'}\n` +
+  //     (err?.response?.data
+  //       ? ` Response : ${truncate(err.response.data)}\n`
+  //       : '') +
+  //     `─────────────────────────────────────────`,
+  // );
 }

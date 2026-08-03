@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import { getCategories, getBrands } from '../api/product';
+import { getCategories, getBrands, ON_SALE_DISCOUNT_RANGE } from '../api/product';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import axiosInstance from '../api/axiosInstance';
 import { productEndpoints } from '../api/endpoints';
@@ -56,6 +56,7 @@ import { deduplicateProducts, isFeaturedSpan, toServerSortBy, applySort } from '
 import { useWishlist } from '../context/WishlistContext';
 import { wishlistCache } from '../utils/wishlistCache';
 import { isProductSoldOut, isVariantPurchasable } from '../utils/stock';
+import { resultScreenCache } from './resultScreenCache';
 
 type ResultScreenProps = {
   navigation: StackNavigationProp<any>;
@@ -99,6 +100,15 @@ const FeaturedCard: React.FC<{
                 resizeMode="cover"
               />
             ) : null}
+            {isOOS ? (
+              <View style={styles.oosBadge}>
+                <Text style={styles.oosBadgeText} numberOfLines={1}>Sold out</Text>
+              </View>
+            ) : hasDiscount ? (
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountBadgeText} numberOfLines={1}>−{discountPct}%</Text>
+              </View>
+            ) : null}
             <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.featuredInfo}>
@@ -109,15 +119,9 @@ const FeaturedCard: React.FC<{
             ) : null}
             <Text style={styles.featuredName} numberOfLines={2}>{product.Name}</Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.featuredPrice}>MUR {product.Price.toFixed(0)}</Text>
-              {isOOS ? (
-                <View style={styles.oosChip}>
-                  <Text style={styles.oosChipText}>Sold Out</Text>
-                </View>
-              ) : hasDiscount ? (
-                <View style={styles.discountChip}>
-                  <Text style={styles.discountChipText}>−{discountPct}%</Text>
-                </View>
+              <Text style={styles.featuredPrice}>MUR {product.Price.toLocaleString('en-IN')}</Text>
+              {hasDiscount ? (
+                <Text style={styles.heroCardWas}>MUR {product.ComparePrice.toLocaleString('en-IN')}</Text>
               ) : null}
             </View>
           </View>
@@ -165,6 +169,15 @@ const GridTile: React.FC<{
                 resizeMode="cover"
               />
             ) : null}
+            {isOOS ? (
+              <View style={styles.oosBadge}>
+                <Text style={styles.oosBadgeText} numberOfLines={1}>Sold out</Text>
+              </View>
+            ) : hasDiscount ? (
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountBadgeText} numberOfLines={1}>−{discountPct}%</Text>
+              </View>
+            ) : null}
             <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.gridInfo}>
@@ -177,15 +190,9 @@ const GridTile: React.FC<{
               {product.Name}
             </Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.gridPrice}>MUR {product.Price.toFixed(0)}</Text>
-              {isOOS ? (
-                <View style={styles.oosChip}>
-                  <Text style={styles.oosChipText}>Sold Out</Text>
-                </View>
-              ) : hasDiscount ? (
-                <View style={styles.discountChip}>
-                  <Text style={styles.discountChipText}>−{discountPct}%</Text>
-                </View>
+              <Text style={styles.gridPrice}>MUR {product.Price.toLocaleString('en-IN')}</Text>
+              {hasDiscount ? (
+                <Text style={styles.heroCardWas}>MUR {product.ComparePrice.toLocaleString('en-IN')}</Text>
               ) : null}
             </View>
           </View>
@@ -231,6 +238,15 @@ const SpanCard: React.FC<{
                 resizeMode="contain"
               />
             ) : null}
+            {isOOS ? (
+              <View style={styles.oosBadge}>
+                <Text style={styles.oosBadgeText} numberOfLines={1}>Sold out</Text>
+              </View>
+            ) : hasDiscount ? (
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountBadgeText} numberOfLines={1}>−{discountPct}%</Text>
+              </View>
+            ) : null}
             <WishlistHeart inventoryId={product.Inventory_Id} />
           </View>
           <View style={styles.spanFooter}>
@@ -243,15 +259,9 @@ const SpanCard: React.FC<{
               {product.Name}
             </Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.gridPrice}>MUR {product.Price.toFixed(0)}</Text>
-              {isOOS ? (
-                <View style={styles.oosChip}>
-                  <Text style={styles.oosChipText}>Sold Out</Text>
-                </View>
-              ) : hasDiscount ? (
-                <View style={styles.discountChip}>
-                  <Text style={styles.discountChipText}>−{discountPct}%</Text>
-                </View>
+              <Text style={styles.gridPrice}>MUR {product.Price.toLocaleString('en-IN')}</Text>
+              {hasDiscount ? (
+                <Text style={styles.heroCardWas}>MUR {product.ComparePrice.toLocaleString('en-IN')}</Text>
               ) : null}
             </View>
           </View>
@@ -289,10 +299,6 @@ const ResultSkeleton: React.FC = () => (
     ))}
   </View>
 );
-
-// ── Module-level cache — fetched once per app session ────────────────────────
-let _cachedCategories: CategoryInterface[] = [];
-let _cachedBrands: { id: number; name: string }[] = [];
 
 let _allProductsCallCount = 0; // TEMP — remove after measuring
 
@@ -354,6 +360,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   >([]);
   const [pageNumber, setPageNumber] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  // setLoadingMore (React state) doesn't take effect until the next render —
+  // a scroll event that fires again in that gap would still see the old
+  // loadingMore value and call loadMore() a second time. This ref flips
+  // synchronously, so a same-tick re-check correctly sees "already loading."
+  const loadMoreInFlight = useRef(false);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const PAGE_SIZE = 20;
@@ -382,9 +393,9 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const [filterDiscount, setFilterDiscount] = useState(initialDiscount ?? false);
   const [sortKey, setSortKey] = useState<SortKey>(initialSort ?? 'default');
   const [sheetCategories, setSheetCategories] =
-    useState<CategoryInterface[]>(_cachedCategories);
+    useState<CategoryInterface[]>(resultScreenCache.categories);
   const [sheetBrands, setSheetBrands] =
-    useState<{ id: number; name: string }[]>(_cachedBrands);
+    useState<{ id: number; name: string }[]>(resultScreenCache.brands);
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
@@ -408,7 +419,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   // ── Fetch categories + brands once per session — skip if already cached ──
   useEffect(() => {
     let active = true;
-    if (!_cachedCategories.length) {
+    if (!resultScreenCache.categories.length) {
       (async () => {
         const CATEGORY_PAGE_SIZE = 50;
         const first = await getCategories(1, CATEGORY_PAGE_SIZE);
@@ -427,11 +438,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           list = list.concat(next);
         }
 
-        _cachedCategories = list;
-        setSheetCategories(_cachedCategories);
+        resultScreenCache.categories = list;
+        setSheetCategories(resultScreenCache.categories);
       })().catch(() => {});
     }
-    if (!_cachedBrands.length) {
+    if (!resultScreenCache.brands.length) {
       (async () => {
         const BRAND_PAGE_SIZE = 50;
         const first = await getBrands(1, BRAND_PAGE_SIZE);
@@ -450,11 +461,11 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           list = list.concat(next);
         }
 
-        _cachedBrands = list.map((b: GetBrandItem) => ({
+        resultScreenCache.brands = list.map((b: GetBrandItem) => ({
           id: Number(b.BrandId),
           name: b.BrandName,
         }));
-        setSheetBrands(_cachedBrands);
+        setSheetBrands(resultScreenCache.brands);
       })().catch(() => {});
     }
     return () => {
@@ -565,7 +576,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
           from: priceMin !== '' ? Number(priceMin) : null,
           to: priceMax !== '' ? Number(priceMax) : null,
         },
-        discount: discount || isFlashDeals ? 1 : null,
+        discount: discount || isFlashDeals ? ON_SALE_DISCOUNT_RANGE : null,
         sortBy: serverSort,
         pagination: { pageNumber: page, pageSize: PAGE_SIZE },
       };
@@ -628,7 +639,14 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
 
   // ── Load next page — appends to list ─────────────────────────────────────
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || loading) return;
+    // loadMoreInFlight (a ref) is checked instead of relying solely on
+    // loadingMore (React state) — state updates aren't visible until the
+    // next render, so a second scroll-triggered call arriving before that
+    // render could otherwise slip past the loadingMore check and fire a
+    // duplicate/overlapping page fetch. The ref flips synchronously, closing
+    // that gap.
+    if (loadMoreInFlight.current || !hasMore || loading) return;
+    loadMoreInFlight.current = true;
     setLoadingMore(true);
     try {
       const nextPage = pageNumber + 1;
@@ -648,8 +666,9 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
         setPageNumber(nextPage);
       }
     } catch {}
+    loadMoreInFlight.current = false;
     setLoadingMore(false);
-  }, [loadingMore, hasMore, loading, pageNumber, buildPayload]);
+  }, [hasMore, loading, pageNumber, buildPayload]);
 
   // ── Scroll-near-bottom detection ──────────────────────────────────────────
   const handleScroll = useCallback(

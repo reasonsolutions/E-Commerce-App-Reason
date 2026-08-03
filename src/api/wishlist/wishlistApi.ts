@@ -20,7 +20,6 @@ function normalizeWishlist(raw: WishlistApiResponse): WishlistItemInterface[] {
       AddedOn:             p.AddedOn ?? '',
       StockCount:          v?.Stock ?? 0,
       SKU:                 v?.SKU ?? '',
-      ORGANISATIONID:      p.OrganisationId ?? '',
       OrganisationName:    p.OrganisationName ?? '',
       IsInStock:           v?.StockStatus?.Value === 1 ? 1 : 0,
       Images:              Array.isArray(p.Images) ? p.Images : [],

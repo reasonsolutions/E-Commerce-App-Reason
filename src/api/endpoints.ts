@@ -23,7 +23,7 @@ export const productEndpoints = {
 export const cartEndpoints = {
   postSaveCartItems:  'ecomm/addToCart',
   deleteCartItem:    'ecomm/deleteCartItem',
-  getSavedCartItems: 'ecomm/getSaveCartItems',
+  getSavedCartItems: 'ecomm/getCart',
   quantityIncrement: 'ecomm/quantityIncrement',
   quantityDecrement: 'ecomm/quantityDecrement',
   updateCartItem:    'ecomm/postUpdateCartItem',

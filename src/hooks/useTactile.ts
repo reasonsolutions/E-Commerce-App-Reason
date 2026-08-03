@@ -1,6 +1,6 @@
 // Press-scale animator — the tactile layer for interactive elements.
 //
-// Provides a scale Animated.Value that compresses to Motion.pressScale (0.97)
+// Provides a scale Animated.Value that compresses to Motion.pressScale (0.98)
 // on press-in and springs back to 1.0 on press-out, using the Tap (120ms easeOut)
 // and Settle (320ms spring) curves from Motion.
 //
@@ -23,10 +23,9 @@
 // supports opacity. The Animated.View wrapper pattern is the idiomatic RN
 // approach and preserves useNativeDriver: true (no JS-thread involvement).
 //
-// ── Integration order ───────────────────────────────────────────────────────
-// This hook is Phase 1 infrastructure. Adoption into Button, ProductCard,
-// WishlistCard, OrderRow, etc. is Phase 2 work per the spec. Do not wire it
-// into existing components in this task.
+// ── Adoption ─────────────────────────────────────────────────────────────────
+// Already wired into PrimaryButton. Use directly for other pressables that
+// need press-scale feedback instead of the default opacity flash.
 
 import { useRef, useCallback } from 'react';
 import { Animated, GestureResponderEvent } from 'react-native';
@@ -50,7 +49,7 @@ export interface TactileResult {
  * Returns press-scale animation infrastructure.
  * Compress on press-in (Tap, 120ms easeOut), spring back on press-out (Settle).
  *
- * @param pressScale  - Target scale on press-in. Defaults to Motion.pressScale (0.97).
+ * @param pressScale  - Target scale on press-in. Defaults to Motion.pressScale (0.98).
  */
 export function useTactile(pressScale: number = Motion.pressScale): TactileResult {
   const scale = useRef(new Animated.Value(1)).current;

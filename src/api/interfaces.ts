@@ -302,8 +302,8 @@ export interface ProductInterface {
     CategoryName:          string;
     CategoryImage:         string;
     RelatedProducts:       string | null;
-    MinPrice:              number;
-    MaxComparePrice:       number;
+    Price:                 number;
+    ComparePrice:          number;
     DiscountPct:           number;
     // First-variant fields — populated by getProductsByCategory/Brand mapping
     Inventory_Id?:         number;
@@ -387,7 +387,7 @@ export interface CategoryProductRaw {
 }
 
 // raw row from getProductsByCategory (productEndpoints.allProducts, filtered by
-// category) — current backend shape: no root-level MinPrice/MaxComparePrice/
+// category) — current backend shape: no root-level Price/ComparePrice/
 // DiscountPct, pricing lives only per-variant under Variants[].PriceDetails.
 export interface CategoryFeedProduct {
     ItemID:                number;
@@ -422,7 +422,7 @@ export interface CategoryFeedProduct {
 }
 
 // raw row from getAllProducts (productEndpoints.allProducts) — full merchant-portal payload.
-// Current backend shape: no root-level MinPrice/MaxComparePrice/DiscountPct —
+// Current backend shape: no root-level Price/ComparePrice/DiscountPct —
 // pricing lives only per-variant under Variants[].PriceDetails.
 export interface AllProductsRawItem {
     ItemID:                number;
@@ -544,6 +544,7 @@ export interface VariantInterface {
         NetAmount:    number | null;
         TaxAmount:    number | null;
         GrossAmount:  number | null;
+        DiscountPct:  number;
     };
     Taxes:              VariantTax[];
     PhysicalAttributes: PhysicalAttributes;
@@ -699,6 +700,10 @@ export interface SavedCartSummaryInterface {
     TotalSaved:           number;
     TotalShippingCharge:  number;
     ItemsTotal:           number;
+    // Backend-computed discounted pre-tax subtotal (Σ Price×Qty across
+    // items) — use this directly instead of summing item PriceDetails.Price
+    // client-side.
+    SubTotal:             number;
     Items:                SavedCartItemInterface[];
     TaxBreakdown:         CartTaxBreakdownItem[];
 }
@@ -752,7 +757,6 @@ export interface WishlistItemInterface {
   AddedOn:              string;
   StockCount:           number;
   SKU:                  string;
-  ORGANISATIONID:       string;
   OrganisationName:     string;
   IsInStock:            number;
   Images:               string[];

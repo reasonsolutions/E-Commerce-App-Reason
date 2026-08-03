@@ -21,6 +21,7 @@ import { FontFamily } from '../theme/fonts';
 import { getDeliveryAddresses } from '../api/address';
 import { userFacingMessage } from '../api/apiError';
 import { placeOrder } from '../api/order';
+import { getSavedCartItems } from '../api/cart';
 import { useCart } from '../context/CartContext';
 import { SavedCartItemInterface, PlaceOrderInterface } from '../api/interfaces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -33,6 +34,7 @@ import { PaymentModes } from '../config/enum_files/PaymentModes';
 import { AddressLabel } from '../config/enum_files/AddressLabel';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { cartLineGross } from '../utils/pricing';
+import { parseServerDate } from '../utils/parseServerDate';
 import { Motion } from '../theme/motion';
 
 export interface DeliveryAddress {
@@ -220,7 +222,7 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
               savedCode != null && list.some(a => a.OrderDeliveryAddressCode === savedCode);
             const primaryCode = list.find(a => a.IsPrimary)?.OrderDeliveryAddressCode;
             const mostRecentCode = [...list].sort(
-              (a, b) => new Date(b.CreatedDate).getTime() - new Date(a.CreatedDate).getTime(),
+              (a, b) => parseServerDate(b.CreatedDate) - parseServerDate(a.CreatedDate),
             )[0].OrderDeliveryAddressCode;
             setSelectedAddressCode(prev =>
               prev === null || hasNewAddress
@@ -252,7 +254,29 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       return;
     }
 
-    const items = route.params?.cartItems;
+    if (!profileCode) {
+      setOrderError('Session expired. Please log in again.');
+      return;
+    }
+
+    // Re-fetch the cart right before placing the order rather than trusting
+    // the route-param snapshot passed when the user first navigated here —
+    // closes the window where CartMasterCode/totals could have drifted
+    // (e.g. a mutation on another screen/tab) between then and now. Falls
+    // back to the route-param snapshot only if this fresh fetch fails, so a
+    // transient network hiccup doesn't block checkout outright.
+    let items = route.params?.cartItems;
+    let amountToBePaid = route.params?.amountToBePaid;
+    try {
+      const freshCart = await getSavedCartItems(profileCode);
+      if (freshCart?.statusCode === 1 && freshCart.result?.Items?.length) {
+        items = freshCart.result.Items;
+        amountToBePaid = freshCart.result.AmountToBePaid;
+      }
+    } catch {
+      // fall through to the route-param snapshot below
+    }
+
     if (!items || items.length === 0) {
       setOrderError('Your cart is empty. Please add items before checking out.');
       return;
@@ -261,17 +285,13 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
       setOrderError('There was a problem with your cart. Please go back and try again.');
       return;
     }
-    if (!profileCode) {
-      setOrderError('Session expired. Please log in again.');
-      return;
-    }
 
-    // amountToBePaid comes straight from getSaveCartItems (CartScreen passes
-    // it through) — the backend-authoritative payable total, including
-    // shipping/discount adjustments a per-line client sum would miss. The
-    // client-side sum is only a fallback for the (unexpected) case where it
-    // wasn't passed.
-    const total = route.params?.amountToBePaid ?? items.reduce(
+    // amountToBePaid comes from the fresh fetch above (or, as a fallback,
+    // straight from getSaveCartItems via CartScreen's route params) — the
+    // backend-authoritative payable total, including shipping/discount
+    // adjustments a per-line client sum would miss. The client-side sum is
+    // only a fallback for the (unexpected) case where neither was available.
+    const total = amountToBePaid ?? items.reduce(
       (sum: number, item: SavedCartItemInterface) => sum + cartLineGross(item),
       0,
     );

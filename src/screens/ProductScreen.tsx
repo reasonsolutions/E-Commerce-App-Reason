@@ -28,7 +28,6 @@ import { postSaveCartItems, getSavedCartItems } from '../api/cart';
 import { getProductByItemId } from '../api/product';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
 import { addToGuestCart } from '../api/cart';
-import { getOrgIdForInventory } from '../api/product';
 import ProductCard from '../components/ProductCard';
 
 import {
@@ -70,7 +69,6 @@ import { useAuthGuard } from '../hooks/useAuthGuard';
 import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { wishlistCache } from '../utils/wishlistCache';
-import { discountPct as calcDiscountPct } from '../utils/pricing';
 import { hasBackorderCapacity, effectivePurchaseLimit } from '../utils/stock';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -97,7 +95,7 @@ const CONDITION_LABELS: Record<number, string> = {
 
 // Related products arrive as ProductDetailInterface (detail-page shape, pricing
 // nested under Variants[0]) — ProductCard expects the listing shape
-// (ProductInterface, flat MinPrice/MaxComparePrice/DiscountPct). This maps the
+// (ProductInterface, flat Price/ComparePrice/DiscountPct). This maps the
 // handful of fields ProductCard actually reads; unused nested objects get inert
 // placeholders since ProductCard never touches them.
 function mapRelatedProductToCard(p: ProductDetailInterface): ProductInterface {
@@ -120,9 +118,9 @@ function mapRelatedProductToCard(p: ProductDetailInterface): ProductInterface {
     CategoryName:          p.CategoryName,
     CategoryImage:         p.CategoryImage,
     RelatedProducts:       null,
-    MinPrice:              price,
-    MaxComparePrice:       comparePrice,
-    DiscountPct:           calcDiscountPct(price, comparePrice),
+    Price:                 price,
+    ComparePrice:          comparePrice,
+    DiscountPct:           variant?.PriceDetails?.DiscountPct ?? 0,
     Inventory_Id:          variant ? Number(variant.InventoryId) : undefined,
     Variant:               variant?.Variant,
     ComplianceInfo:        p.ComplianceInfo as unknown as ProductInterface['ComplianceInfo'],
@@ -206,9 +204,8 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       const key = scopedKey('recentlyViewed', code);
       return AsyncStorage.getItem(key).then(raw => {
         const prev: any[] = raw ? JSON.parse(raw) : [];
-        const minPrice = preselect?.PriceDetails?.Price ?? 0;
-        const maxComparePrice = preselect?.PriceDetails?.ComparePrice ?? 0;
-        // getProductByItemId has no top-level DiscountPct (unlike allProducts) — derive it here
+        const price = preselect?.PriceDetails?.Price ?? 0;
+        const comparePrice = preselect?.PriceDetails?.ComparePrice ?? 0;
         const snapshot = {
           ItemID:          itemIdNum,
           Name:            p.Name,
@@ -216,9 +213,9 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           Images:          Array.isArray(p.Images)
             ? (p.Images as unknown as string[]).join(';')
             : p.Images,
-          MinPrice:        minPrice,
-          MaxComparePrice: maxComparePrice,
-          DiscountPct:     calcDiscountPct(minPrice, maxComparePrice),
+          Price:           price,
+          ComparePrice:    comparePrice,
+          DiscountPct:     preselect?.PriceDetails?.DiscountPct ?? 0,
           Inventory_Id:    preselect?.InventoryId ?? null,
           CategoryName:    p.CategoryName,
           Variants:        preselect
@@ -280,7 +277,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const activePrice        = selectedVariant?.PriceDetails?.Price ?? 0;
   const activeComparePrice = selectedVariant?.PriceDetails?.ComparePrice ?? 0;
   const hasDiscount        = activeComparePrice > activePrice;
-  const discountPct        = calcDiscountPct(activePrice, activeComparePrice);
+  const discountPct        = selectedVariant?.PriceDetails?.DiscountPct ?? 0;
 
   const isBackorder = selectedVariant?.StockStatus?.Value === InventoryStockFilter.OutOfStock
                       && hasBackorderCapacity(selectedVariant?.BackOrder);
@@ -388,7 +385,6 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           image:          Array.isArray(product?.Images)
             ? (product.Images as unknown as string[])[0] ?? ''
             : product?.Images?.split(/[,;]/)[0]?.trim() ?? '',
-          organisationId: getOrgIdForInventory(inventoryId) ?? '',
           maxPerOrder:    variantObj?.MaxPerOrder ?? null,
           stock:          variantObj?.Stock ?? null,
           backOrder:      variantObj?.BackOrder,
@@ -614,11 +610,11 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
               {/* Price row */}
               <View style={styles.priceRow}>
-                <Text style={styles.price}>MUR {activePrice.toFixed(0)}</Text>
+                <Text style={styles.price}>MUR {activePrice.toLocaleString('en-IN')}</Text>
                 {hasDiscount ? (
                   <>
                     <Text style={styles.comparePrice}>
-                      MUR {activeComparePrice.toFixed(0)}
+                      MUR {activeComparePrice.toLocaleString('en-IN')}
                     </Text>
                     <Text style={styles.discountInline}>{discountPct}% off</Text>
                   </>

@@ -39,12 +39,17 @@ import {
   getProductsByCategory,
   getCategories,
   getBrands,
+  getAllProducts,
+  ON_SALE_DISCOUNT_RANGE,
 } from '../api/product';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { clearSession } from '../utils/auth';
 import { homeCache } from '../utils/homeCache';
+import { homeScreenCache } from './homeScreenCache';
 import { wishlistCache } from '../utils/wishlistCache';
-import { isVariantPurchasable } from '../utils/stock';
+import { getSessionGeneration } from '../utils/sessionGeneration';
+import { isVariantPurchasable, sortOutOfStockLast } from '../utils/stock';
+import { parseServerDate } from '../utils/parseServerDate';
 import { InventoryStockFilter } from '../config/enum_files/InventoryStockFilter';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -84,8 +89,8 @@ interface RecentlyViewedItem {
   Name: string;
   BrandName: string;
   Images: string;
-  MinPrice: number;
-  MaxComparePrice: number;
+  Price: number;
+  ComparePrice: number;
   DiscountPct?: number;
   Inventory_Id?: number | null;
   CategoryName?: string;
@@ -493,7 +498,7 @@ function useCustomBackHandler(navigation: NavigationProp) {
 // Maps a getProductsByCategory raw row (pricing lives only under
 // Variants[].PriceDetails as of the current backend) onto the flat
 // ProductInterface shape the rest of this screen already consumes
-// (MinPrice/MaxComparePrice/DiscountPct/Inventory_Id). Picks the first
+// (Price/ComparePrice/DiscountPct/Inventory_Id). Picks the first
 // purchasable variant (in-stock, or out-of-stock-but-backorderable) so the
 // card's price/discount never represents a variant the user can't actually
 // buy; falls back to Variants[0] only when every variant is truly sold out.
@@ -503,8 +508,8 @@ const mapHomeFeedProduct = (p: CategoryFeedProduct): ProductInterface => {
   const priceDetails = variant?.PriceDetails;
   return {
     ...p,
-    MinPrice:        priceDetails?.Price ?? 0,
-    MaxComparePrice: priceDetails?.ComparePrice ?? 0,
+    Price:           priceDetails?.Price ?? 0,
+    ComparePrice:    priceDetails?.ComparePrice ?? 0,
     DiscountPct:     priceDetails?.DiscountPct ?? 0,
     Inventory_Id:    variant ? Number(variant.InventoryID) : undefined,
     Variant:         variant?.Variant,
@@ -513,9 +518,10 @@ const mapHomeFeedProduct = (p: CategoryFeedProduct): ProductInterface => {
 
 // Module-level product cache — survives remounts within an app session
 // categories + brands also written to homeCache so SearchScreen can read them
-let _cachedProducts: ProductInterface[] | null = null;
-let _cachedCategories: CategoryInterface[] | null = homeCache.categories;
-let _cachedBrands: GetBrandItem[] | null = homeCache.brands;
+// (lives in homeScreenCache.ts so auth.ts can clear it on logout without a
+// circular import — HomeScreen.tsx already imports clearSession from auth.ts)
+if (homeScreenCache.categories === null) homeScreenCache.categories = homeCache.categories;
+if (homeScreenCache.brands === null) homeScreenCache.brands = homeCache.brands;
 
 type HomeScreenProps = { navigation: NavigationProp };
 
@@ -621,26 +627,107 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     data: categories,
     run: runCategories,
     isError: categoriesError,
-  } = useAsyncState<CategoryInterface[]>(_cachedCategories);
+  } = useAsyncState<CategoryInterface[]>(homeScreenCache.categories);
   const {
     data: products,
     run: runProducts,
     isError: productsError,
-  } = useAsyncState<ProductInterface[]>(_cachedProducts);
+  } = useAsyncState<ProductInterface[]>(homeScreenCache.products);
   const {
     data: brands,
     run: runBrands,
     isError: brandsError,
-  } = useAsyncState<GetBrandItem[]>(_cachedBrands);
+  } = useAsyncState<GetBrandItem[]>(homeScreenCache.brands);
+  const { data: bestDeals, run: runBestDeals } = useAsyncState<
+    ProductInterface[]
+  >(homeScreenCache.bestDeals);
 
   // Risk 2 fix: cartCount change only updates the cue, never re-fires API calls
   useEffect(() => {
     setShowResumeCue(cartCount > 0);
   }, [cartCount]);
 
-  // Tracks whether fetches have been initiated this session — prevents re-firing
-  // when individual fetches complete and change the state that deps previously read.
-  const fetchInitiated = useRef(false);
+  // Fetches categories/products/brands fresh and writes the results into the
+  // shared module cache (homeScreenCache/homeCache) — homeScreenCache also
+  // seeds useAsyncState's initial value, so a returning visit still paints
+  // instantly with the last-known-good data while this fetch runs in the
+  // background, rather than flashing to a skeleton on every focus.
+  const fetchHomeFeed = useCallback((cancelled: { current: boolean }) => {
+    // Captured before any fetch starts — if logout (or another login)
+    // happens while these are in flight, the generation moves on and the
+    // shared-cache writes below are skipped even though the component may
+    // still be mounted (e.g. manual logout resets to MainTabs, not Login).
+    const requestGeneration = getSessionGeneration();
+
+    // Fetch categories once and share the result with both the categories
+    // state and the product-rail fetch, instead of calling getCategories() twice.
+    const categoriesPromise = getCategories();
+
+    runCategories(async () => {
+      const res = await categoriesPromise;
+      const result: CategoryInterface[] =
+        res?.statusCode === 1 && Array.isArray(res.result?.Categories)
+          ? res.result.Categories
+          : [];
+      if (requestGeneration !== getSessionGeneration()) return result;
+      homeScreenCache.categories = result;
+      homeCache.categories = result;
+      return result;
+    }, cancelled);
+
+    runProducts(async () => {
+      const catRes = await categoriesPromise;
+      const cats: CategoryInterface[] =
+        catRes?.statusCode === 1 && Array.isArray(catRes.result?.Categories)
+          ? catRes.result.Categories
+          : [];
+      if (!cats.length) return [];
+      // Sample every category (not just the first few) so date-sorted rails
+      // like "New arrivals" draw from the whole catalog — a category-limited
+      // pool can silently miss genuinely new products whose category wasn't
+      // sampled, which reads as "new arrivals" showing stale items instead.
+      // Fewer per category keeps total payload comparable to the old 4×10.
+      const ids = cats.map(c => c.CategoryId);
+      const results = await Promise.all(
+        ids.map(id => getProductsByCategory(id, 1, 5).catch(() => [])),
+      );
+      const merged = results.flat().map(mapHomeFeedProduct);
+      const seen = new Set<number>();
+      const deduped: ProductInterface[] = [];
+      for (const p of merged) {
+        if (!seen.has(p.ItemID)) {
+          seen.add(p.ItemID);
+          deduped.push(p);
+        }
+      }
+      if (requestGeneration !== getSessionGeneration()) return deduped;
+      homeScreenCache.products = deduped;
+      return deduped;
+    }, cancelled);
+
+    runBrands(async () => {
+      const res = await getBrands();
+      const list: GetBrandItem[] = Array.isArray(res?.result?.Brands)
+        ? res.result.Brands
+        : [];
+      const result = list.slice(0, 8);
+      if (requestGeneration !== getSessionGeneration()) return result;
+      homeScreenCache.brands = result;
+      homeCache.brands = result;
+      return result;
+    }, cancelled);
+
+    runBestDeals(async () => {
+      const raw = await getAllProducts(undefined, ON_SALE_DISCOUNT_RANGE, 1, 20);
+      // getAllProducts' top-level Price/ComparePrice/DiscountPct come back empty —
+      // real values live under Variants[].PriceDetails, same as the category feed,
+      // so flatten through the same mapper used there.
+      const result = raw.map(mapHomeFeedProduct);
+      if (requestGeneration !== getSessionGeneration()) return result;
+      homeScreenCache.bestDeals = result;
+      return result;
+    }, cancelled);
+  }, [runCategories, runProducts, runBrands, runBestDeals]);
 
   useFocusEffect(
     useCallback(() => {
@@ -675,130 +762,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           .catch(() => {});
       }
 
-      // Skip if already fetching or if all data is cached — prevents re-firing on
-      // focus events and prevents the dep-change loop (completed fetch changes state
-      // → callback recreates → fetches restart → cancels previous in-flight results).
-      if (
-        fetchInitiated.current ||
-        (_cachedCategories && _cachedProducts && _cachedBrands)
-      ) {
-        return () => {
-          cancelled.current = true;
-        };
-      }
-
-      fetchInitiated.current = true;
-
-      // Fetch categories once and share the result with both the categories
-      // state and the product-rail fetch, instead of calling getCategories() twice.
-      const categoriesPromise = getCategories();
-
-      runCategories(async () => {
-        const res = await categoriesPromise;
-        const result: CategoryInterface[] =
-          res?.statusCode === 1 && Array.isArray(res.result?.Categories)
-            ? res.result.Categories
-            : [];
-        _cachedCategories = result;
-        homeCache.categories = result;
-        return result;
-      }, cancelled);
-
-      runProducts(async () => {
-        const catRes = await categoriesPromise;
-        const cats: CategoryInterface[] =
-          catRes?.statusCode === 1 && Array.isArray(catRes.result?.Categories)
-            ? catRes.result.Categories
-            : [];
-        if (!cats.length) return [];
-        const ids = cats.slice(0, 4).map(c => c.CategoryId);
-        const results = await Promise.all(
-          ids.map(id => getProductsByCategory(id, 1, 10).catch(() => [])),
-        );
-        const merged = results.flat().map(mapHomeFeedProduct);
-        const seen = new Set<number>();
-        const deduped: ProductInterface[] = [];
-        for (const p of merged) {
-          if (!seen.has(p.ItemID)) {
-            seen.add(p.ItemID);
-            deduped.push(p);
-          }
-        }
-        _cachedProducts = deduped;
-        return deduped;
-      }, cancelled);
-
-      runBrands(async () => {
-        const res = await getBrands();
-        const list: GetBrandItem[] = Array.isArray(res?.result?.Brands)
-          ? res.result.Brands
-          : [];
-        const result = list.slice(0, 8);
-        _cachedBrands = result;
-        homeCache.brands = result;
-        return result;
-      }, cancelled);
+      // Refetch categories/products/brands every time Home regains focus —
+      // homeScreenCache still seeds the initial render so this repaints in
+      // place rather than flashing to a skeleton (see fetchHomeFeed comment).
+      fetchHomeFeed(cancelled);
 
       return () => {
         cancelled.current = true;
       };
-    }, [runCategories, runProducts, runBrands, refreshWishlist]),
+    }, [fetchHomeFeed, refreshWishlist]),
   );
 
-  // ── Retry all fetches — clears module cache so useFocusEffect re-fires ──────────
+  // ── Pull-to-refresh — same fetch, just user-triggered ────────────────────────
   const handleRetryFeed = useCallback(() => {
-    _cachedCategories = null;
-    _cachedProducts = null;
-    _cachedBrands = null;
-    homeCache.categories = null;
-    homeCache.brands = null;
-    fetchInitiated.current = false;
     const cancelled = { current: false };
-    const categoriesPromise = getCategories();
-    runCategories(async () => {
-      const res = await categoriesPromise;
-      const result: CategoryInterface[] =
-        res?.statusCode === 1 && Array.isArray(res.result?.Categories)
-          ? res.result.Categories
-          : [];
-      _cachedCategories = result;
-      homeCache.categories = result;
-      return result;
-    }, cancelled);
-    runProducts(async () => {
-      const catRes = await categoriesPromise;
-      const cats: CategoryInterface[] =
-        catRes?.statusCode === 1 && Array.isArray(catRes.result?.Categories)
-          ? catRes.result.Categories
-          : [];
-      if (!cats.length) return [];
-      const ids = cats.slice(0, 4).map(c => c.CategoryId);
-      const results = await Promise.all(
-        ids.map(id => getProductsByCategory(id, 1, 10).catch(() => [])),
-      );
-      const merged = results.flat().map(mapHomeFeedProduct);
-      const seen = new Set<number>();
-      const deduped: ProductInterface[] = [];
-      for (const p of merged) {
-        if (!seen.has(p.ItemID)) {
-          seen.add(p.ItemID);
-          deduped.push(p);
-        }
-      }
-      _cachedProducts = deduped;
-      return deduped;
-    }, cancelled);
-    runBrands(async () => {
-      const res = await getBrands();
-      const list: GetBrandItem[] = Array.isArray(res?.result?.Brands)
-        ? res.result.Brands
-        : [];
-      const result = list.slice(0, 8);
-      _cachedBrands = result;
-      homeCache.brands = result;
-      return result;
-    }, cancelled);
-  }, [runCategories, runProducts, runBrands]);
+    fetchHomeFeed(cancelled);
+  }, [fetchHomeFeed]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -827,22 +806,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     [products],
   );
 
-  const smartBuys = useMemo(
-    () =>
-      deduped
-        ? deduped.filter(p => p.MaxComparePrice > p.MinPrice && p.MinPrice > 0)
-        : null,
-    [deduped],
+  // Best deals — grid pulls straight from fetched state, so sold-out sinking
+  // happens here rather than at the fetch/cache boundary (kept raw/order-of-arrival).
+  const sortedBestDeals = useMemo(
+    () => (bestDeals ? sortOutOfStockLast(bestDeals) : null),
+    [bestDeals],
   );
 
-  // New arrivals — sorted by CreatedDate, most recent first
+  // New arrivals — sorted by CreatedDate (most recent first), then sold-out
+  // items sunk to the end so they don't crowd out purchasable arrivals.
   const newArrivals = useMemo(
     () =>
       deduped
-        ? [...deduped].sort(
-            (a, b) =>
-              new Date(b.CreatedDate).getTime() -
-              new Date(a.CreatedDate).getTime(),
+        ? sortOutOfStockLast(
+            [...deduped].sort(
+              (a, b) =>
+                parseServerDate(b.CreatedDate) -
+                parseServerDate(a.CreatedDate),
+            ),
           )
         : null,
     [deduped],
@@ -872,7 +853,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const featuredCategoryProducts = useMemo(
     () =>
       deduped && featuredCategoryName
-        ? deduped.filter(p => p.CategoryName === featuredCategoryName)
+        ? sortOutOfStockLast(
+            deduped.filter(p => p.CategoryName === featuredCategoryName),
+          )
         : null,
     [deduped, featuredCategoryName],
   );
@@ -899,11 +882,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     if (!deduped || pickedForYouCategories.length < 2) return null;
     const viewedIds = new Set(recentlyViewed.map(item => item.ItemID));
     const categorySet = new Set(pickedForYouCategories);
-    return deduped.filter(
-      p =>
-        p.CategoryName &&
-        categorySet.has(p.CategoryName) &&
-        !viewedIds.has(p.ItemID),
+    return sortOutOfStockLast(
+      deduped.filter(
+        p =>
+          p.CategoryName &&
+          categorySet.has(p.CategoryName) &&
+          !viewedIds.has(p.ItemID),
+      ),
     );
   }, [deduped, pickedForYouCategories, recentlyViewed]);
 
@@ -935,7 +920,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
     const bestPerBrand = new Map<string, ProductInterface>();
     for (const p of deduped) {
-      if (!(p.MaxComparePrice > p.MinPrice) || !p.BrandName) continue;
+      if (!(p.ComparePrice > p.Price) || !p.BrandName) continue;
       const existing = bestPerBrand.get(p.BrandName);
       if (!existing || p.DiscountPct > existing.DiscountPct) {
         bestPerBrand.set(p.BrandName, p);
@@ -968,8 +953,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           itemId: p.ItemID,
           inventoryId: p.Inventory_Id,
           discountPct: p.DiscountPct,
-          price: p.MinPrice,
-          comparePrice: p.MaxComparePrice,
+          price: p.Price,
+          comparePrice: p.ComparePrice,
           gradient: themed.gradient,
         };
       });
@@ -1306,12 +1291,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         )}
         {/* 3. Best deals — tinted band, 2-col grid */}
-        {(smartBuys === null || (smartBuys && smartBuys.length > 0)) && (
+        {(sortedBestDeals === null ||
+          (sortedBestDeals && sortedBestDeals.length > 0)) && (
           <View style={styles.sectionDeep}>
             <ProductGrid
               eyebrow="ON SALE"
               title="Best deals"
-              items={smartBuys}
+              items={sortedBestDeals}
               onSeeAll={() =>
                 navigation.navigate('Result', {
                   categoryName: 'Deals',

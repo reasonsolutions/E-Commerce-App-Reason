@@ -211,7 +211,7 @@ const ItemCard: React.FC<{
           ) : null}
           <View style={itemCardStyles.priceRow}>
             <Text style={itemCardStyles.price}>
-              MUR {(item.Amount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              MUR {(item.Amount ?? 0).toLocaleString('en-IN')}
             </Text>
             {item.Quantity > 1 ? (
               <Text style={itemCardStyles.qty}>Qty: {item.Quantity}</Text>
@@ -549,6 +549,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   const tax = orderPayment
     ? Math.max(0, orderPayment.AmountPaid - subtotal + discount - (orderPayment.DeliveryCharges ?? 0))
     : 0;
+  const codReference = orderPayment?.PaymentDetails?.CashOnDelivery?.[0]?.CollectionReference;
 
   return (
     <View style={styles.root}>
@@ -622,12 +623,12 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         {orderPayment ? (
           <Animated.View style={[styles.section, paymentAnim]}>
             <Text style={styles.sectionEyebrow}>PAYMENT SUMMARY</Text>
-            <DetailRow label="SUBTOTAL" value={`MUR ${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+            <DetailRow label="SUBTOTAL" value={`MUR ${subtotal.toLocaleString('en-IN')}`} />
             {discount > 0 ? (
-              <DetailRow label="DISCOUNT" value={`− MUR ${discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <DetailRow label="DISCOUNT" value={`− MUR ${discount.toLocaleString('en-IN')}`} />
             ) : null}
             {orderPayment.DeliveryCharges > 0 ? (
-              <DetailRow label="DELIVERY" value={`MUR ${orderPayment.DeliveryCharges.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <DetailRow label="DELIVERY" value={`MUR ${orderPayment.DeliveryCharges.toLocaleString('en-IN')}`} />
             ) : orderPayment.isFreeShipping ? (
               <DetailRow label="DELIVERY" value="Free" />
             ) : null}
@@ -635,9 +636,19 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
               <DetailRow label="COUPON" value={orderPayment.CouponAvailed} />
             ) : null}
             {tax > 0 ? (
-              <DetailRow label="TAX PAID" value={`MUR ${tax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <DetailRow label="TAX PAID" value={`MUR ${tax.toLocaleString('en-IN')}`} />
             ) : null}
-            <DetailRow label="TOTAL PAID" value={`MUR ${orderPayment.AmountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} isLast />
+            <DetailRow
+              label="TOTAL PAID"
+              value={`MUR ${orderPayment.AmountPaid.toLocaleString('en-IN')}`}
+              isLast={!orderPayment.PaymentMode?.Description}
+            />
+            {orderPayment.PaymentMode?.Description ? (
+              <DetailRow label="PAYMENT" value={orderPayment.PaymentMode.Description} />
+            ) : null}
+            {codReference ? (
+              <DetailRow label="REFERENCE" value={codReference} isLast />
+            ) : null}
           </Animated.View>
         ) : null}
       </ScrollView>

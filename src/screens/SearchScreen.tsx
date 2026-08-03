@@ -44,6 +44,13 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
   const [cachedCategories, setCachedCategories] = useState<CategoryInterface[] | null>(homeCache.categories);
   const lastQueryRef    = useRef('');
   const profileCodeRef  = useRef<number | null>(null);
+  // Guards against out-of-order responses: only the response matching the
+  // most recently fired request is allowed to update suggestions/error state.
+  // A slower earlier query (e.g. "sh") resolving after a faster later one
+  // (e.g. "shoe") would otherwise silently overwrite correct results with
+  // stale ones — debouncing only limits how often requests fire, it doesn't
+  // stop two from being in flight at once.
+  const latestRequestId = useRef(0);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEYS.userData).then(userRaw => {
@@ -73,6 +80,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   const fetchSuggestions = useCallback(async (text: string) => {
+    const requestId = ++latestRequestId.current;
     try {
       console.log(`[allProducts] SearchScreen fetchSuggestions #${++_allProductsCallCount} ("${text}")`); // TEMP — remove after measuring
       const response = await axiosInstance.post(productEndpoints.allProducts, {
@@ -82,6 +90,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
         discount: null,
         pagination: { pageNumber: 1, pageSize: 8 },
       });
+      if (requestId !== latestRequestId.current) return; // superseded by a newer query
       const names: string[] = Array.from(
         new Set<string>(
           (response.data?.result?.Products ?? [])
@@ -92,6 +101,7 @@ const SearchScreen: React.FC<Props> = ({ navigation }) => {
       setSuggestions(names);
       setSearchError(false);
     } catch {
+      if (requestId !== latestRequestId.current) return; // superseded by a newer query
       setSuggestions([]);
       setSearchError(true);
     }

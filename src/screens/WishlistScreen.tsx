@@ -63,6 +63,10 @@ const WishlistCard: React.FC<{
   const price        = item.PriceDetails?.Price ?? 0;
   const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
   const hasDiscount  = comparePrice > price;
+  // No DiscountPct on this endpoint's PriceDetails — derive it once here and
+  // reuse for both the image badge and the inline Price label below, instead
+  // of computing the same percentage twice.
+  const discountPct  = hasDiscount ? Math.round(((comparePrice - price) / comparePrice) * 100) : 0;
   const isOOS        = item.IsInStock === 0;
   const imageUri     = resolveImageUrl(Array.isArray(item.Images) ? item.Images[0] : item.Images);
 
@@ -99,7 +103,7 @@ const WishlistCard: React.FC<{
             {hasDiscount && !isOOS ? (
               <View style={styles.discountBadge}>
                 <Text style={styles.discountBadgeText}>
-                  {Math.round(((comparePrice - price) / comparePrice) * 100)}%
+                  {discountPct}%
                 </Text>
               </View>
             ) : null}
@@ -119,15 +123,14 @@ const WishlistCard: React.FC<{
 
           {/* ── Info ────────────────────────────────────────────────────── */}
           <View style={styles.info}>
-            {item.BrandName ? (
-              <Text style={styles.brand} numberOfLines={1}>
-                {item.BrandName.toUpperCase()}
-              </Text>
-            ) : null}
+            <Text style={styles.brand} numberOfLines={1}>
+              {item.BrandName ? item.BrandName.toUpperCase() : ' '}
+            </Text>
             <Text style={styles.name} numberOfLines={2}>{item.Name}</Text>
             <Price
               value={price}
               was={hasDiscount ? comparePrice : undefined}
+              discountOverride={hasDiscount ? discountPct : undefined}
               size="sm"
             />
           </View>
@@ -610,7 +613,8 @@ const styles = StyleSheet.create({
   },
   brand: {
     ...Type.label,
-    color: Colors.ink4,
+    color:  Colors.ink4,
+    height: 14,
   },
   name: {
     fontFamily:    FontFamily.sans,
@@ -619,6 +623,7 @@ const styles = StyleSheet.create({
     color:         Colors.ink1,
     letterSpacing: -0.1,
     lineHeight:    13 * 1.4,
+    height:        13 * 1.4 * 2,
   },
 
   // ── Move to Bag — solid black, full-width, sharp corners ─────────────────────
