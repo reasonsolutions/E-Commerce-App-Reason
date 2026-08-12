@@ -119,9 +119,9 @@ const FeaturedCard: React.FC<{
             ) : null}
             <Text style={styles.featuredName} numberOfLines={2}>{product.Name}</Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.featuredPrice}>MUR {product.Price.toLocaleString('en-IN')}</Text>
+              <Text style={styles.featuredPrice}>Rs {product.Price.toLocaleString('en-IN')}</Text>
               {hasDiscount ? (
-                <Text style={styles.heroCardWas}>MUR {product.ComparePrice.toLocaleString('en-IN')}</Text>
+                <Text style={styles.heroCardWas}>Rs {product.ComparePrice.toLocaleString('en-IN')}</Text>
               ) : null}
             </View>
           </View>
@@ -190,9 +190,9 @@ const GridTile: React.FC<{
               {product.Name}
             </Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.gridPrice}>MUR {product.Price.toLocaleString('en-IN')}</Text>
+              <Text style={styles.gridPrice}>Rs {product.Price.toLocaleString('en-IN')}</Text>
               {hasDiscount ? (
-                <Text style={styles.heroCardWas}>MUR {product.ComparePrice.toLocaleString('en-IN')}</Text>
+                <Text style={styles.heroCardWas}>Rs {product.ComparePrice.toLocaleString('en-IN')}</Text>
               ) : null}
             </View>
           </View>
@@ -259,9 +259,9 @@ const SpanCard: React.FC<{
               {product.Name}
             </Text>
             <View style={styles.heroPriceRow}>
-              <Text style={styles.gridPrice}>MUR {product.Price.toLocaleString('en-IN')}</Text>
+              <Text style={styles.gridPrice}>Rs {product.Price.toLocaleString('en-IN')}</Text>
               {hasDiscount ? (
-                <Text style={styles.heroCardWas}>MUR {product.ComparePrice.toLocaleString('en-IN')}</Text>
+                <Text style={styles.heroCardWas}>Rs {product.ComparePrice.toLocaleString('en-IN')}</Text>
               ) : null}
             </View>
           </View>

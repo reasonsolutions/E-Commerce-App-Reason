@@ -97,7 +97,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
   const shortOrder = orderNumber ? `#${orderNumber}` : '';
 
   const displayTotal =
-    orderTotal > 0 ? `MUR ${orderTotal.toLocaleString('en-IN')}` : null;
+    orderTotal > 0 ? `Rs ${orderTotal.toLocaleString('en-IN')}` : null;
 
   const displayTime = formatOrderTimestamp(orderTimestamp);
 
@@ -269,7 +269,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
               ) : null}
               {totalSavings > 0 ? (
                 <Text style={s.savings}>
-                  Saved MUR {totalSavings.toLocaleString('en-IN')}
+                  Saved Rs {totalSavings.toLocaleString('en-IN')}
                 </Text>
               ) : null}
             </View>

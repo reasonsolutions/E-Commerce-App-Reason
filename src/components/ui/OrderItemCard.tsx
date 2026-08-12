@@ -107,7 +107,7 @@ export const OrderItemCard: React.FC<OrderItemCardProps> = ({
         {/* Right side - price, status, expand button */}
         <View style={styles.headerRight}>
           <Text style={styles.price}>
-            MUR {lineTotal.toLocaleString('en-IN')}
+            Rs {lineTotal.toLocaleString('en-IN')}
           </Text>
           <View style={styles.statusBadge}>
             <Text style={styles.statusBadgeText}>{statusLabel}</Text>
@@ -137,16 +137,16 @@ export const OrderItemCard: React.FC<OrderItemCardProps> = ({
           {/* Price breakdown */}
           <View>
             <Text style={styles.detailLabel}>
-              Total: <Text style={styles.detailValue}>MUR {lineTotal.toLocaleString('en-IN')}</Text>
+              Total: <Text style={styles.detailValue}>Rs {lineTotal.toLocaleString('en-IN')}</Text>
             </Text>
             <Text style={styles.detailSecondary}>
-              (MUR {price.toLocaleString('en-IN')} each)
+              (Rs {price.toLocaleString('en-IN')} each)
             </Text>
             {discount ? (
               <View style={styles.savingsBadge}>
                 <Icon name="tag" size={11} color={Colors.success} />
                 <Text style={styles.savingsText}>
-                  Saved MUR {discount.toLocaleString('en-IN')}
+                  Saved Rs {discount.toLocaleString('en-IN')}
                 </Text>
               </View>
             ) : null}

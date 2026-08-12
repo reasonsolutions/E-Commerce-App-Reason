@@ -255,11 +255,11 @@ const BannerCard: React.FC<{
             {spot.price != null ? (
               <View style={styles.bannerPriceRow}>
                 <Text style={styles.bannerPrice}>
-                  MUR {spot.price.toLocaleString('en-IN')}
+                  Rs {spot.price.toLocaleString('en-IN')}
                 </Text>
                 {spot.comparePrice != null && spot.comparePrice > spot.price ? (
                   <Text style={styles.bannerComparePrice}>
-                    MUR {spot.comparePrice.toLocaleString('en-IN')}
+                    Rs {spot.comparePrice.toLocaleString('en-IN')}
                   </Text>
                 ) : null}
               </View>

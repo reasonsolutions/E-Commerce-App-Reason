@@ -31,7 +31,7 @@ export const Price: React.FC<PriceProps> = ({
   value,
   was,
   size = 'base',
-  currency = 'MUR ',
+  currency = 'Rs ',
   discountOverride,
 }) => {
   const fs = mainFontSize[size];

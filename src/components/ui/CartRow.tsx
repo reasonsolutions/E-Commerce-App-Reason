@@ -106,9 +106,9 @@ export const CartRow = React.memo<{
           </View>
         ) : (
           <View style={styles.cartPriceRow}>
-            <Text style={styles.cartLineTotal}>MUR {lineTotal.toLocaleString('en-IN')}</Text>
+            <Text style={styles.cartLineTotal}>Rs {lineTotal.toLocaleString('en-IN')}</Text>
             {hasDiscount && (
-              <Text style={styles.cartUnitWas}>MUR {(comparePrice * item.Quantity).toLocaleString('en-IN')}</Text>
+              <Text style={styles.cartUnitWas}>Rs {(comparePrice * item.Quantity).toLocaleString('en-IN')}</Text>
             )}
           </View>
         )}
@@ -239,8 +239,8 @@ export const GuestCartRow = React.memo<{
         <Text style={styles.cartName} numberOfLines={2}>{item.name}</Text>
         {item.variant ? <Text style={styles.cartVariant}>{item.variant}</Text> : null}
         <View style={styles.cartPriceRow}>
-          <Text style={styles.cartLineTotal}>MUR {(item.price * item.quantity).toLocaleString('en-IN')}</Text>
-          {hasDiscount && <Text style={styles.cartUnitWas}>MUR {item.comparePrice.toLocaleString('en-IN')}</Text>}
+          <Text style={styles.cartLineTotal}>Rs {(item.price * item.quantity).toLocaleString('en-IN')}</Text>
+          {hasDiscount && <Text style={styles.cartUnitWas}>Rs {item.comparePrice.toLocaleString('en-IN')}</Text>}
         </View>
         <View style={styles.cartBottom}>
           <View style={styles.qtyPill}>

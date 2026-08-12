@@ -142,7 +142,7 @@ const OrderCard: React.FC<{
             </Text>
           </View>
           <Text style={cardStyles.total} numberOfLines={1}>
-            MUR {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            Rs {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </Text>
         </View>
 

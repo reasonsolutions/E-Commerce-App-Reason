@@ -90,13 +90,13 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(({
         <View style={styles.priceBlock}>
           <View style={styles.priceRow}>
             {product.Price > 0 ? (
-              <Text style={styles.price} numberOfLines={1}>MUR {product.Price.toLocaleString('en-IN')}</Text>
+              <Text style={styles.price} numberOfLines={1}>Rs {product.Price.toLocaleString('en-IN')}</Text>
             ) : (
               <Text style={styles.priceUnavailable} numberOfLines={1}>Price unavailable</Text>
             )}
           </View>
           {hasDiscount && product.Price > 0 ? (
-            <Text style={styles.was} numberOfLines={1}>MUR {product.ComparePrice.toLocaleString('en-IN')}</Text>
+            <Text style={styles.was} numberOfLines={1}>Rs {product.ComparePrice.toLocaleString('en-IN')}</Text>
           ) : null}
         </View>
       </View>

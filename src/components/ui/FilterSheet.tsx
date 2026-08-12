@@ -141,8 +141,8 @@ const PriceRangeSlider: React.FC<{
   return (
     <View style={sliderStyles.wrap}>
       <View style={sliderStyles.labels}>
-        <Text style={sliderStyles.valueText}>MUR {displayMin.toLocaleString()}</Text>
-        <Text style={sliderStyles.valueText}>MUR {displayMax.toLocaleString()}</Text>
+        <Text style={sliderStyles.valueText}>Rs {displayMin.toLocaleString()}</Text>
+        <Text style={sliderStyles.valueText}>Rs {displayMax.toLocaleString()}</Text>
       </View>
 
       <View
@@ -162,8 +162,8 @@ const PriceRangeSlider: React.FC<{
       </View>
 
       <View style={sliderStyles.boundLabels}>
-        <Text style={sliderStyles.boundText}>MUR {floor.toLocaleString()}</Text>
-        <Text style={sliderStyles.boundText}>MUR {ceiling.toLocaleString()}</Text>
+        <Text style={sliderStyles.boundText}>Rs {floor.toLocaleString()}</Text>
+        <Text style={sliderStyles.boundText}>Rs {ceiling.toLocaleString()}</Text>
       </View>
     </View>
   );

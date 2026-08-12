@@ -390,7 +390,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
                         </Text>
                       </View>
                       <Text style={styles.itemPrice}>
-                        MUR {(item.PriceDetails?.Price || 0).toLocaleString('en-IN')}
+                        Rs {(item.PriceDetails?.Price || 0).toLocaleString('en-IN')}
                       </Text>
                     </View>
                   </React.Fragment>
@@ -402,7 +402,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>MRP</Text>
                 <Text style={[styles.priceValue, summary.TotalSaved > 0 && styles.mrpValueStruck]}>
-                  MUR {summary.ItemsTotal.toLocaleString('en-IN')}
+                  Rs {summary.ItemsTotal.toLocaleString('en-IN')}
                 </Text>
               </View>
 
@@ -410,7 +410,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
                 <View style={styles.savingsRow}>
                   <Text style={styles.savingsLabel}>You save</Text>
                   <Text style={styles.savingsValue}>
-                    MUR {summary.TotalSaved.toLocaleString('en-IN')}
+                    Rs {summary.TotalSaved.toLocaleString('en-IN')}
                   </Text>
                 </View>
               )}
@@ -418,7 +418,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Delivery</Text>
                 <Text style={[styles.priceValue, summary.TotalShippingCharge === 0 && styles.freeShipping]}>
-                  {summary.TotalShippingCharge === 0 ? 'Free' : `MUR ${summary.TotalShippingCharge.toLocaleString('en-IN')}`}
+                  {summary.TotalShippingCharge === 0 ? 'Free' : `Rs ${summary.TotalShippingCharge.toLocaleString('en-IN')}`}
                 </Text>
               </View>
 
@@ -426,7 +426,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
                 <Text style={styles.priceLabel}>Total</Text>
                 <View style={styles.totalAmountValueWrap}>
                   <Text style={styles.priceValue}>
-                    MUR {summary.AmountToBePaid.toLocaleString('en-IN')}
+                    Rs {summary.AmountToBePaid.toLocaleString('en-IN')}
                   </Text>
                   <TouchableOpacity
                     onPress={() => setShowTaxBreakdown(true)}
@@ -474,7 +474,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
               <Text style={styles.payableAmount}>
-                MUR {summary.AmountToBePaid.toLocaleString('en-IN')}
+                Rs {summary.AmountToBePaid.toLocaleString('en-IN')}
               </Text>
             </View>
           </>
@@ -519,7 +519,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
               <View style={styles.breakdownRowTotal}>
                 <Text style={styles.breakdownLabelTotal}>Total Amount (incl. taxes)</Text>
                 <Text style={styles.breakdownValueTotal}>
-                  MUR {summary.AmountToBePaid.toLocaleString('en-IN')}
+                  Rs {summary.AmountToBePaid.toLocaleString('en-IN')}
                 </Text>
               </View>
 
@@ -534,14 +534,14 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
                         {tax.TaxName ?? `Tax (${tax.TaxRate}%)`}
                       </Text>
                       <Text style={styles.breakdownValue}>
-                        MUR {tax.TaxAmount.toLocaleString('en-IN')}
+                        Rs {tax.TaxAmount.toLocaleString('en-IN')}
                       </Text>
                     </View>
                   ))}
                   <View style={styles.breakdownRow}>
                     <Text style={[styles.breakdownLabel, styles.totalTaxLabel]}>Total Tax</Text>
                     <Text style={[styles.breakdownValue, styles.totalTaxValue]}>
-                      MUR {summary.TaxBreakdown.reduce((sum, tax) => sum + tax.TaxAmount, 0).toLocaleString('en-IN')}
+                      Rs {summary.TaxBreakdown.reduce((sum, tax) => sum + tax.TaxAmount, 0).toLocaleString('en-IN')}
                     </Text>
                   </View>
                 </>

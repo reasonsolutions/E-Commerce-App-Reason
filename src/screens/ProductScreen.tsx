@@ -609,11 +609,11 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
               {/* Price row */}
               <View style={styles.priceRow}>
-                <Text style={styles.price}>MUR {activePrice.toLocaleString('en-IN')}</Text>
+                <Text style={styles.price}>Rs {activePrice.toLocaleString('en-IN')}</Text>
                 {hasDiscount ? (
                   <>
                     <Text style={styles.comparePrice}>
-                      MUR {activeComparePrice.toLocaleString('en-IN')}
+                      Rs {activeComparePrice.toLocaleString('en-IN')}
                     </Text>
                     <Text style={styles.discountInline}>{discountPct}% off</Text>
                   </>

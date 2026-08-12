@@ -683,18 +683,18 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           <Text style={styles.sectionEyebrow}>PAYMENT SUMMARY</Text>
           <DetailRow
             label="MRP"
-            value={`MUR ${mrp.toLocaleString('en-IN')}`}
+            value={`Rs ${mrp.toLocaleString('en-IN')}`}
           />
           {orderPayment.TotalSaved && orderPayment.TotalSaved > 0 ? (
             <DetailRow
               label="YOU SAVE"
-              value={`− MUR ${orderPayment.TotalSaved.toLocaleString('en-IN')}`}
+              value={`− Rs ${orderPayment.TotalSaved.toLocaleString('en-IN')}`}
             />
           ) : null}
           {orderPayment.DeliveryCharges > 0 ? (
             <DetailRow
               label="DELIVERY"
-              value={`MUR ${orderPayment.DeliveryCharges.toLocaleString(
+              value={`Rs ${orderPayment.DeliveryCharges.toLocaleString(
                 'en-IN',
               )}`}
             />
@@ -717,7 +717,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 >
                   <Text style={styles.taxBreakdownLabel}>{taxItem.TaxName}</Text>
                   <Text style={styles.taxBreakdownValue}>
-                    MUR {taxItem.TaxAmount.toLocaleString('en-IN')}
+                    Rs {taxItem.TaxAmount.toLocaleString('en-IN')}
                   </Text>
                 </View>
               ))}
@@ -726,7 +726,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
 
           <DetailRow
             label="TOTAL AMOUNT"
-            value={`MUR ${orderPayment.AmountPaid.toLocaleString('en-IN')}`}
+            value={`Rs ${orderPayment.AmountPaid.toLocaleString('en-IN')}`}
             isLast={!orderPayment.PaymentMode?.Description}
           />
           {orderPayment.PaymentMode?.Description ? (
