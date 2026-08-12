@@ -149,6 +149,12 @@ export const CartRow = React.memo<{
             <Text style={styles.removeLink}>Remove</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Merchant-set cap only — a stock-derived limit isn't an order
+            policy, so surfacing it here would read as a made-up rule. */}
+        {!isOOS && item.MaxPerOrder != null && (
+          <Text style={styles.maxPerOrderNote}>Up to {item.MaxPerOrder} per order</Text>
+        )}
       </View>
     </Animated.View>
   );
@@ -382,6 +388,12 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color:    Colors.ink4,
     fontSize: 12,
+  },
+  maxPerOrderNote: {
+    ...Type.caption,
+    color:     Colors.ink4,
+    fontSize:  11,
+    marginTop: Space[1],
   },
   qtyPill: {
     flexDirection:     'row',

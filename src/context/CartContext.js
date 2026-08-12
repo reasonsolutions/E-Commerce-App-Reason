@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { isLoggedIn } from '../utils/auth';
+import { getGuestCart } from '../api/cart/guestCartApi';
 
 const CartContext = createContext();
 
@@ -20,6 +22,21 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     cartCountSetter = setCartCount;
     return () => { cartCountSetter = null; };
+  }, []);
+
+  // Bootstrap the badge from the persisted guest cart on cold launch — without
+  // this, a guest who added items in a previous session sees no badge until
+  // they open CartScreen (which does this same sync) or log in.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const loggedIn = await isLoggedIn();
+      if (cancelled || loggedIn) return;
+      const items = await getGuestCart();
+      if (cancelled) return;
+      setCartCount(items.reduce((sum, item) => sum + item.quantity, 0));
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const value = {

@@ -1,4 +1,4 @@
-import type { SavedCartItemInterface, OrderDetailItemExtendedInterface } from '../api/interfaces';
+import type { SavedCartItemInterface, OrderDetailItemExtendedInterface, SavedCartSummaryInterface } from '../api/interfaces';
 import type { SortKey } from '../components/ui';
 
 interface DeliveryAddress {
@@ -54,18 +54,17 @@ export type RootStackParamList = {
     initialSort?:     SortKey;
     initialDiscount?: boolean;
   };
-  Address:            { cartItems?: SavedCartItemInterface[]; amountToBePaid?: number };
+  Checkout:          undefined;
   OrderSuccess: {
-    orderNumber?:              string;
-    itemCount?:                number;
-    orderTotal?:               number;
-    orderTotalBeforeDiscount?: number;
-    orderCurrency?:            string;
-    orderTimestamp?:           string | null;
-    orderStatus?:              number | null;
-    paymentMethod?:            string | null;
-    deliveryAddress?:          OrderSuccessDeliveryAddress | null;
-    cartItems?:                OrderSuccessCartItem[];
+    orderNumber?:     string;
+    itemCount?:       number;
+    orderTotal?:      number;
+    totalSaved?:      number;
+    orderCurrency?:   string;
+    orderTimestamp?:  string | null;
+    paymentMethod?:   string | null;
+    deliveryAddress?: OrderSuccessDeliveryAddress | null;
+    cartItems?:       OrderSuccessCartItem[];
   };
   Orders:             { refresh?: true } | undefined;
   OrderDetails: {
@@ -74,7 +73,7 @@ export type RootStackParamList = {
   };
   Profile:            undefined;
   Wishlist:           undefined;
-  AddressManagement:  undefined;
+  AddressManagement:  { from?: 'checkout' } | undefined;
   AddAddress:         { editAddress?: DeliveryAddress } | undefined;
   Search:             undefined;
   EcomPayment: {

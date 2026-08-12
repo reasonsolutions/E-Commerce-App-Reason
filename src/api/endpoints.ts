@@ -8,6 +8,7 @@ export const authEndpoints = {
   changePassword:         'ecomm/changePassword',
   forgotPassword:         'ecomm/forgotPassword',
   verifyForgotPasswordOTP:'ecomm/verifyForgotPasswordOTP',
+  postReview:             'ecomm/postReview',
 } as const;
 
 // ─── Products ─────────────────────────────────────────────────────────────────

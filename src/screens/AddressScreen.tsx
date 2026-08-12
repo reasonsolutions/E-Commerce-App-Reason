@@ -24,6 +24,7 @@ import { placeOrder } from '../api/order';
 import { getSavedCartItems } from '../api/cart';
 import { useCart } from '../context/CartContext';
 import { SavedCartItemInterface, PlaceOrderInterface } from '../api/interfaces';
+import { paymentModeLabel } from '../utils/paymentMode';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS, scopedKey } from '../config/storageKeys';
 import { useAsyncState } from '../hooks/useAsyncState';
@@ -349,16 +350,14 @@ const AddressScreen: React.FC<AddressScreenProps> = ({ route, navigation }) => {
 
       setCartCount(0);
       const result = response.result;
-      const firstStatus = result?.SubOrders?.[0]?.ItemDetails?.[0]?.OrderStatus ?? 1;
       navigation.replace('OrderSuccess', {
-        orderNumber:              result?.OrderNumber ?? '',
-        itemCount:                items.length,
-        orderTotal:               result?.TotalAmountAfterDiscount ?? total,
-        orderTotalBeforeDiscount: result?.TotalAmountBeforeDiscount ?? total,
-        orderCurrency:            'MUR',
-        orderTimestamp:           result?.CreatedDate ?? null,
-        orderStatus:              firstStatus,
-        paymentMethod:            result?.PaymentMethod ?? null,
+        orderNumber:    result?.OrderNumber ?? '',
+        itemCount:      items.length,
+        orderTotal:     result?.PaymentAmount ?? total,
+        totalSaved:     result?.TotalSaved ?? 0,
+        orderCurrency:  'MUR',
+        orderTimestamp: result?.CreatedDate ?? null,
+        paymentMethod:  paymentModeLabel(result?.PaymentMode),
         deliveryAddress: {
           street: [selectedAddr?.Address, selectedAddr?.StreetName].filter(Boolean).join(', '),
           city:   selectedAddr?.City ?? '',

@@ -16,7 +16,11 @@ import { ErrorState } from '../components/system';
 import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
-import { getDeliveryAddresses, postDeleteDeliveryAddress, postUpdateDeliveryAddress } from '../api/address';
+import {
+  getDeliveryAddresses,
+  postDeleteDeliveryAddress,
+  postUpdateDeliveryAddress,
+} from '../api/address';
 import { userFacingMessage } from '../api/apiError';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -35,16 +39,21 @@ type Props = {
     goBack: () => void;
     navigate: (screen: string, params?: Record<string, any>) => void;
   };
+  route?: {
+    params?: {
+      from?: 'checkout';
+    };
+  };
 };
 
 const LABEL_ICON: Record<AddressLabel, string> = {
-  [AddressLabel.Home]:  'home-outline',
-  [AddressLabel.Work]:  'briefcase-outline',
+  [AddressLabel.Home]: 'home-outline',
+  [AddressLabel.Work]: 'briefcase-outline',
   [AddressLabel.Other]: 'location-outline',
 };
 const LABEL_TEXT: Record<AddressLabel, string> = {
-  [AddressLabel.Home]:  'HOME',
-  [AddressLabel.Work]:  'WORK',
+  [AddressLabel.Home]: 'HOME',
+  [AddressLabel.Work]: 'WORK',
   [AddressLabel.Other]: 'OTHER',
 };
 
@@ -56,8 +65,17 @@ const AddressRow: React.FC<{
   onSetPrimary: () => void;
   isLast: boolean;
   delay: number;
-}> = ({ item, onEdit, onDelete, onSetPrimary, isLast, delay }) => {
-  const haptic   = useHaptic();
+  isFromCheckout?: boolean;
+}> = ({
+  item,
+  onEdit,
+  onDelete,
+  onSetPrimary,
+  isLast,
+  delay,
+  isFromCheckout,
+}) => {
+  const haptic = useHaptic();
   const entrance = useEntrance(delay);
   const { animatedStyle: pressStyle, handlers } = useTactile();
 
@@ -68,15 +86,29 @@ const AddressRow: React.FC<{
           {...handlers}
           style={styles.addressRow}
           activeOpacity={1}
-          onPress={() => { haptic.light(); onEdit(); }}
+          onPress={() => {
+            haptic.light();
+            onEdit();
+          }}
         >
-          <View style={[styles.primaryDot, item.IsPrimary && styles.primaryDotActive]} />
+          <View
+            style={[
+              styles.primaryDot,
+              item.IsPrimary && styles.primaryDotActive,
+            ]}
+          />
 
           <View style={styles.addressContent}>
             {item.AddressLabel ? (
               <View style={styles.labelChip}>
-                <Icon name={LABEL_ICON[item.AddressLabel]} size={11} color={Colors.brandNavy} />
-                <Text style={styles.labelChipText}>{LABEL_TEXT[item.AddressLabel]}</Text>
+                <Icon
+                  name={LABEL_ICON[item.AddressLabel]}
+                  size={11}
+                  color={Colors.brandNavy}
+                />
+                <Text style={styles.labelChipText}>
+                  {LABEL_TEXT[item.AddressLabel]}
+                </Text>
               </View>
             ) : null}
             <View style={styles.nameRow}>
@@ -87,12 +119,12 @@ const AddressRow: React.FC<{
                 </View>
               ) : null}
             </View>
-            {(item.Address || item.StreetName) ? (
+            {item.Address || item.StreetName ? (
               <Text style={styles.addressLine}>
                 {[item.Address, item.StreetName].filter(Boolean).join(', ')}
               </Text>
             ) : null}
-            {(item.City || item.Zipcode) ? (
+            {item.City || item.Zipcode ? (
               <Text style={styles.addressLine}>
                 {[item.City, item.Zipcode].filter(Boolean).join(' — ')}
               </Text>
@@ -100,28 +132,43 @@ const AddressRow: React.FC<{
             {item.Landmark ? (
               <Text style={styles.addressLineMuted}>{item.Landmark}</Text>
             ) : null}
-            <Text style={styles.addressMobile}>{String(item.MobileNumber)}</Text>
-            {!item.IsPrimary ? (
+            <Text style={styles.addressMobile}>
+              {String(item.MobileNumber)}
+            </Text>
+            {!item.IsPrimary || isFromCheckout ? (
               <TouchableOpacity
-                onPress={() => { haptic.light(); onSetPrimary(); }}
+                onPress={() => {
+                  haptic.light();
+                  onSetPrimary();
+                }}
                 hitSlop={{ top: 6, bottom: 6, left: 0, right: 6 }}
                 style={styles.setPrimaryBtn}
               >
-                <Text style={styles.setPrimaryText}>Set as default</Text>
+                <Text style={styles.setPrimaryText}>
+                  {isFromCheckout
+                    ? ' Deliver to this address'
+                    : 'Set as default'}
+                </Text>
               </TouchableOpacity>
             ) : null}
           </View>
 
           <View style={styles.addressActions}>
             <TouchableOpacity
-              onPress={() => { haptic.light(); onEdit(); }}
+              onPress={() => {
+                haptic.light();
+                onEdit();
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.actionBtn}
             >
               <Icon name="pencil-outline" size={16} color={Colors.brandNavy} />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => { haptic.warning(); onDelete(); }}
+              onPress={() => {
+                haptic.warning();
+                onDelete();
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.actionBtn}
             >
@@ -136,10 +183,16 @@ const AddressRow: React.FC<{
 };
 
 // ── Screen ────────────────────────────────────────────────────────────────────
-const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
+const AddressManagementScreen: React.FC<Props> = ({ navigation, route }) => {
+  const isFromCheckout = route?.params?.from === 'checkout';
   const insets = useSafeAreaInsets();
-  const { data: addresses, loading: fetchLoading, isError: fetchError, error: fetchErrorMsg, run } =
-    useAsyncState<DeliveryAddress[]>([]);
+  const {
+    data: addresses,
+    loading: fetchLoading,
+    isError: fetchError,
+    error: fetchErrorMsg,
+    run,
+  } = useAsyncState<DeliveryAddress[]>([]);
 
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const toast = useAppToast();
@@ -151,7 +204,9 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
         if (!userData) return [];
         const user = JSON.parse(userData);
         const response = await getDeliveryAddresses(user.CustomerProfileCode);
-        return response.statusCode === 1 ? (response.result as DeliveryAddress[]) : [];
+        return response.statusCode === 1
+          ? (response.result as DeliveryAddress[])
+          : [];
       }, cancelled),
     [run],
   );
@@ -160,7 +215,9 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
     useCallback(() => {
       const cancelled = { current: false };
       fetchAddresses(cancelled);
-      return () => { cancelled.current = true; };
+      return () => {
+        cancelled.current = true;
+      };
     }, [fetchAddresses]),
   );
 
@@ -168,25 +225,34 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
     try {
       const response = await postUpdateDeliveryAddress({
         OrderDeliveryAddressCode: item.OrderDeliveryAddressCode,
-        CustomerProfileCode:      item.CustomerProfileCode,
-        CustomerName:             item.CustomerName,
-        MobileNumber:             Number(item.MobileNumber),
-        Address:                  item.Address    ?? '',
-        StreetName:               item.StreetName ?? '',
-        City:                     item.City       ?? '',
-        Landmark:                 item.Landmark   ?? '',
-        Zipcode:                  Number(item.Zipcode),
-        IsPrimary:                1,
-        CountryCode:              item.CountryCode ?? COUNTRY_OPTIONS[0].code,
-        AddressLabel:             item.AddressLabel ?? undefined,
+        CustomerProfileCode: item.CustomerProfileCode,
+        CustomerName: item.CustomerName,
+        MobileNumber: Number(item.MobileNumber),
+        Address: item.Address ?? '',
+        StreetName: item.StreetName ?? '',
+        City: item.City ?? '',
+        Landmark: item.Landmark ?? '',
+        Zipcode: Number(item.Zipcode),
+        IsPrimary: 1,
+        CountryCode: item.CountryCode ?? COUNTRY_OPTIONS[0].code,
+        AddressLabel: item.AddressLabel ?? undefined,
       });
       if (response.statusCode === 1) {
         await fetchAddresses();
+        if (isFromCheckout) {
+          navigation.goBack();
+        }
       } else {
-        toast.error({ title: 'Could not set default address', description: response.userMessage || undefined });
+        toast.error({
+          title: 'Could not set default address',
+          description: response.userMessage || undefined,
+        });
       }
     } catch (err) {
-      toast.error({ title: 'Could not set default address', description: userFacingMessage(err) });
+      toast.error({
+        title: 'Could not set default address',
+        description: userFacingMessage(err),
+      });
     }
   };
 
@@ -201,10 +267,16 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
       if (response.statusCode === 1) {
         await fetchAddresses();
       } else {
-        toast.error({ title: 'Could not delete address', description: response.userMessage || undefined });
+        toast.error({
+          title: 'Could not delete address',
+          description: response.userMessage || undefined,
+        });
       }
     } catch (err) {
-      toast.error({ title: 'Could not delete address', description: userFacingMessage(err) });
+      toast.error({
+        title: 'Could not delete address',
+        description: userFacingMessage(err),
+      });
     }
   };
 
@@ -262,8 +334,16 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
                     <Skeleton width={20} height={20} radius={10} />
                     <View style={styles.skeletonLines}>
                       <Skeleton width="55%" height={11} />
-                      <Skeleton width="85%" height={9} style={styles.skeletonLine} />
-                      <Skeleton width="70%" height={9} style={styles.skeletonLine} />
+                      <Skeleton
+                        width="85%"
+                        height={9}
+                        style={styles.skeletonLine}
+                      />
+                      <Skeleton
+                        width="70%"
+                        height={9}
+                        style={styles.skeletonLine}
+                      />
                     </View>
                   </View>
                 ))}
@@ -273,7 +353,9 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
           ListEmptyComponent={
             !fetchLoading ? (
               <EmptyState
-                icon={<Icon name="location-outline" size={26} color={Colors.ink4} />}
+                icon={
+                  <Icon name="location-outline" size={26} color={Colors.ink4} />
+                }
                 title="No saved addresses."
                 body="Add a delivery address to get started."
                 action={
@@ -293,11 +375,14 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation }) => {
           renderItem={({ item, index }) => (
             <AddressRow
               item={item}
-              onEdit={() => navigation.navigate('AddAddress', { editAddress: item })}
+              onEdit={() =>
+                navigation.navigate('AddAddress', { editAddress: item })
+              }
               onDelete={() => requestDelete(item.OrderDeliveryAddressCode)}
               onSetPrimary={() => setAsPrimary(item)}
               isLast={index === addressList.length - 1}
               delay={Motion.stagger.delay(index)}
+              isFromCheckout={isFromCheckout}
             />
           )}
         />
@@ -325,57 +410,57 @@ const styles = StyleSheet.create({
 
   // ── Header ───────────────────────────────────────────────────────────────────
   header: {
-    flexDirection:     'row',
-    alignItems:        'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Space.screenH,
-    paddingBottom:     Space[4],
-    backgroundColor:   Colors.surface,
+    paddingBottom: Space[4],
+    backgroundColor: Colors.surface,
   },
   backBtn: {
-    width:          36,
-    height:         36,
-    alignItems:     'center',
+    width: 36,
+    height: 36,
+    alignItems: 'center',
     justifyContent: 'center',
-    marginLeft:     -Space[2],
+    marginLeft: -Space[2],
   },
   headerTitle: {
-    flex:        1,
-    fontFamily:  FontFamily.sans,
-    fontSize:    18,
-    fontWeight:  '600',
-    color:       Colors.ink1,
+    flex: 1,
+    fontFamily: FontFamily.sans,
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.ink1,
     letterSpacing: -0.1,
   },
   addBtn: {
-    width:          36,
-    height:         36,
-    alignItems:     'center',
+    width: 36,
+    height: 36,
+    alignItems: 'center',
     justifyContent: 'center',
-    marginRight:    -Space[2],
+    marginRight: -Space[2],
   },
   headerDivider: {
-    height:          StyleSheet.hairlineWidth,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
   },
 
   // ── List ─────────────────────────────────────────────────────────────────────
   listContent: {
     paddingHorizontal: Space.screenH,
-    paddingTop:        Space[5],
+    paddingTop: Space[5],
   },
   rowWrap: {},
   addressRow: {
-    flexDirection:   'row',
-    alignItems:      'flex-start',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingVertical: Space[4],
-    gap:             Space[3],
+    gap: Space[3],
   },
   primaryDot: {
-    width:        6,
-    height:       6,
+    width: 6,
+    height: 6,
     borderRadius: 3,
-    marginTop:    6,
-    flexShrink:   0,
+    marginTop: 6,
+    flexShrink: 0,
     backgroundColor: 'transparent',
   },
   primaryDotActive: {
@@ -383,29 +468,29 @@ const styles = StyleSheet.create({
   },
   nameRow: {
     flexDirection: 'row',
-    alignItems:    'center',
-    gap:           Space[2],
-    flexWrap:      'wrap',
+    alignItems: 'center',
+    gap: Space[2],
+    flexWrap: 'wrap',
   },
   addressContent: {
     flex: 1,
-    gap:  3,
+    gap: 3,
   },
   labelChip: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    alignSelf:         'flex-start',
-    gap:               5,
-    backgroundColor:   Colors.brandNavyTint,
-    borderRadius:      Radius.pill,
-    paddingVertical:   3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    backgroundColor: Colors.brandNavyTint,
+    borderRadius: Radius.pill,
+    paddingVertical: 3,
     paddingHorizontal: 8,
-    marginBottom:      4,
+    marginBottom: 4,
   },
   labelChipText: {
     ...Type.label,
-    fontSize:      10,
-    color:         Colors.brandNavy,
+    fontSize: 10,
+    color: Colors.brandNavy,
     letterSpacing: 0.4,
   },
   addressName: {
@@ -414,20 +499,20 @@ const styles = StyleSheet.create({
   },
   addressLine: {
     ...Type.caption,
-    color:      Colors.ink3,
+    color: Colors.ink3,
     lineHeight: 13 * 1.5,
   },
   addressLineMuted: {
     ...Type.caption,
-    color:      Colors.ink4,
+    color: Colors.ink4,
     lineHeight: 13 * 1.5,
   },
   addressMobile: {
-    fontSize:      11,
-    fontWeight:    '500',
-    color:         Colors.ink4,
+    fontSize: 11,
+    fontWeight: '500',
+    color: Colors.ink4,
     letterSpacing: 0.2,
-    marginTop:     2,
+    marginTop: 2,
   },
   setPrimaryBtn: {
     alignSelf: 'flex-start',
@@ -435,34 +520,34 @@ const styles = StyleSheet.create({
   },
   setPrimaryText: {
     ...Type.caption,
-    color:              Colors.brandNavy,
+    color: Colors.brandNavy,
     textDecorationLine: 'underline',
   },
   primaryBadge: {
     backgroundColor: Colors.brandNavy,
-    borderRadius:    Radius.xs,
+    borderRadius: Radius.xs,
     paddingHorizontal: 5,
-    paddingVertical:   2,
+    paddingVertical: 2,
   },
   primaryBadgeText: {
     ...Type.label,
-    fontSize:      9,
-    color:         '#FFFFFF',
+    fontSize: 9,
+    color: '#FFFFFF',
     letterSpacing: 0.4,
   },
   addressActions: {
     flexDirection: 'column',
-    gap:           Space[3],
-    flexShrink:    0,
-    paddingTop:    2,
+    gap: Space[3],
+    flexShrink: 0,
+    paddingTop: 2,
   },
   actionBtn: {
     padding: 2,
   },
   rowDivider: {
-    height:          StyleSheet.hairlineWidth,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
-    marginLeft:      Space[2] + 6,
+    marginLeft: Space[2] + 6,
   },
 
   // ── Address fetch skeleton ────────────────────────────────────────────────────
@@ -472,15 +557,15 @@ const styles = StyleSheet.create({
   },
   skeletonRow: {
     flexDirection: 'row',
-    alignItems:    'center',
-    gap:           Space[3],
+    alignItems: 'center',
+    gap: Space[3],
     paddingVertical: Space[3],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.rule,
   },
   skeletonLines: {
     flex: 1,
-    gap:  Space[1],
+    gap: Space[1],
   },
   skeletonLine: {
     marginTop: Space[1],
@@ -488,14 +573,14 @@ const styles = StyleSheet.create({
 
   // ── Empty state ──────────────────────────────────────────────────────────────
   emptyAddBtn: {
-    height:          44,
-    borderWidth:     1.5,
-    borderColor:     Colors.brandNavy,
-    borderRadius:    Radius.pill,
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: Colors.brandNavy,
+    borderRadius: Radius.pill,
     paddingHorizontal: Space[6],
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginTop:       Space[2],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Space[2],
   },
   emptyAddBtnText: {
     ...Type.bodyStrong,

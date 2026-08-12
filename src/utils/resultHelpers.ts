@@ -33,5 +33,15 @@ export function applySort(
       parseServerDate(b.Date_Created) - parseServerDate(a.Date_Created),
     );
   }
+  // Server-side price sort keys off an arbitrary variant (e.g. Variants[0]),
+  // which can be out of stock — the card always shows the first *purchasable*
+  // variant's price (see mapProducts), so re-sort here on that same Price
+  // field to guarantee the displayed order always matches the displayed price.
+  if (sortKey === 'price_asc') {
+    return [...products].sort((a, b) => a.Price - b.Price);
+  }
+  if (sortKey === 'price_desc') {
+    return [...products].sort((a, b) => b.Price - a.Price);
+  }
   return products;
 }

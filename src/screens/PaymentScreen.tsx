@@ -439,10 +439,9 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
       navigation.replace('OrderSuccess', {
         orderNumber: response.result?.OrderNumber ?? '',
         itemCount: cartItems.length,
-        orderTotal,
+        orderTotal: response.result?.PaymentAmount ?? orderTotal,
         orderCurrency: 'MUR',
         orderTimestamp: response.result?.CreatedDate ?? null,
-        orderStatus: response.result?.OrderStatus ?? null,
         deliveryAddress: {
           street: [selectedAddress.Address, selectedAddress.StreetName]
             .filter(Boolean)

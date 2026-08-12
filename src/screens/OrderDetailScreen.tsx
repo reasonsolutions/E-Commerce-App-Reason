@@ -26,6 +26,7 @@ import {
   StatusBadge,
   FadeImage,
   CancelOrderSheet,
+  OrderItemCard,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius, Shadow } from '../theme';
@@ -43,9 +44,13 @@ import type {
   OrderStatusCode,
   OrderEventInterface,
 } from '../api/interfaces';
-import { CustomerCancellationReason, CancellationReasonLabel } from '../config/enum_files/CustomerCancellationReason';
+import {
+  CustomerCancellationReason,
+  CancellationReasonLabel,
+} from '../config/enum_files/CustomerCancellationReason';
 import { RefundMode } from '../config/enum_files/RefundMode';
 import { CustomerPlatform } from '../config/enum_files/CustomerPlatform';
+import { PaymentModes } from '../config/enum_files/PaymentModes';
 
 const THUMB_W = 72;
 const THUMB_H = 72;
@@ -53,7 +58,7 @@ const ACTION_BAR_HEIGHT = 64;
 const CANCELLABLE_STATUSES: OrderStatusCode[] = [1, 2, 3];
 
 type OrderDetailScreenRouteParams = {
-  orderItem:   OrderDetailItemExtendedInterface;
+  orderItem: OrderDetailItemExtendedInterface;
   orderNumber: string;
 };
 
@@ -62,24 +67,32 @@ type OrderDetailScreenProps = {
 };
 
 // ── Flat detail row ────────────────────────────────────────────────────────────
-const DetailRow: React.FC<{ label: string; value: React.ReactNode; isLast?: boolean }> = ({ label, value, isLast }) => (
+const DetailRow: React.FC<{
+  label: string;
+  value: React.ReactNode;
+  isLast?: boolean;
+}> = ({ label, value, isLast }) => (
   <View style={[detailStyles.row, !isLast && detailStyles.rowDivider]}>
     <Text style={detailStyles.rowLabel}>{label}</Text>
     <View style={detailStyles.rowRight}>
-      {typeof value === 'string' || typeof value === 'number'
-        ? <Text style={detailStyles.rowValue} numberOfLines={2}>{value}</Text>
-        : value}
+      {typeof value === 'string' || typeof value === 'number' ? (
+        <Text style={detailStyles.rowValue} numberOfLines={2}>
+          {value}
+        </Text>
+      ) : (
+        value
+      )}
     </View>
   </View>
 );
 
 const detailStyles = StyleSheet.create({
   row: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    justifyContent:  'space-between',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: Space[4],
-    gap:             Space[4],
+    gap: Space[4],
   },
   rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -87,24 +100,26 @@ const detailStyles = StyleSheet.create({
   },
   rowLabel: {
     ...Type.label,
-    color:     Colors.ink4,
+    color: Colors.ink4,
     flexShrink: 0,
   },
   rowRight: {
-    flex:       1,
+    flex: 1,
     alignItems: 'flex-end',
   },
   rowValue: {
-    fontSize:      12,
-    fontWeight:    '500',
-    color:         Colors.ink2,
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.ink2,
     letterSpacing: 0.2,
-    textAlign:     'right',
+    textAlign: 'right',
   },
 });
 
 // ── Per-item event timeline ────────────────────────────────────────────────────
-const ItemTimeline: React.FC<{ events: OrderEventInterface[] }> = ({ events }) => {
+const ItemTimeline: React.FC<{ events: OrderEventInterface[] }> = ({
+  events,
+}) => {
   if (!events.length) return null;
   return (
     <View style={timelineStyles.wrap}>
@@ -113,16 +128,33 @@ const ItemTimeline: React.FC<{ events: OrderEventInterface[] }> = ({ events }) =
         return (
           <View key={index} style={timelineStyles.row}>
             <View style={timelineStyles.spine}>
-              <View style={[timelineStyles.dot, event.IsCompleted && timelineStyles.dotCompleted]} />
-              {!isLast ? <View style={[timelineStyles.line, event.IsCompleted && timelineStyles.lineCompleted]} /> : null}
+              <View
+                style={[
+                  timelineStyles.dot,
+                  event.IsCompleted && timelineStyles.dotCompleted,
+                ]}
+              />
+              {!isLast ? (
+                <View
+                  style={[
+                    timelineStyles.line,
+                    event.IsCompleted && timelineStyles.lineCompleted,
+                  ]}
+                />
+              ) : null}
             </View>
             <View style={timelineStyles.content}>
-              <Text style={[timelineStyles.desc, event.IsCompleted && timelineStyles.descCompleted]}>
+              <Text
+                style={[
+                  timelineStyles.desc,
+                  event.IsCompleted && timelineStyles.descCompleted,
+                ]}
+              >
                 {event.Description}
               </Text>
               {event.Date ? (
                 <Text style={timelineStyles.meta}>
-                  {formatDate(event.Date)}{event.Location ? `  ·  ${event.Location}` : ''}
+                  {formatDate(event.Date)}
                 </Text>
               ) : null}
             </View>
@@ -137,35 +169,35 @@ const timelineStyles = StyleSheet.create({
   wrap: { marginTop: Space[3] },
   row: {
     flexDirection: 'row',
-    gap:           Space[3],
+    gap: Space[3],
     paddingBottom: Space[3],
   },
   spine: {
     alignItems: 'center',
-    width:      14,
+    width: 14,
     flexShrink: 0,
-    marginTop:  3,
+    marginTop: 3,
   },
   dot: {
-    width:           10,
-    height:          10,
-    borderRadius:    5,
-    borderWidth:     1.5,
-    borderColor:     Colors.rule,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: Colors.rule,
     backgroundColor: Colors.surface,
   },
   dotCompleted: {
-    borderColor:     Colors.ink1,
+    borderColor: Colors.ink1,
     backgroundColor: Colors.ink1,
   },
   line: {
-    width:           1.5,
-    flex:            1,
-    marginTop:       3,
+    width: 1.5,
+    flex: 1,
+    marginTop: 3,
     backgroundColor: Colors.rule,
   },
   lineCompleted: { backgroundColor: Colors.ink1 },
-  content:       { flex: 1, paddingBottom: Space[1] },
+  content: { flex: 1, paddingBottom: Space[1] },
   desc: {
     ...Type.body,
     color: Colors.ink4,
@@ -173,134 +205,8 @@ const timelineStyles = StyleSheet.create({
   descCompleted: { color: Colors.ink1 },
   meta: {
     ...Type.caption,
-    color:     Colors.ink4,
+    color: Colors.ink4,
     marginTop: Space[1],
-  },
-});
-
-// ── Single item card inside the order ─────────────────────────────────────────
-const ItemCard: React.FC<{
-  item: OrderDetailItemExtendedInterface;
-  onCancel: (item: OrderDetailItemExtendedInterface) => void;
-  isLast: boolean;
-}> = ({ item, onCancel, isLast }) => {
-  const imgUri = resolveImageUrl(item.Images);
-  const derivedStatus = currentOrderStatus(item.OrderStatus, item.Events);
-  const status = orderStatusLabel(derivedStatus);
-  const isCancellable = CANCELLABLE_STATUSES.includes(derivedStatus);
-
-  return (
-    <View style={[itemCardStyles.card, !isLast && itemCardStyles.cardBorder]}>
-      {/* Image + meta row */}
-      <View style={itemCardStyles.row}>
-        <FadeImage
-          uri={imgUri}
-          width={THUMB_W}
-          height={THUMB_H}
-          borderRadius={Radius.sm}
-          resizeMode="contain"
-          showSkeleton
-        />
-        <View style={itemCardStyles.meta}>
-          {item.Brand_Name ? (
-            <Text style={itemCardStyles.brand}>{item.Brand_Name.toUpperCase()}</Text>
-          ) : null}
-          <Text style={itemCardStyles.name} numberOfLines={2}>{item.Name}</Text>
-          {item.Variant ? (
-            <Text style={itemCardStyles.variant}>{item.Variant}</Text>
-          ) : null}
-          <View style={itemCardStyles.priceRow}>
-            <Text style={itemCardStyles.price}>
-              MUR {(item.Amount ?? 0).toLocaleString('en-IN')}
-            </Text>
-            {item.Quantity > 1 ? (
-              <Text style={itemCardStyles.qty}>Qty: {item.Quantity}</Text>
-            ) : null}
-          </View>
-        </View>
-      </View>
-
-      {/* Status + progress */}
-      <View style={itemCardStyles.statusRow}>
-        <StatusBadge status={status} />
-        {isCancellable ? (
-          <TouchableOpacity
-            onPress={() => onCancel(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={itemCardStyles.cancelLink}>Cancel</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      {/* Per-item timeline */}
-      <ItemTimeline events={item.Events ?? []} />
-    </View>
-  );
-};
-
-const itemCardStyles = StyleSheet.create({
-  card: {
-    paddingVertical: Space[4],
-  },
-  cardBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.rule,
-  },
-  row: {
-    flexDirection: 'row',
-    gap:           Space[3],
-    marginBottom:  Space[3],
-  },
-  meta: {
-    flex: 1,
-    gap:  3,
-  },
-  brand: {
-    ...Type.label,
-    color: Colors.ink4,
-  },
-  name: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      15,
-    fontWeight:    '500',
-    color:         Colors.ink1,
-    letterSpacing: -0.1,
-    lineHeight:    15 * 1.35,
-  },
-  variant: {
-    ...Type.caption,
-    color: Colors.ink4,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems:    'baseline',
-    gap:           Space[2],
-    marginTop:     2,
-  },
-  price: {
-    fontFamily:    FontFamily.sans,
-    fontSize:      15,
-    fontWeight:    '700',
-    color:         Colors.ink1,
-    letterSpacing: -0.1,
-  },
-  qty: {
-    fontSize:      11,
-    fontWeight:    '500',
-    color:         Colors.ink4,
-    letterSpacing: 0.3,
-  },
-  statusRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-  },
-  cancelLink: {
-    fontFamily:         FontFamily.sans,
-    fontSize:           12,
-    color:              Colors.danger,
-    textDecorationLine: 'underline',
   },
 });
 
@@ -310,7 +216,11 @@ const OrderActionBar: React.FC<{
   bottomInset: number;
 }> = ({ onHelp, bottomInset }) => (
   <View style={[barStyles.bar, { paddingBottom: bottomInset + Space[3] }]}>
-    <TouchableOpacity style={barStyles.btn} activeOpacity={0.7} onPress={onHelp}>
+    <TouchableOpacity
+      style={barStyles.btn}
+      activeOpacity={0.7}
+      onPress={onHelp}
+    >
       <Text style={barStyles.btnText}>Need Help</Text>
     </TouchableOpacity>
   </View>
@@ -319,18 +229,18 @@ const OrderActionBar: React.FC<{
 const barStyles = StyleSheet.create({
   bar: {
     paddingHorizontal: Space.screenH,
-    paddingTop:        Space[3],
-    borderTopWidth:    StyleSheet.hairlineWidth,
-    borderTopColor:    Colors.rule,
-    backgroundColor:   Colors.surface,
+    paddingTop: Space[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.rule,
+    backgroundColor: Colors.surface,
   },
   btn: {
-    height:          44,
-    borderRadius:    Radius.pill,
-    borderWidth:     1.5,
-    borderColor:     Colors.brandNavy,
-    alignItems:      'center',
-    justifyContent:  'center',
+    height: 44,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
+    borderColor: Colors.brandNavy,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.surface,
   },
   btnText: {
@@ -340,25 +250,37 @@ const barStyles = StyleSheet.create({
 });
 
 // ── Screen ─────────────────────────────────────────────────────────────────────
-const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => {
+const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
+  navigation,
+}) => {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
-  const route  = useRoute<RouteProp<{ params: OrderDetailScreenRouteParams }, 'params'>>();
-  const fallbackItem  = route.params?.orderItem;
-  const orderNumber   = route.params?.orderNumber ?? fallbackItem?.OrderNumber;
+  const route =
+    useRoute<RouteProp<{ params: OrderDetailScreenRouteParams }, 'params'>>();
+  const fallbackItem = route.params?.orderItem;
+  const orderNumber = route.params?.orderNumber ?? fallbackItem?.OrderNumber;
 
-  const { data: orderDetails, loading, isError, error, run } =
-    useAsyncState<OrderDetailResponseInterface>(null);
+  const {
+    data: orderDetails,
+    loading,
+    isError,
+    error,
+    run,
+  } = useAsyncState<OrderDetailResponseInterface>(null);
 
-  const [showCancelSheet, setShowCancelSheet]       = useState(false);
-  const [cancelTarget, setCancelTarget]             = useState<OrderDetailItemExtendedInterface | null>(null);
-  const [selectedReason, setSelectedReason]         = useState<CustomerCancellationReason | null>(null);
-  const [selectedRefundMode, setSelectedRefundMode] = useState<RefundMode | null>(null);
-  const [remarks, setRemarks]                       = useState('');
-  const [cancelLoading, setCancelLoading]           = useState(false);
-  const [cancelError, setCancelError]               = useState<string | null>(null);
-  const [cancelSuccess, setCancelSuccess]           = useState(false);
-  const [refreshing, setRefreshing]                 = useState(false);
+  const [showCancelSheet, setShowCancelSheet] = useState(false);
+  const [cancelTarget, setCancelTarget] =
+    useState<OrderDetailItemExtendedInterface | null>(null);
+  const [selectedReason, setSelectedReason] =
+    useState<CustomerCancellationReason | null>(null);
+  const [selectedRefundMode, setSelectedRefundMode] =
+    useState<RefundMode | null>(null);
+  const [remarks, setRemarks] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [expandedItemIds, setExpandedItemIds] = useState<string[]>([]);
 
   const fetchOrderDetails = useCallback(
     (cancelled?: { current: boolean }) =>
@@ -366,7 +288,10 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.userData);
         if (!userData) throw new Error('Session expired. Please log in again.');
         const user = JSON.parse(userData);
-        return postCnfOrderDetail(String(orderNumber), user.CustomerProfileCode);
+        return postCnfOrderDetail(
+          String(orderNumber),
+          user.CustomerProfileCode,
+        );
       }, cancelled),
     [run, orderNumber],
   );
@@ -375,7 +300,9 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     if (!orderNumber) return;
     const cancelled = { current: false };
     fetchOrderDetails(cancelled);
-    return () => { cancelled.current = true; };
+    return () => {
+      cancelled.current = true;
+    };
   }, [fetchOrderDetails, orderNumber]);
 
   const handleRefresh = useCallback(async () => {
@@ -385,17 +312,35 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   }, [fetchOrderDetails]);
 
   const openCancelSheet = (item: OrderDetailItemExtendedInterface) => {
+    const payment = orderDetails?.PaymentInfo;
+    const cod =
+      !!payment?.PaymentDetails?.CashOnDelivery?.[0]?.CollectionReference ||
+      payment?.PaymentMode?.Code === PaymentModes.CashOnDelivery;
     setCancelTarget(item);
     setCancelError(null);
     setSelectedReason(null);
-    setSelectedRefundMode(null);
+    setSelectedRefundMode(cod ? RefundMode.NO_REFUND : null);
     setRemarks('');
     haptic.light();
     setShowCancelSheet(true);
   };
 
+  const toggleExpandItem = (itemId: string) => {
+    setExpandedItemIds(current =>
+      current.includes(itemId)
+        ? current.filter(id => id !== itemId)
+        : [...current, itemId],
+    );
+    haptic.light();
+  };
+
   const handleConfirmCancel = async () => {
-    if (!selectedReason || !selectedRefundMode || !cancelTarget || !orderNumber) {
+    if (
+      !selectedReason ||
+      !selectedRefundMode ||
+      !cancelTarget ||
+      !orderNumber
+    ) {
       setCancelError('Please select a reason and a refund mode.');
       return;
     }
@@ -406,19 +351,26 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
       if (!raw) throw new Error('Session expired. Please log in again.');
       const user = JSON.parse(raw);
       const response = await cancelOrder({
-        CustomerProfileCode:        user.CustomerProfileCode,
-        CustomerPlatform:           Platform.OS === 'ios' ? CustomerPlatform.IOS : CustomerPlatform.Android,
-        OrderNumber:                orderNumber,
-        SubOrder: [{
-          Id:          cancelTarget.SubOrder.Code,
-          InventoryId: cancelTarget.Inventory_Id,
-        }],
+        CustomerProfileCode: user.CustomerProfileCode,
+        CustomerPlatform:
+          Platform.OS === 'ios'
+            ? CustomerPlatform.IOS
+            : CustomerPlatform.Android,
+        OrderNumber: orderNumber,
+        SubOrder: [
+          {
+            Id: cancelTarget.SubOrder.Code,
+            InventoryId: cancelTarget.Inventory_Id,
+          },
+        ],
         CustomerCancellationReason: selectedReason,
-        RefundMode:                 selectedRefundMode,
-        Remarks:                    remarks.trim() || CancellationReasonLabel[selectedReason],
+        RefundMode: selectedRefundMode,
+        Remarks: remarks.trim() || CancellationReasonLabel[selectedReason],
       });
       if (response?.statusCode !== 1) {
-        setCancelError(response?.userMessage ?? 'Could not cancel. Please try again.');
+        setCancelError(
+          response?.userMessage ?? 'Could not cancel. Please try again.',
+        );
         return;
       }
       haptic.success();
@@ -432,17 +384,24 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     }
   };
 
-  const headerAnim  = useEntrance(0);
-  const itemsAnim   = useEntrance(80);
+  const headerAnim = useEntrance(0);
+  const itemsAnim = useEntrance(80);
   const addressAnim = useEntrance(160);
   const paymentAnim = useEntrance(220);
 
-  const displayDate = fallbackItem?.OrderedDate ?? orderDetails?.OrderDetails[0]?.OrderedDate ?? '';
+  const displayDate =
+    fallbackItem?.OrderedDate ??
+    orderDetails?.OrderDetails[0]?.OrderedDate ??
+    '';
 
   const Header = (
     <Animated.View style={headerAnim}>
       <DarkHeader
-        eyebrow={displayDate ? `YOUR ORDER  ·  ${formatDate(displayDate)}` : 'YOUR ORDER'}
+        eyebrow={
+          displayDate
+            ? `YOUR ORDER  ·  ${formatDate(displayDate)}`
+            : 'YOUR ORDER'
+        }
         title={orderNumber ? `#${orderNumber}` : 'Details'}
         titleFont="mono"
         onBack={() => navigation.goBack()}
@@ -454,10 +413,19 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   if (!orderNumber) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={Colors.surface}
+          translucent
+        />
         {Header}
         <View style={styles.stateWrap}>
-          <ErrorState title="Order reference missing" message="Please go back and try again." onRetry={() => navigation.goBack()} retryLoading={false} />
+          <ErrorState
+            title="Order reference missing"
+            message="Please go back and try again."
+            onRetry={() => navigation.goBack()}
+            retryLoading={false}
+          />
         </View>
       </View>
     );
@@ -466,10 +434,19 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   if (isError) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={Colors.surface}
+          translucent
+        />
         {Header}
         <View style={styles.stateWrap}>
-          <ErrorState title="Couldn't load this order." message={error ?? 'Tap retry to try again.'} onRetry={() => fetchOrderDetails()} retryLoading={loading} />
+          <ErrorState
+            title="Couldn't load this order."
+            message={error ?? 'Tap retry to try again.'}
+            onRetry={() => fetchOrderDetails()}
+            retryLoading={loading}
+          />
         </View>
       </View>
     );
@@ -479,14 +456,21 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   if (!orderDetails) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={Colors.surface}
+          translucent
+        />
         {Header}
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
           <View style={styles.section}>
             <View style={styles.skeletonItemRow}>
               <Skeleton width={THUMB_W} height={THUMB_H} radius={Radius.sm} />
               <View style={{ flex: 1, gap: Space[2] }}>
-                <Skeleton height={9}  width="35%" />
+                <Skeleton height={9} width="35%" />
                 <Skeleton height={14} width="85%" />
                 <Skeleton height={12} width="50%" />
               </View>
@@ -494,14 +478,18 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             <View style={styles.skeletonItemRow}>
               <Skeleton width={THUMB_W} height={THUMB_H} radius={Radius.sm} />
               <View style={{ flex: 1, gap: Space[2] }}>
-                <Skeleton height={9}  width="40%" />
+                <Skeleton height={9} width="40%" />
                 <Skeleton height={14} width="70%" />
                 <Skeleton height={12} width="45%" />
               </View>
             </View>
           </View>
           <View style={[styles.section, { marginTop: Space[6] }]}>
-            <Skeleton height={9} width="25%" style={{ marginBottom: Space[4] }} />
+            <Skeleton
+              height={9}
+              width="25%"
+              style={{ marginBottom: Space[4] }}
+            />
             <SkeletonRow gap={Space[2]} style={{ marginBottom: Space[3] }}>
               <Skeleton height={12} width="30%" />
               <Skeleton height={12} width="35%" />
@@ -516,15 +504,18 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
     );
   }
 
-  const items    = orderDetails.OrderDetails;
-  const delivery = orderDetails.DeliveryDetail[0];
+  const items = orderDetails.OrderDetails;
+  const delivery = orderDetails.DeliveryDetail;
   const orderedDate = items[0]?.OrderedDate ?? displayDate;
 
   // Group by sub-order (seller/fulfilment partner) — each seller manages their own
   // portion independently, so items can diverge in status once merchants act on
   // their part. A sub-order is NOT guaranteed to be a single physical package —
   // items within it can still ship separately, so avoid "shipment" language here.
-  const sellerGroups: { number: string; items: OrderDetailItemExtendedInterface[] }[] = [];
+  const sellerGroups: {
+    number: string;
+    items: OrderDetailItemExtendedInterface[];
+  }[] = [];
   for (const item of items) {
     const number = item.SubOrder?.Number ?? '';
     let group = sellerGroups.find(g => g.number === number);
@@ -536,30 +527,38 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   }
   const isMultiSeller = sellerGroups.length > 1;
 
-  // TotalAmountBeforeDiscount/Discount are per-item; AmountPaid/DeliveryCharges/isFreeShipping
-  // are order-level (same value repeated on every item).
-  const orderPayment = items[0]?.PaymentInfo;
-  // Amount is already the line total (unit price × qty) — do not multiply by Quantity again.
-  const subtotal  = items.reduce((sum, it) => sum + (it.Amount ?? 0), 0);
-  const discount  = items.reduce((sum, it) => sum + (it.PaymentInfo?.Discount ?? 0), 0);
-  // Tax isn't returned as its own field on this endpoint — derived from two
-  // backend-recorded totals (AmountPaid, the real charge; Subtotal, the sum of
-  // pre-tax line amounts), not computed from a rate. AmountPaid = Subtotal -
-  // Discount + DeliveryCharges + Tax.
-  const tax = orderPayment
-    ? Math.max(0, orderPayment.AmountPaid - subtotal + discount - (orderPayment.DeliveryCharges ?? 0))
-    : 0;
-  const codReference = orderPayment?.PaymentDetails?.CashOnDelivery?.[0]?.CollectionReference;
+  const orderPayment = orderDetails.PaymentInfo;
+  // MRP = sum of all item compare prices (original MRP before discounts)
+  const mrp = items.reduce(
+    (sum, it) => sum + (it.PricingDetails?.ComparePrice ?? 0) * it.Quantity,
+    0,
+  );
+  const codReference =
+    orderPayment.PaymentDetails?.CashOnDelivery?.[0]?.CollectionReference;
+  // No refund method to choose when the order was never paid upfront —
+  // COD is settled at delivery, so a cancellation before that has nothing
+  // to refund and never reaches PaymentMode.Code, only PaymentDetails.CashOnDelivery.
+  const isCOD =
+    !!codReference || orderPayment.PaymentMode?.Code === PaymentModes.CashOnDelivery;
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} translucent />
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={Colors.surface}
+        translucent
+      />
       {Header}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + Space[8] }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + Space[8] },
+        ]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
       >
         {/* ── Order meta strip ── */}
         <View style={styles.metaStrip}>
@@ -573,90 +572,187 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
         {/* ── Items ── */}
         <Animated.View style={[styles.section, itemsAnim]}>
           <Text style={styles.sectionEyebrow}>ITEMS</Text>
-          {isMultiSeller ? (
-            sellerGroups.map((group, gi) => (
-              <View
-                key={group.number || gi}
-                style={gi > 0 ? styles.subOrderGroup : undefined}
-              >
-                {group.items.map((item, i) => (
-                  <ItemCard
-                    key={`${item.Inventory_Id}-${i}`}
-                    item={item}
-                    onCancel={openCancelSheet}
-                    isLast={i === group.items.length - 1}
+          {isMultiSeller
+            ? sellerGroups.map((group, gi) => (
+                <View
+                  key={group.number || gi}
+                  style={gi > 0 ? styles.subOrderGroup : undefined}
+                >
+                  {group.items.map(item => {
+                    const derivedStatus = currentOrderStatus(
+                      item.OrderStatus,
+                      item.Events,
+                    );
+                    const status = orderStatusLabel(derivedStatus);
+                    const isCancellable =
+                      CANCELLABLE_STATUSES.includes(derivedStatus);
+                    const isExpanded = expandedItemIds.includes(
+                      item.InventoryID.toString(),
+                    );
+
+                    return (
+                      <OrderItemCard
+                        key={`${item.InventoryID}`}
+                        id={item.InventoryID.toString()}
+                        image={item.Images.split(',')[0] ?? ''}
+                        title={item.Name}
+                        brandName={item.BrandName}
+                        variantLabel={item.Variant}
+                        quantity={item.Quantity}
+                        price={item.PricingDetails?.GrossAmount ?? 0}
+                        statusLabel={status}
+                        isCancellable={isCancellable}
+                        onCancel={() => openCancelSheet(item)}
+                        expanded={isExpanded}
+                        onToggle={toggleExpandItem}
+                        renderTimeline={() => (
+                          <ItemTimeline events={item.Events ?? []} />
+                        )}
+                      />
+                    );
+                  })}
+                </View>
+              ))
+            : items.map(item => {
+                const derivedStatus = currentOrderStatus(
+                  item.OrderStatus,
+                  item.Events,
+                );
+                const status = orderStatusLabel(derivedStatus);
+                const isCancellable =
+                  CANCELLABLE_STATUSES.includes(derivedStatus);
+                const isExpanded = expandedItemIds.includes(
+                  item.InventoryID.toString(),
+                );
+
+                return (
+                  <OrderItemCard
+                    key={`${item.InventoryID}`}
+                    id={item.InventoryID.toString()}
+                    image={item.Images.split(',')[0] ?? ''}
+                    title={item.Name}
+                    brandName={item.BrandName}
+                    variantLabel={item.Variant}
+                    quantity={item.Quantity}
+                    price={item.PricingDetails?.GrossAmount ?? 0}
+                    statusLabel={status}
+                    isCancellable={isCancellable}
+                    onCancel={() => openCancelSheet(item)}
+                    expanded={isExpanded}
+                    onToggle={toggleExpandItem}
+                    renderTimeline={() => (
+                      <ItemTimeline events={item.Events ?? []} />
+                    )}
                   />
-                ))}
-              </View>
-            ))
-          ) : (
-            items.map((item, i) => (
-              <ItemCard
-                key={`${item.Inventory_Id}-${i}`}
-                item={item}
-                onCancel={openCancelSheet}
-                isLast={i === items.length - 1}
-              />
-            ))
-          )}
+                );
+              })}
         </Animated.View>
 
         {/* ── Delivery address ── */}
-        {delivery ? (
-          <Animated.View style={[styles.section, addressAnim]}>
-            <Text style={styles.sectionEyebrow}>DELIVERING TO</Text>
-            <View style={styles.addressCard}>
-              <Text style={styles.addressName}>{delivery.CustomerName}</Text>
-              {[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).length > 0 ? (
-                <Text style={styles.addressLine}>
-                  {[delivery.Address, delivery.StreetName, delivery.City, delivery.Zipcode].filter(Boolean).join(', ')}
-                </Text>
-              ) : null}
-              {delivery.MobileNumber ? (
-                <Text style={styles.addressPhone}>{String(delivery.MobileNumber)}</Text>
-              ) : null}
-            </View>
-          </Animated.View>
-        ) : null}
+        <Animated.View style={[styles.section, addressAnim]}>
+          <Text style={styles.sectionEyebrow}>DELIVERING TO</Text>
+          <View style={styles.addressCard}>
+            <Text style={styles.addressName}>{delivery.CustomerName}</Text>
+            {[
+              delivery.Address,
+              delivery.StreetName,
+              delivery.City,
+              delivery.Zipcode,
+            ].filter(Boolean).length > 0 ? (
+              <Text style={styles.addressLine}>
+                {[
+                  delivery.Address,
+                  delivery.StreetName,
+                  delivery.City,
+                  delivery.Zipcode,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+              </Text>
+            ) : null}
+            {delivery.MobileNumber ? (
+              <Text style={styles.addressPhone}>
+                {String(delivery.MobileNumber)}
+              </Text>
+            ) : null}
+          </View>
+        </Animated.View>
 
         {/* ── Payment summary ── */}
-        {orderPayment ? (
-          <Animated.View style={[styles.section, paymentAnim]}>
-            <Text style={styles.sectionEyebrow}>PAYMENT SUMMARY</Text>
-            <DetailRow label="SUBTOTAL" value={`MUR ${subtotal.toLocaleString('en-IN')}`} />
-            {discount > 0 ? (
-              <DetailRow label="DISCOUNT" value={`− MUR ${discount.toLocaleString('en-IN')}`} />
-            ) : null}
-            {orderPayment.DeliveryCharges > 0 ? (
-              <DetailRow label="DELIVERY" value={`MUR ${orderPayment.DeliveryCharges.toLocaleString('en-IN')}`} />
-            ) : orderPayment.isFreeShipping ? (
-              <DetailRow label="DELIVERY" value="Free" />
-            ) : null}
-            {orderPayment.CouponAvailed ? (
-              <DetailRow label="COUPON" value={orderPayment.CouponAvailed} />
-            ) : null}
-            {tax > 0 ? (
-              <DetailRow label="TAX PAID" value={`MUR ${tax.toLocaleString('en-IN')}`} />
-            ) : null}
+        <Animated.View style={[styles.section, paymentAnim]}>
+          <Text style={styles.sectionEyebrow}>PAYMENT SUMMARY</Text>
+          <DetailRow
+            label="MRP"
+            value={`MUR ${mrp.toLocaleString('en-IN')}`}
+          />
+          {orderPayment.TotalSaved && orderPayment.TotalSaved > 0 ? (
             <DetailRow
-              label="TOTAL PAID"
-              value={`MUR ${orderPayment.AmountPaid.toLocaleString('en-IN')}`}
-              isLast={!orderPayment.PaymentMode?.Description}
+              label="YOU SAVE"
+              value={`− MUR ${orderPayment.TotalSaved.toLocaleString('en-IN')}`}
             />
-            {orderPayment.PaymentMode?.Description ? (
-              <DetailRow label="PAYMENT" value={orderPayment.PaymentMode.Description} />
-            ) : null}
-            {codReference ? (
-              <DetailRow label="REFERENCE" value={codReference} isLast />
-            ) : null}
-          </Animated.View>
-        ) : null}
+          ) : null}
+          {orderPayment.DeliveryCharges > 0 ? (
+            <DetailRow
+              label="DELIVERY"
+              value={`MUR ${orderPayment.DeliveryCharges.toLocaleString(
+                'en-IN',
+              )}`}
+            />
+          ) : orderPayment.isFreeShipping ? (
+            <DetailRow label="DELIVERY" value="Free" />
+          ) : null}
+          {orderPayment.CouponAvailed ? (
+            <DetailRow label="COUPON" value={orderPayment.CouponAvailed} />
+          ) : null}
+
+          {/* Tax Breakdown */}
+          {orderPayment.TaxBreakdown && orderPayment.TaxBreakdown.length > 0 ? (
+            <View style={styles.taxBreakdownSection}>
+              <View style={styles.taxBreakdownDivider} />
+              <Text style={styles.taxBreakdownTitle}>TAX BREAKDOWN</Text>
+              {orderPayment.TaxBreakdown.map((taxItem, index) => (
+                <View
+                  key={`${taxItem.TaxId}-${index}`}
+                  style={styles.taxBreakdownRow}
+                >
+                  <Text style={styles.taxBreakdownLabel}>{taxItem.TaxName}</Text>
+                  <Text style={styles.taxBreakdownValue}>
+                    MUR {taxItem.TaxAmount.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <DetailRow
+            label="TOTAL AMOUNT"
+            value={`MUR ${orderPayment.AmountPaid.toLocaleString('en-IN')}`}
+            isLast={!orderPayment.PaymentMode?.Description}
+          />
+          {orderPayment.PaymentMode?.Description ? (
+            <DetailRow
+              label="PAYMENT"
+              value={orderPayment.PaymentMode.Description}
+            />
+          ) : null}
+          {codReference ? (
+            <DetailRow label="REFERENCE" value={codReference} isLast />
+          ) : null}
+        </Animated.View>
       </ScrollView>
 
-      <OrderActionBar onHelp={() => navigation.navigate('HelpCenter')} bottomInset={insets.bottom} />
+      <OrderActionBar
+        onHelp={() => navigation.navigate('HelpCenter')}
+        bottomInset={insets.bottom}
+      />
 
       {/* ── Cancel success modal ── */}
-      <Modal visible={cancelSuccess} transparent animationType="fade" statusBarTranslucent>
+      <Modal
+        visible={cancelSuccess}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Order Cancelled</Text>
@@ -666,7 +762,15 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
             <TouchableOpacity
               style={styles.modalCta}
               activeOpacity={0.8}
-              onPress={() => { setCancelSuccess(false); (navigation.navigate as (screen: string, params?: Record<string, unknown>) => void)('MainTabs', { screen: 'Orders', params: { refresh: true } }); }}
+              onPress={() => {
+                setCancelSuccess(false);
+                (
+                  navigation.navigate as (
+                    screen: string,
+                    params?: Record<string, unknown>,
+                  ) => void
+                )('MainTabs', { screen: 'Orders', params: { refresh: true } });
+              }}
             >
               <Text style={styles.modalCtaText}>Done</Text>
             </TouchableOpacity>
@@ -689,11 +793,18 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
           itemName={cancelTarget?.Name}
           selectedReason={selectedReason}
           selectedRefundMode={selectedRefundMode}
+          showRefundMode={!isCOD}
           remarks={remarks}
           cancelError={cancelError}
           cancelLoading={cancelLoading}
-          onSelectReason={(reason) => { haptic.light(); setSelectedReason(reason); }}
-          onSelectRefundMode={(mode) => { haptic.light(); setSelectedRefundMode(mode); }}
+          onSelectReason={reason => {
+            haptic.light();
+            setSelectedReason(reason);
+          }}
+          onSelectRefundMode={mode => {
+            haptic.light();
+            setSelectedRefundMode(mode);
+          }}
           onChangeRemarks={setRemarks}
           onConfirm={handleConfirmCancel}
           onClose={() => setShowCancelSheet(false)}
@@ -703,60 +814,59 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({ navigation }) => 
   );
 };
 
-
 const styles = StyleSheet.create({
   root: {
-    flex:            1,
+    flex: 1,
     backgroundColor: Colors.surfaceSoft,
   },
   stateWrap: { flex: 1 },
   scrollContent: {
-    paddingTop:    0,
+    paddingTop: 0,
     paddingBottom: Space[8],
   },
 
   // ── Order meta strip ───────────────────────────────────────────────────────────
   metaStrip: {
     paddingHorizontal: Space.screenH,
-    paddingVertical:   Space[3],
-    backgroundColor:   Colors.surface,
+    paddingVertical: Space[3],
+    backgroundColor: Colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.rule,
   },
   metaText: {
     ...Type.label,
-    fontSize:      10,
-    color:         Colors.ink4,
+    fontSize: 10,
+    color: Colors.ink4,
     letterSpacing: 0.3,
   },
 
   // ── Section ────────────────────────────────────────────────────────────────────
   section: {
-    marginTop:         Space[4],
-    marginHorizontal:  Space.screenH,
-    backgroundColor:   Colors.surface,
-    borderRadius:      16,
+    marginTop: Space[4],
+    marginHorizontal: Space.screenH,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
     paddingHorizontal: Space[4],
-    paddingVertical:   Space[2],
+    paddingVertical: Space[2],
     ...Shadow.sm,
   },
   sectionEyebrow: {
     ...Type.label,
-    color:         Colors.ink4,
-    paddingTop:    Space[2],
+    color: Colors.ink4,
+    paddingTop: Space[2],
     paddingBottom: Space[1],
   },
   subOrderGroup: {
-    marginTop:      Space[6],
-    paddingTop:     Space[4],
+    marginTop: Space[6],
+    paddingTop: Space[4],
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.rule,
   },
 
   // ── Skeleton ───────────────────────────────────────────────────────────────────
   skeletonItemRow: {
-    flexDirection:  'row',
-    gap:            Space[3],
+    flexDirection: 'row',
+    gap: Space[3],
     paddingVertical: Space[4],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.rule,
@@ -764,67 +874,98 @@ const styles = StyleSheet.create({
 
   // ── Delivery address ───────────────────────────────────────────────────────────
   addressCard: {
-    gap:           Space[1],
-    paddingTop:    Space[2],
+    gap: Space[1],
+    paddingTop: Space[2],
     paddingBottom: Space[4],
   },
   addressName: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      15,
-    color:         Colors.ink1,
+    fontFamily: FontFamily.serif,
+    fontSize: 15,
+    color: Colors.ink1,
     letterSpacing: -0.1,
-    lineHeight:    15 * 1.35,
+    lineHeight: 15 * 1.35,
   },
   addressLine: {
     ...Type.caption,
-    color:      Colors.ink3,
+    color: Colors.ink3,
     lineHeight: 18,
-    marginTop:  2,
+    marginTop: 2,
   },
   addressPhone: {
-    fontSize:      11,
-    fontWeight:    '500',
-    color:         Colors.ink4,
+    fontSize: 11,
+    fontWeight: '500',
+    color: Colors.ink4,
     letterSpacing: 0.3,
-    marginTop:     2,
+    marginTop: 2,
   },
 
   // ── Cancel success modal ────────────────────────────────────────────────────────
   modalOverlay: {
-    flex:              1,
-    backgroundColor:   'rgba(0,0,0,0.5)',
-    justifyContent:    'center',
-    alignItems:        'center',
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: Space.screenH,
   },
   modalCard: {
-    width:           '100%',
+    width: '100%',
     backgroundColor: Colors.surface,
-    borderRadius:    Radius.md,
-    padding:         Space[6],
-    gap:             Space[3],
+    borderRadius: Radius.md,
+    padding: Space[6],
+    gap: Space[3],
   },
   modalTitle: {
-    fontFamily:    FontFamily.serif,
-    fontSize:      22,
-    color:         Colors.ink1,
+    fontFamily: FontFamily.serif,
+    fontSize: 22,
+    color: Colors.ink1,
     letterSpacing: -0.3,
   },
   modalBody: {
     ...Type.body,
-    color:      Colors.ink3,
+    color: Colors.ink3,
     lineHeight: 22,
   },
   modalCta: {
-    marginTop:       Space[2],
+    marginTop: Space[2],
     backgroundColor: Colors.ink1,
-    borderRadius:    Radius.pill,
+    borderRadius: Radius.pill,
     paddingVertical: Space[4],
-    alignItems:      'center',
+    alignItems: 'center',
   },
   modalCtaText: {
     ...Type.bodyStrong,
     color: Colors.surface,
+  },
+
+  // Tax Breakdown Section
+  taxBreakdownSection: {
+    gap: Space[2],
+  },
+  taxBreakdownDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+  },
+  taxBreakdownTitle: {
+    ...Type.label,
+    color: Colors.ink4,
+    fontSize: 10,
+    marginTop: Space[1],
+  },
+  taxBreakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space[1],
+  },
+  taxBreakdownLabel: {
+    fontSize: 12,
+    color: Colors.ink3,
+    flex: 1,
+  },
+  taxBreakdownValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.ink2,
   },
 });
 

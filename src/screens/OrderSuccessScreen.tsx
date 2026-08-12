@@ -58,10 +58,9 @@ type OrderSuccessParams = {
   orderNumber?: string;
   itemCount?: number;
   orderTotal?: number;
-  orderTotalBeforeDiscount?: number;
+  totalSaved?: number;
   orderCurrency?: string;
   orderTimestamp?: string | null;
-  orderStatus?: number | null;
   paymentMethod?: string | null;
   deliveryAddress?: DeliveryAddressParam | null;
   cartItems?: CartItemParam[];
@@ -85,7 +84,7 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
   const orderNumber = p.orderNumber ?? '';
   const itemCount = p.itemCount ?? 0;
   const orderTotal = p.orderTotal ?? 0;
-  const orderTotalBeforeDiscount = p.orderTotalBeforeDiscount ?? orderTotal;
+  const totalSavings = p.totalSaved ?? 0;
   const orderTimestamp = p.orderTimestamp ?? null;
   const paymentMethod = p.paymentMethod ?? null;
   const deliveryAddress = p.deliveryAddress ?? null;
@@ -95,19 +94,12 @@ const OrderSuccessScreen: React.FC<Props> = ({ navigation, route }) => {
   const ctaTactile = useTactile();
 
   // ── Computed ──────────────────────────────────────────────────────────────
-  const shortOrder = orderNumber
-    ? orderNumber.replace(/^ORDNO_\d{6}/, '#').replace(/^ORDNO_/, '#')
-    : '';
+  const shortOrder = orderNumber ? `#${orderNumber}` : '';
 
   const displayTotal =
     orderTotal > 0 ? `MUR ${orderTotal.toLocaleString('en-IN')}` : null;
 
   const displayTime = formatOrderTimestamp(orderTimestamp);
-
-  const totalSavings =
-    orderTotalBeforeDiscount > orderTotal
-      ? orderTotalBeforeDiscount - orderTotal
-      : 0;
 
   const metaParts: string[] = [];
   if (itemCount > 0)

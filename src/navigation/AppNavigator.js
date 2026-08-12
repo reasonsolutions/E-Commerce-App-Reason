@@ -8,7 +8,7 @@ import HomeScreen from '../screens/HomeScreen';
 import ProductScreen from '../screens/ProductScreen';
 import CartScreen from '../screens/CartScreen';
 import ResultScreen from '../screens/ResultScreen';
-import AddressScreen from '../screens/AddressScreen';
+import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderSuccessScreen from '../screens/OrderSuccessScreen';
 import OrderHistoryScreen from '../screens/OrderHistoryScreen';
 import OrderDetailScreen from '../screens/OrderDetailScreen';
@@ -86,7 +86,7 @@ const AppNavigator = () => {
         <Stack.Screen name="Product" component={ProductScreen} />
         <Stack.Screen name="Cart" component={CartScreen} options={{ contentStyle: { backgroundColor: '#FFFFFF' } }} />
         <Stack.Screen name="Result" component={ResultScreen} />
-        <Stack.Screen name="Address" component={AddressScreen} />
+        <Stack.Screen name="Checkout" component={CheckoutScreen} />
         <Stack.Screen name="OrderSuccess" component={OrderSuccessScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="OrderDetails" component={OrderDetailScreen} options={{ animation: 'none' }} />
         <Stack.Screen name="AddressManagement" component={AddressManagementScreen} />

@@ -39,7 +39,6 @@ import {
   DeliverToRow,
   VariantChipGrid,
   type VariantChipOption,
-  TrustCardRow,
   ProductSpecs,
   SellerCard,
   LoginPromptSheet,
@@ -655,11 +654,6 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           />
         </Animated.View>
 
-        {/* Trust cards */}
-        {productDetails ? (
-          <TrustCardRow policy={productDetails.PolicyInfo} />
-        ) : null}
-
         {/* Description + specs as accordions */}
         <ProductSpecs
           description={productDetails?.Description}
@@ -670,6 +664,18 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           weightUnit={selectedVariant?.PhysicalAttributes?.WeightUnit?.Description ?? null}
           season={(productDetails?.AdditionalInfo?.Season as any)?.Description ?? null}
           demographic={(productDetails?.AdditionalInfo?.ProductDemoGraphic as any)?.Description ?? null}
+          countryOfOrigin={productDetails?.ProductClassification?.CountryOfOrigin ?? null}
+          manufacturer={productDetails?.ProductClassification?.Manufacturer ?? null}
+          manufacturerPartNumber={productDetails?.ProductClassification?.ManufacturerPartNumber ?? null}
+          hsCode={productDetails?.ProductClassification?.HSCode ?? null}
+          packageDimensions={selectedVariant?.PhysicalAttributes ? {
+            length: selectedVariant.PhysicalAttributes.PackageLength,
+            width:  selectedVariant.PhysicalAttributes.PackageWidth,
+            height: selectedVariant.PhysicalAttributes.PackageHeight,
+            unit:   selectedVariant.PhysicalAttributes.DimensionUnit?.Description ?? null,
+          } : null}
+          policy={productDetails?.PolicyInfo}
+          shipping={productDetails?.ShippingInfo}
         />
 
         {/* Related products — reuses ProductCard for consistent image fit, corners, pricing */}
@@ -766,6 +772,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
         />
       ) : null}
+
     </View>
   );
 };

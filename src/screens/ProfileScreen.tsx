@@ -19,6 +19,7 @@ import {
   EditProfileSheet,
   ChangePasswordSheet,
   PrimaryButton,
+  RateAppSheet,
 } from '../components/ui';
 import { ErrorState } from '../components/system/ErrorState';
 import { getDeliveryAddresses } from '../api/address';
@@ -362,6 +363,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const [editVisible,     setEditVisible]     = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [logoutVisible,   setLogoutVisible]   = useState(false);
+  const [rateVisible,     setRateVisible]     = useState(false);
 
   const loadProfile = useCallback(() => {
     let cancelled = false;
@@ -488,6 +490,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
           destructive
         />
       )}
+      {rateVisible && session && (
+        <RateAppSheet
+          customerProfileCode={session.CustomerProfileCode}
+          customerFirstName={displayName !== '—' ? displayName.split(' ')[0] : null}
+          onClose={() => setRateVisible(false)}
+          onSuccess={() => {
+            setRateVisible(false);
+            toast.success({ title: 'Thanks for rating us!' });
+          }}
+        />
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -599,6 +612,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               icon="reader-outline"
               label="Terms of Service"
               onPress={() => { haptic.light(); navigation.navigate('Legal', { type: 'terms' }); }}
+            />
+            <MenuRow
+              icon="star-outline"
+              label="Rate Us"
+              onPress={() => { haptic.light(); setRateVisible(true); }}
               showDivider={false}
             />
           </View>

@@ -67,6 +67,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
     | null
   >(null);
   const [moveLoading, setMoveLoading] = useState(false);
+  const [showTaxBreakdown, setShowTaxBreakdown] = useState(false);
 
   const cartItems = optimistic ?? fetched ?? [];
 
@@ -78,7 +79,13 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           isLoggedIn(),
           AsyncStorage.getItem(STORAGE_KEYS.userData),
         ]);
-        if (!loggedIn) {
+        const code = raw ? JSON.parse(raw).CustomerProfileCode : null;
+        // Keychain tokens outlive reinstall/dev-reload, so isLoggedIn() can
+        // report true with no userData ever having been written this
+        // install — that's not a real session, just an orphaned token.
+        // Treat it the same as logged-out rather than dead-ending on an
+        // empty cart for someone who's never had an account here.
+        if (!loggedIn || !code) {
           setIsGuest(true);
           setSummary(null);
           const items = await getGuestCart();
@@ -88,8 +95,6 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           return [];
         }
         setIsGuest(false);
-        const code = raw ? JSON.parse(raw).CustomerProfileCode : null;
-        if (!code) return [];
         const response = await getSavedCartItems(code);
         setSummary(response.result ?? null);
         return response.result?.Items || [];
@@ -163,6 +168,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   const totalSavings = isGuest
     ? guestItems.reduce((sum, i) => sum + Math.max(0, i.comparePrice - i.price) * i.quantity, 0)
     : summary?.TotalSaved ?? 0;
+  // Total tax as sum of TaxBreakdown — this whole section only ever renders
+  // for logged-in carts (see `summary &&` gate below), so no isGuest branch.
+  const totalTax = summary?.TaxBreakdown.reduce((sum, tax) => sum + tax.TaxAmount, 0) ?? 0;
 
   const handleUpdateQuantity = useCallback(async (item: SavedCartItemInterface, quantity: number) => {
     const delta = quantity - item.Quantity;
@@ -271,8 +279,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
   }, [removeTarget, removeSavedItem, setWishlistCode, toast]);
 
   const handleCheckout = useCallback(() => {
-    guard(() => navigation.navigate('Address', { cartItems: purchasableCartItems, amountToBePaid: payableTotal }));
-  }, [guard, navigation, purchasableCartItems, payableTotal]);
+    guard(() => navigation.navigate('Checkout'));
+  }, [guard, navigation]);
 
   // Guest carts aren't re-validated against live stock (their stock field is
   // only a snapshot from add-time), so only the logged-in cart's OOS lines
@@ -409,12 +417,17 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
               : cartItems.map((item, index) => (
                   <React.Fragment key={`${item.CartDetailsCode}-${index}`}>
                     {index > 0 && <View style={styles.itemDivider} />}
-                    <CartRow
-                      item={item}
-                      onUpdateQuantity={handleUpdateQuantity}
-                      onRemove={handleRemoveItem}
-                      delay={Motion.stagger.delay(index)}
-                    />
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => navigation.navigate('Product', { product: String(item.ItemId) })}
+                    >
+                      <CartRow
+                        item={item}
+                        onUpdateQuantity={handleUpdateQuantity}
+                        onRemove={handleRemoveItem}
+                        delay={Motion.stagger.delay(index)}
+                      />
+                    </TouchableOpacity>
                   </React.Fragment>
                 ))
             }
@@ -430,58 +443,105 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
             </View>
           )}
 
-          {/* ── Order summary card ─────────────────────────────────────── */}
-          <Animated.View style={[styles.summaryCard, summaryAnim]}>
-            <Text style={styles.summaryCardLabel}>ORDER SUMMARY</Text>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>MUR {subtotal.toLocaleString('en-IN')}</Text>
-            </View>
-            {totalSavings > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.savingsLabel}>Savings</Text>
-                <Text style={styles.savingsValue}>− MUR {totalSavings.toLocaleString('en-IN')}</Text>
-              </View>
-            )}
-            {taxGroups.map(group => (
-              <View key={group.taxId} style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>
-                  {group.taxName ? group.taxName : `Tax (${group.taxRate}%)`}
-                </Text>
-                <Text style={styles.summaryValue}>MUR {group.amount.toLocaleString('en-IN')}</Text>
-              </View>
-            ))}
-            {shippingCharge > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Shipping</Text>
-                <Text style={styles.summaryValue}>MUR {shippingCharge.toLocaleString('en-IN')}</Text>
-              </View>
-            )}
-            <View style={styles.summaryRule} />
-            <View style={styles.summaryPayableBlock}>
-              <Text style={styles.summaryPayableLabel}>PAYABLE NOW</Text>
-              <Text style={styles.summaryPayableAmount}>MUR {payableTotal.toLocaleString('en-IN')}</Text>
-            </View>
-            {!isGuest && unavailableCount > 0 && (
-              <Text style={styles.unavailableNote}>
-                {unavailableCount} item{unavailableCount > 1 ? 's' : ''} unavailable — not included in total
-              </Text>
-            )}
-          </Animated.View>
+          {/* ── Price Details section (guest) ───────────────────────────── */}
+          {/* Guests have no backend summary/TaxBreakdown, so tax can't be
+              computed client-side — point them to log in instead of showing
+              a misleading MUR 0 or omitting the row entirely. */}
+          {hasFetched && itemCount > 0 && isGuest && (
+            <View style={styles.priceDetailsSection}>
+              <Text style={styles.priceDetailsLabel}>PRICE DETAILS</Text>
 
-          {/* ── Trust strip ────────────────────────────────────────────── */}
-          <View style={styles.trustRow}>
-            {[
-              'Secure Checkout',
-              'Easy Returns',
-              'Safe Payments',
-            ].map(label => (
-              <View key={label} style={styles.trustItem}>
-                <Icon name="checkmark-circle-outline" size={15} color={Colors.ink3} />
-                <Text style={styles.trustText}>{label}</Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.priceRowLabel}>MRP</Text>
+                <Text style={[styles.priceRowValue, totalSavings > 0 && styles.mrpValueStruck]}>
+                  MUR {(subtotal + totalSavings).toLocaleString('en-IN')}
+                </Text>
               </View>
-            ))}
-          </View>
+
+              {totalSavings > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.savingsLabel}>You save</Text>
+                  <Text style={styles.savingsValue}>
+                    MUR {totalSavings.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.priceRow}>
+                <Text style={styles.priceRowLabel}>Delivery</Text>
+                <Text style={[styles.priceRowValue, styles.freeShipping]}>Free</Text>
+              </View>
+
+              <View style={styles.priceRow}>
+                <Text style={styles.priceRowLabel}>Tax</Text>
+                <Text style={styles.priceRowNote}>Log in to see tax details</Text>
+              </View>
+
+              <View style={styles.priceDivider} />
+              <View style={styles.priceRow}>
+                <Text style={styles.totalAmountLabel}>Total Amount</Text>
+                <Text style={styles.priceRowValue}>
+                  MUR {payableTotal.toLocaleString('en-IN')}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* ── Price Details section ────────────────────────────────────── */}
+          {hasFetched && itemCount > 0 && summary && (
+            <View style={styles.priceDetailsSection}>
+              <Text style={styles.priceDetailsLabel}>PRICE DETAILS</Text>
+
+              <View style={styles.priceRow}>
+                <Text style={styles.priceRowLabel}>MRP</Text>
+                <Text style={[styles.priceRowValue, totalSavings > 0 && styles.mrpValueStruck]}>
+                  MUR {summary.ItemsTotal.toLocaleString('en-IN')}
+                </Text>
+              </View>
+
+              {totalSavings > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.savingsLabel}>You save</Text>
+                  <Text style={styles.savingsValue}>
+                    MUR {totalSavings.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.priceRow}>
+                <Text style={styles.priceRowLabel}>Delivery</Text>
+                <Text style={[styles.priceRowValue, summary.TotalShippingCharge === 0 && styles.freeShipping]}>
+                  {summary.TotalShippingCharge === 0 ? 'Free' : `MUR ${summary.TotalShippingCharge.toLocaleString('en-IN')}`}
+                </Text>
+              </View>
+
+              <View style={styles.priceDivider} />
+              <View style={styles.priceRow}>
+                <Text style={styles.totalAmountLabel}>Total Amount</Text>
+                <View style={styles.totalAmountValueWrap}>
+                  <Text style={styles.priceRowValue}>
+                    MUR {payableTotal.toLocaleString('en-IN')}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowTaxBreakdown(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.inclTaxesText}>incl. taxes</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ── Unavailable warning ────────────────────────────────────── */}
+          {!isGuest && unavailableCount > 0 && (
+            <View style={styles.unavailableWarning}>
+              <Icon name="alert-circle-outline" size={16} color={Colors.ink4} />
+              <Text style={styles.unavailableWarningText}>
+                {unavailableCount} item{unavailableCount > 1 ? 's' : ''} unavailable
+              </Text>
+            </View>
+          )}
 
           {/* ── Continue shopping ──────────────────────────────────────── */}
           <TouchableOpacity
@@ -496,9 +556,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
 
         {/* ── Sticky checkout footer ─────────────────────────────────── */}
         <View style={[styles.summaryPanel, { paddingBottom: insets.bottom + Space[4] }]}>
-          <View style={styles.footerPayableRow}>
-            <Text style={styles.footerPayableLabel}>PAYABLE NOW</Text>
-            <Text style={styles.footerPayableAmount}>MUR {payableTotal.toLocaleString('en-IN')}</Text>
+          <View style={styles.footerPriceRow}>
+            <Text style={styles.footerPriceLabel}>Price</Text>
+            <Text style={styles.footerPrice}>MUR {payableTotal.toLocaleString('en-IN')}</Text>
           </View>
           <Animated.View style={checkoutTactile.animatedStyle}>
             <TouchableOpacity
@@ -508,10 +568,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
               {...checkoutTactile.handlers}
               activeOpacity={1}
               accessibilityRole="button"
-              accessibilityLabel="Proceed to checkout"
+              accessibilityLabel={`Proceed to buy ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
             >
-              <Icon name="lock-closed-outline" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.checkoutBtnText}>Secure Checkout</Text>
+              <Text style={styles.checkoutBtnText}>Proceed to Buy ({itemCount})</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -536,9 +595,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>
-              My Bag{hasFetched && itemCount > 0 ? ` (${itemCount})` : ''}
-            </Text>
+            <Text style={styles.headerTitle}>Shopping Cart</Text>
           </View>
 
           {(isGuest ? guestItems.length : cartItems.length) > 0 ? (
@@ -587,6 +644,62 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           onMoveToWishlist={confirmMoveToWishlist}
           onClose={dismissRemoveSheet}
         />
+      )}
+
+      {/* ── Tax Breakdown Sheet ────────────────────────────────────────── */}
+      {showTaxBreakdown && (
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity
+            style={styles.sheetBackdrop}
+            onPress={() => setShowTaxBreakdown(false)}
+            activeOpacity={1}
+          />
+          <View style={[styles.taxSheet, { paddingBottom: insets.bottom + Space[4] }]}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Price Breakdown</Text>
+              <TouchableOpacity
+                onPress={() => setShowTaxBreakdown(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Icon name="close" size={24} color={Colors.ink1} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.sheetContent} showsVerticalScrollIndicator={false}>
+              {/* Total Amount */}
+              <View style={styles.breakdownRowTotal}>
+                <Text style={styles.breakdownLabelTotal}>Total Amount (incl. taxes)</Text>
+                <Text style={styles.breakdownValueTotal}>
+                  MUR {payableTotal.toLocaleString('en-IN')}
+                </Text>
+              </View>
+
+              {/* Tax Breakdown Section */}
+              {summary?.TaxBreakdown && summary.TaxBreakdown.length > 0 && (
+                <>
+                  <View style={styles.taxSectionDivider} />
+                  <Text style={styles.taxSectionTitle}>Tax Breakdown</Text>
+                  {summary.TaxBreakdown.map((tax, index) => (
+                    <View key={`${tax.TaxId}-${tax.TaxRate}-${index}`} style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>
+                        {tax.TaxName ?? `Tax (${tax.TaxRate}%)`}
+                      </Text>
+                      <Text style={styles.breakdownValue}>
+                        MUR {tax.TaxAmount.toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                  ))}
+                  <View style={styles.breakdownRow}>
+                    <Text style={[styles.breakdownLabel, styles.totalTaxLabel]}>Total Tax</Text>
+                    <Text style={[styles.breakdownValue, styles.totalTaxValue]}>
+                      MUR {totalTax.toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -756,30 +869,46 @@ const styles = StyleSheet.create({
     flex:       1,
   },
 
-  // ── Order summary — flat, no card ─────────────────────────────────────────
+  // ── Order summary — card with background ─────────────────────────────────────────
   summaryCard: {
     marginHorizontal: Space.screenH,
     marginTop:        Space[2],
-    gap:              Space[3],
-    paddingTop:       Space[4],
+    backgroundColor:  Colors.surface,
+    borderRadius:     Radius.lg,
+    borderWidth:      1,
+    borderColor:      Colors.surfaceDeep,
+    paddingHorizontal: Space[4],
+    paddingVertical:  Space[4],
+    gap:              Space[2],
+  },
+  summarySection: {
+    gap: Space[3],
+  },
+  taxBreakdownSection: {
+    gap: Space[3],
+    paddingVertical: Space[2],
   },
   summaryCardLabel: {
     ...Type.label,
     color:         Colors.ink4,
     letterSpacing: 2,
+    marginBottom:  Space[1],
   },
   summaryRow: {
     flexDirection:  'row',
     justifyContent: 'space-between',
     alignItems:     'baseline',
+    gap:            Space[2],
   },
   summaryLabel: {
     ...Type.caption,
     color: Colors.ink3,
+    flex:  1,
   },
   summaryValue: {
     ...Type.caption,
     color: Colors.ink2,
+    fontWeight: '500',
   },
   savingsLabel: {
     ...Type.caption,
@@ -789,9 +918,21 @@ const styles = StyleSheet.create({
     ...Type.caption,
     color: '#226B3C',
   },
+  strikethoughLabel: {
+    textDecorationLine: 'line-through',
+    color: Colors.ink4,
+  },
+  strikethoughValue: {
+    textDecorationLine: 'line-through',
+    color: Colors.ink4,
+  },
+  freeShipping: {
+    color: '#226B3C',
+  },
   summaryRule: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
+    marginVertical: Space[3],
   },
   summaryTotalRow: {
     flexDirection:  'row',
@@ -813,7 +954,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   summaryPayableBlock: {
-    gap: 2,
+    gap:              Space[2],
+    backgroundColor:  Colors.surfaceSoft,
+    borderRadius:     Radius.md,
+    paddingHorizontal: Space[3],
+    paddingVertical:  Space[3],
+    marginTop:        Space[1],
   },
   summaryPayableLabel: {
     ...Type.label,
@@ -823,38 +969,257 @@ const styles = StyleSheet.create({
   },
   summaryPayableAmount: {
     fontFamily:    FontFamily.serif,
-    fontSize:      30,
-    fontWeight:    '600',
+    fontSize:      28,
+    fontWeight:    '700',
     color:         Colors.ink1,
     letterSpacing: -0.4,
-    lineHeight:    34,
+    lineHeight:    32,
   },
   unavailableNote: {
     ...Type.caption,
     color:     Colors.ink4,
     marginTop: Space[2],
   },
-
-  // ── Trust strip — plain icon row, no card ─────────────────────────────────
-  trustRow: {
+  unavailableWarning: {
     flexDirection:     'row',
-    justifyContent:    'center',
-    gap:               Space[6],
+    alignItems:        'center',
+    gap:               Space[2],
     marginHorizontal:  Space.screenH,
-    marginTop:         Space[4],
-    paddingVertical:   Space[3],
-    borderTopWidth:    StyleSheet.hairlineWidth,
-    borderTopColor:    Colors.rule,
+    marginTop:         Space[3],
+    paddingVertical:   Space[2],
+    paddingHorizontal: Space[3],
+    backgroundColor:   'rgba(249,115,22,0.08)',
+    borderRadius:      Radius.sm,
   },
-  trustItem: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           5,
-  },
-  trustText: {
+  unavailableWarningText: {
     ...Type.caption,
-    color:    Colors.ink3,
-    fontSize: 11,
+    color: Colors.ink4,
+    flex:  1,
+  },
+  summaryDivider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+    marginVertical:  Space[3],
+  },
+  summaryNote: {
+    ...Type.caption,
+    color:     Colors.ink4,
+    marginTop: Space[2],
+    textAlign: 'center',
+  },
+  savingsBannerInline: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               Space[1],
+    marginBottom:      Space[2],
+    paddingVertical:   Space[2],
+    paddingHorizontal: Space[2],
+    backgroundColor:   'rgba(34,107,60,0.08)',
+    borderRadius:      Radius.sm,
+  },
+  savingsBannerInlineText: {
+    fontFamily: FontFamily.sans,
+    fontSize:   12,
+    fontWeight: '500',
+    color:      '#226B3C',
+    flex:       1,
+  },
+
+  // ── Price Details section ─────────────────────────────────────────────────
+  priceDetailsSection: {
+    paddingHorizontal: Space.screenH,
+    paddingVertical:   Space[4],
+    backgroundColor:   WHITE,
+    gap:               Space[2],
+  },
+  priceDetailsLabel: {
+    ...Type.label,
+    color:         Colors.ink4,
+    letterSpacing: 1.6,
+    fontSize:      9,
+    marginBottom:  Space[2],
+  },
+  priceRow: {
+    flexDirection:  'row',
+    justifyContent: 'space-between',
+    alignItems:     'flex-start',
+    paddingVertical: Space[2],
+  },
+  priceRowLabel: {
+    ...Type.caption,
+    color: Colors.ink3,
+    flex:  1,
+  },
+  priceRowValue: {
+    ...Type.caption,
+    color:      Colors.ink2,
+    fontWeight: '500',
+  },
+  mrpValueStruck: {
+    color:              Colors.ink4,
+    textDecorationLine: 'line-through',
+  },
+  priceRowNote: {
+    ...Type.caption,
+    color:    Colors.ink4,
+    fontSize: 12,
+  },
+  priceDivider: {
+    height:          StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+    marginVertical:  Space[2],
+  },
+  totalAmountLabel: {
+    ...Type.caption,
+    color: Colors.ink3,
+  },
+  totalAmountValueWrap: {
+    alignItems: 'flex-end',
+    gap: 0,
+  },
+  inclTaxesText: {
+    ...Type.caption,
+    color: Colors.brandNavy,
+    textDecorationLine: 'underline',
+    fontSize: 12,
+  },
+
+  // ── Price Details sheet ────────────────────────────────────────────────────
+  sheetOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 99,
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  taxSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    maxHeight: '80%',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.rule,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Space.screenH,
+    paddingVertical: Space[4],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.rule,
+  },
+  sheetTitle: {
+    fontFamily: FontFamily.serif,
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.ink1,
+    letterSpacing: -0.2,
+  },
+  sheetContent: {
+    paddingHorizontal: Space.screenH,
+    paddingVertical: Space[4],
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space[2],
+  },
+  breakdownRowTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space[3],
+    paddingHorizontal: Space[2],
+    backgroundColor: Colors.surfaceSoft,
+    borderRadius: Radius.md,
+  },
+  breakdownLabel: {
+    ...Type.caption,
+    color: Colors.ink3,
+  },
+  breakdownLabelTotal: {
+    fontFamily: FontFamily.serif,
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.ink1,
+  },
+  breakdownValue: {
+    ...Type.caption,
+    color: Colors.ink2,
+    fontWeight: '500',
+  },
+  breakdownValueTotal: {
+    fontFamily: FontFamily.serif,
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.ink1,
+    letterSpacing: -0.2,
+  },
+  totalTaxLabel: {
+    fontWeight: '700',
+  },
+  totalTaxValue: {
+    fontWeight: '700',
+  },
+  breakdownDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+    marginVertical: Space[3],
+  },
+  discountLabel: {
+    ...Type.caption,
+    color: '#226B3C',
+  },
+  discountValue: {
+    ...Type.caption,
+    color: '#226B3C',
+    fontWeight: '500',
+  },
+  freeShippingText: {
+    color: '#226B3C',
+  },
+  priceRowValueWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space[2],
+  },
+  savingSectionHighlight: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Space[2],
+    paddingHorizontal: Space[2],
+    backgroundColor: 'rgba(34,107,60,0.08)',
+    borderRadius: Radius.sm,
+  },
+  savingLabel: {
+    ...Type.caption,
+    color: '#226B3C',
+    fontWeight: '500',
+  },
+  savingValue: {
+    ...Type.caption,
+    color: '#226B3C',
+    fontWeight: '600',
+  },
+  taxSectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.rule,
+    marginVertical: Space[3],
+  },
+  taxSectionTitle: {
+    ...Type.label,
+    color: Colors.ink4,
+    letterSpacing: 1.6,
+    marginVertical: Space[2],
+    fontSize: 9,
   },
 
   // ── Sticky checkout footer ────────────────────────────────────────────────
@@ -888,6 +1253,21 @@ const styles = StyleSheet.create({
   summaryTopRule: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
+  },
+  footerPriceRow: {
+    flexDirection:  'row',
+    justifyContent: 'space-between',
+    alignItems:     'center',
+    marginBottom:   Space[3],
+  },
+  footerPriceLabel: {
+    ...Type.caption,
+    color: Colors.ink3,
+  },
+  footerPrice: {
+    ...Type.caption,
+    color:      Colors.ink2,
+    fontWeight: '500',
   },
   checkoutBtn: {
     width:           '100%',

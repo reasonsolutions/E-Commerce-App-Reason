@@ -2,6 +2,7 @@ import axiosInstance from '../axiosInstance';
 import { orderEndpoints } from '../endpoints';
 import type {
   PlaceOrderInterface,
+  PlaceOrderResponse,
   OrderHistoryRequest,
   OrderDetailRequest,
   CancelOrderInterface,
@@ -45,7 +46,7 @@ export interface OrderHistoryFilters {
   status?:   'all' | 'delivered' | 'cancelled' | 'returned';
 }
 
-export const placeOrder = async (data: PlaceOrderInterface) => {
+export const placeOrder = async (data: PlaceOrderInterface): Promise<PlaceOrderResponse> => {
   const response = await axiosInstance.post(orderEndpoints.placeOrder, data);
   return response.data;
 };

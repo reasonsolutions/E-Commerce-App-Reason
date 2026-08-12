@@ -1,6 +1,6 @@
 import axiosInstance from '../axiosInstance';
 import { authEndpoints } from '../endpoints';
-import type { createCustomerInterface, postLoginInterface, postUpdateCustomerInterface, ChangePasswordInterface } from '../interfaces';
+import type { createCustomerInterface, postLoginInterface, postUpdateCustomerInterface, ChangePasswordInterface, postReviewInterface } from '../interfaces';
 
 export const loginCustomer = async (data: Pick<postLoginInterface, 'LoginID' | 'Password'>) => {
   const response = await axiosInstance.post(authEndpoints.postLoginCustomer, {
@@ -37,5 +37,10 @@ export const forgotPassword = async (emailAddress: string) => {
 
 export const verifyForgotPasswordOTP = async (emailAddress: string, otp: string) => {
   const response = await axiosInstance.post(authEndpoints.verifyForgotPasswordOTP, { emailAddress, otp });
+  return response.data;
+};
+
+export const postReview = async (data: postReviewInterface) => {
+  const response = await axiosInstance.post(authEndpoints.postReview, data);
   return response.data;
 };

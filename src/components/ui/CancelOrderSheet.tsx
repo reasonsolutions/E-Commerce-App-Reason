@@ -28,6 +28,7 @@ interface CancelOrderSheetProps {
   itemName?: string;
   selectedReason: CustomerCancellationReason | null;
   selectedRefundMode: RefundMode | null;
+  showRefundMode?: boolean;
   remarks: string;
   cancelError: string | null;
   cancelLoading: boolean;
@@ -53,6 +54,7 @@ export const CancelOrderSheet: React.FC<CancelOrderSheetProps> = ({
   itemName,
   selectedReason,
   selectedRefundMode,
+  showRefundMode = true,
   remarks,
   cancelError,
   cancelLoading,
@@ -65,7 +67,8 @@ export const CancelOrderSheet: React.FC<CancelOrderSheetProps> = ({
   const insets = useSafeAreaInsets();
   const maxSheetHeight = Math.min(SHEET_H, SCREEN_H - insets.top - Space[4]);
   const [step, setStep] = useState<'details' | 'remarks'>('details');
-  const canProceed = selectedReason !== null && selectedRefundMode !== null;
+  const canProceed =
+    selectedReason !== null && (!showRefundMode || selectedRefundMode !== null);
 
   return (
     <Modal
@@ -139,20 +142,24 @@ export const CancelOrderSheet: React.FC<CancelOrderSheetProps> = ({
                   </TouchableOpacity>
                 ))}
 
-                <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>REFUND METHOD</Text>
-                {(Object.values(RefundMode).filter(v => typeof v === 'number') as RefundMode[]).map(mode => (
-                  <TouchableOpacity
-                    key={mode}
-                    onPress={() => onSelectRefundMode(mode)}
-                    style={styles.optionRow}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.optionRadio, selectedRefundMode === mode && styles.optionRadioSelected]} />
-                    <Text style={[styles.optionLabel, selectedRefundMode === mode && styles.optionLabelSelected]}>
-                      {RefundModeLabel[mode]}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {showRefundMode ? (
+                  <>
+                    <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>REFUND METHOD</Text>
+                    {(Object.values(RefundMode).filter(v => typeof v === 'number') as RefundMode[]).map(mode => (
+                      <TouchableOpacity
+                        key={mode}
+                        onPress={() => onSelectRefundMode(mode)}
+                        style={styles.optionRow}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.optionRadio, selectedRefundMode === mode && styles.optionRadioSelected]} />
+                        <Text style={[styles.optionLabel, selectedRefundMode === mode && styles.optionLabelSelected]}>
+                          {RefundModeLabel[mode]}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                ) : null}
               </ScrollView>
 
               <View style={[styles.ctaWrap, { paddingBottom: insets.bottom + Space[4] }]}>
