@@ -626,6 +626,9 @@ export interface DeliveryAddressInterface {
     Zipcode: string | null;
     IsPrimary: boolean;
     AddressLabel?: AddressLabel | null;
+    // Present on getDeliveryAddress; absent on getOrderStatus's DeliveryDetail —
+    // keep optional rather than assuming both endpoints agree.
+    CountryCode?: number | null;
 }
 
 //Order api result

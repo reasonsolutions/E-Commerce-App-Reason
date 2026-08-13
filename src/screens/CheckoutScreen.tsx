@@ -30,6 +30,7 @@ import { useEntrance } from '../hooks/useEntrance';
 import { useHaptic } from '../hooks/useHaptic';
 import { useTactile } from '../hooks/useTactile';
 import { AddressLabel } from '../config/enum_files/AddressLabel';
+import { dialCodeForCountry } from '../config/countries';
 import { PaymentModes } from '../config/enum_files/PaymentModes';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { paymentModeLabel } from '../utils/paymentMode';
@@ -289,7 +290,9 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
                   {primaryAddress.MobileNumber && (
                     <View style={styles.addressMobileRow}>
                       <Icon name="call-outline" size={11} color={Colors.ink4} />
-                      <Text style={styles.addressMobile}>{primaryAddress.MobileNumber}</Text>
+                      <Text style={styles.addressMobile}>
+                        {dialCodeForCountry(primaryAddress.CountryCode ?? undefined)} {primaryAddress.MobileNumber}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -375,7 +378,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
                   onPress={() => navigation.navigate('Cart')}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.editBagText}>Edit Bag</Text>
+                  <Text style={styles.editBagText}>Edit Cart</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setSummaryOpen(!summaryOpen)}

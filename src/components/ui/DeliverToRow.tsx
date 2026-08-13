@@ -18,6 +18,7 @@ import { getDeliveryAddresses } from '../../api/address';
 import { AddressLabel } from '../../config/enum_files/AddressLabel';
 import type { DeliveryAddress } from '../../screens/AddressScreen';
 import { parseServerDate } from '../../utils/parseServerDate';
+import { dialCodeForCountry } from '../../config/countries';
 
 const LABEL_TEXT: Record<AddressLabel, string> = {
   [AddressLabel.Home]:  'HOME',
@@ -160,7 +161,9 @@ export const DeliverToRow: React.FC<DeliverToRowProps> = ({ onAddAddress }) => {
                   {a.MobileNumber ? (
                     <View style={styles.optionMobileRow}>
                       <Icon name="call-outline" size={11} color={Colors.ink4} />
-                      <Text style={styles.optionMobile}>{a.MobileNumber}</Text>
+                      <Text style={styles.optionMobile}>
+                        {dialCodeForCountry(a.CountryCode ?? undefined)} {a.MobileNumber}
+                      </Text>
                     </View>
                   ) : null}
                 </View>

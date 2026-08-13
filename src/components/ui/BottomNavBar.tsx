@@ -32,7 +32,7 @@ const TABS: TabDef[] = [
   { route: 'Home',     label: 'Home',    activeIcon: 'home',          inactiveIcon: 'home-outline' },
   { route: 'Orders',   label: 'Orders',  activeIcon: 'receipt',       inactiveIcon: 'receipt-outline' },
   { route: 'Wishlist', label: 'Wishlist',activeIcon: 'heart',         inactiveIcon: 'heart-outline' },
-  { route: 'Cart',     label: 'Cart',    activeIcon: 'bag',           inactiveIcon: 'bag-outline' },
+  { route: 'Cart',     label: 'Cart',    activeIcon: 'cart',          inactiveIcon: 'cart-outline' },
   { route: 'Profile',  label: 'Profile', activeIcon: 'person-circle', inactiveIcon: 'person-circle-outline' },
 ];
 

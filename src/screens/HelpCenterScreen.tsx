@@ -51,7 +51,7 @@ const FAQ_SECTIONS: FaqSection[] = [
       },
       {
         question: 'I want to reorder items from a past order. Is that possible?',
-        answer: 'Yes. Open the order in Orders and tap Reorder — the items will be added to your bag at their current price and availability.',
+        answer: 'Yes. Open the order in Orders and tap Reorder — the items will be added to your cart at their current price and availability.',
       },
     ],
   },
@@ -64,7 +64,7 @@ const FAQ_SECTIONS: FaqSection[] = [
       },
       {
         question: 'Is shipping free?',
-        answer: 'It depends on the product and seller — free shipping, when it applies, is shown on the product page and in your bag before checkout.',
+        answer: 'It depends on the product and seller — free shipping, when it applies, is shown on the product page and in your cart before checkout.',
       },
     ],
   },

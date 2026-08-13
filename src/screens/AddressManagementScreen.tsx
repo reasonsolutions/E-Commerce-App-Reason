@@ -32,7 +32,7 @@ import { useAppToast } from '../hooks/useAppToast';
 import { DeliveryAddress } from './AddressScreen';
 import { Motion } from '../theme/motion';
 import { AddressLabel } from '../config/enum_files/AddressLabel';
-import { COUNTRY_OPTIONS } from '../config/countries';
+import { COUNTRY_OPTIONS, dialCodeForCountry } from '../config/countries';
 
 type Props = {
   navigation: {
@@ -139,7 +139,7 @@ const AddressRow: React.FC<{
             <View style={styles.addressMobileRow}>
               <Icon name="call-outline" size={11} color={Colors.ink4} />
               <Text style={styles.addressMobile}>
-                {String(item.MobileNumber)}
+                {dialCodeForCountry(item.CountryCode ?? undefined)} {String(item.MobileNumber)}
               </Text>
             </View>
             {!item.IsPrimary || isFromCheckout ? (

@@ -42,7 +42,7 @@ const CONTEXT_MAP: Record<LoginPromptContext, { icon: string; title: string; bod
     benefits: ['Track orders', 'Save wishlist', 'Manage addresses'],
   },
   checkout: {
-    icon:     'bag-outline',
+    icon:     'cart-outline',
     title:    'Almost there',
     body:     'Sign in to complete your purchase and save your address.',
     benefits: ['Saved addresses', 'Order tracking', 'Easy returns'],

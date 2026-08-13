@@ -1065,7 +1065,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   { width: topBarIconSize, height: topBarIconSize },
                 ]}
               >
-                <Icon name="bag-outline" size={19} color="#FFFFFF" />
+                <Icon name="cart-outline" size={19} color="#FFFFFF" />
                 {cartCount > 0 && (
                   <View style={styles.cartBadge}>
                     <Text style={styles.cartBadgeText}>
@@ -1114,10 +1114,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           activeOpacity={0.85}
         >
           <View style={styles.resumeLeft}>
-            <Icon name="bag-outline" size={16} color={Colors.accent} />
+            <Icon name="cart-outline" size={16} color={Colors.accent} />
             <Text style={styles.resumeText}>
               {cartCount} {cartCount === 1 ? 'item' : 'items'} waiting in your
-              bag
+              cart
             </Text>
           </View>
           <View style={styles.resumeRight}>

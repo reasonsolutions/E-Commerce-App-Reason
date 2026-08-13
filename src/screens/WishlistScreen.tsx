@@ -135,18 +135,18 @@ const WishlistCard: React.FC<{
             />
           </View>
 
-          {/* ── Add to Bag ──────────────────────────────────────────────── */}
+          {/* ── Add to Cart ──────────────────────────────────────────────── */}
           {!isOOS ? (
             <TouchableOpacity
               style={[styles.bagBtn, addingToBag && styles.bagBtnLoading]}
               onPress={() => { haptic.light(); onAddToBag(item); }}
               activeOpacity={0.85}
               disabled={addingToBag}
-              accessibilityLabel="Move to bag"
+              accessibilityLabel="Move to cart"
               accessibilityRole="button"
             >
               <Text style={styles.bagBtnText}>
-                {addingToBag ? 'Adding…' : 'Move to Bag'}
+                {addingToBag ? 'Adding…' : 'Move to Cart'}
               </Text>
             </TouchableOpacity>
           ) : (
@@ -271,7 +271,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
       });
       haptic.success();
       setCartCount((prev: number) => prev + 1);
-      toastEmitter.emit('success', 'Moved to bag');
+      toastEmitter.emit('success', 'Moved to cart');
       // Remove from wishlist atomically after successful cart add
       try {
         await removeFromWishlist(profileCode, item.WishlistCode);
@@ -281,7 +281,7 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         // Cart add succeeded — don't block the user, wishlist will sync on next focus
       }
     } catch {
-      toastEmitter.emit('error', 'Could not add to bag');
+      toastEmitter.emit('error', 'Could not add to cart');
     } finally {
       setAddingIds(prev => {
         const next = new Set(prev);
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
     height:        13 * 1.4 * 2,
   },
 
-  // ── Move to Bag — solid black, full-width, sharp corners ─────────────────────
+  // ── Move to Cart — solid black, full-width, sharp corners ─────────────────────
   bagBtn: {
     marginTop:       Space[2] + 2,
     backgroundColor: Colors.brandNavy,

@@ -14,7 +14,7 @@ interface PrimaryButtonProps extends Omit<TouchableOpacityProps, 'children'> {
 
 // Full-width navy pill CTA — the canonical primary action button for the app.
 // Wraps useTactile so callers don't wire it manually. Handles loading state.
-// Use for every "Add to Bag", "Place Order", "Confirm" action.
+// Use for every "Add to Cart", "Place Order", "Confirm" action.
 export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
   label,
   loading = false,

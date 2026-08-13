@@ -336,7 +336,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         // The stepper above only clamps against this variant's own limit —
         // it has no idea how much of this item is already sitting in the
         // user's cart from a previous visit. Re-check against the live cart
-        // so two separate "Add to Bag" trips can't jointly exceed MaxPerOrder
+        // so two separate "Add to Cart" trips can't jointly exceed MaxPerOrder
         // (or, when the merchant hasn't set one, available stock).
         const cartRes = await getSavedCartItems(profileCode);
         const existingQty: number = Array.isArray(cartRes?.result?.Items)
@@ -347,7 +347,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           haptic.warning();
           toast.warning({
             title: 'Limit reached',
-            description: `You already have ${existingQty} in your bag — max ${maxQty} per order for this item.`,
+            description: `You already have ${existingQty} in your cart — max ${maxQty} per order for this item.`,
           });
           return;
         }
@@ -355,7 +355,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           haptic.warning();
           toast.warning({
             title: 'Limit reached',
-            description: `You already have ${existingQty} in your bag — only ${remaining} more can be added.`,
+            description: `You already have ${existingQty} in your cart — only ${remaining} more can be added.`,
           });
           return;
         }
@@ -368,7 +368,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         const res = await postSaveCartItems(requestbody);
         if (res?.statusCode !== 1) {
           haptic.warning();
-          toast.error({ title: "Couldn't add to bag", description: res?.userMessage ?? 'Something went wrong.' });
+          toast.error({ title: "Couldn't add to cart", description: res?.userMessage ?? 'Something went wrong.' });
           return;
         }
         setCartCount((prev: number) => prev + quantity);
@@ -399,10 +399,10 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
         Animated.spring(badgeScale, { toValue: Motion.badgePopScale, ...Motion.spring.snap }),
         Animated.spring(badgeScale, { toValue: 1, ...Motion.spring.settle }),
       ]).start();
-      toast.success({ title: 'Added to bag' });
+      toast.success({ title: 'Added to cart' });
     } catch {
       haptic.warning();
-      toast.error({ title: "Couldn't add to bag", description: 'Check your connection and try again.' });
+      toast.error({ title: "Couldn't add to cart", description: 'Check your connection and try again.' });
     } finally {
       setAddingToCart(false);
     }
@@ -494,7 +494,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Animated.View style={{ transform: [{ scale: badgeScale }] }}>
-                <Icon name="bag-outline" size={18} color={Colors.ink1} />
+                <Icon name="cart-outline" size={18} color={Colors.ink1} />
               </Animated.View>
             </TouchableOpacity>
           </View>
@@ -758,7 +758,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           </View>
           <View style={{ flex: 1 }}>
             <PrimaryButton
-              label="Add to Bag"
+              label="Add to Cart"
               loading={addingToCart}
               onPress={handleAddToCart}
               isDisabled={false}

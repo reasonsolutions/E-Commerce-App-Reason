@@ -442,7 +442,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
       }
 
       if (failed === 0) {
-        toastEmitter.emit('success', 'Added to bag');
+        toastEmitter.emit('success', 'Added to cart');
       } else if (succeeded > 0) {
         toastEmitter.emit(
           'warning',
@@ -450,7 +450,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
           `${failed} couldn't be added — check availability.`,
         );
       } else {
-        setReorderError("Couldn't add these items to your bag. Please try again.");
+        setReorderError("Couldn't add these items to your cart. Please try again.");
       }
     });
   }, [guard, haptic, setCartCount]);

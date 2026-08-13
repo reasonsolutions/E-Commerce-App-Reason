@@ -346,11 +346,11 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       return (
         <View style={styles.fillWrap}>
           <ErrorState
-            title="Couldn't load your bag."
+            title="Couldn't load your cart."
             message={error ?? 'Tap retry to try again.'}
             onRetry={() => fetchCart()}
             retryLoading={loading}
-            icon={<Icon name="bag-outline" size={32} color={Colors.ink3} />}
+            icon={<Icon name="cart-outline" size={32} color={Colors.ink3} />}
           />
         </View>
       );
@@ -361,9 +361,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
       return (
         <View style={styles.fillWrap}>
           <View style={styles.emptyContent}>
-            <Icon name="bag-outline" size={36} color={Colors.ink4} />
+            <Icon name="cart-outline" size={36} color={Colors.ink4} />
             <View style={styles.emptyText}>
-              <Text style={styles.emptyTitle}>Your bag is empty.</Text>
+              <Text style={styles.emptyTitle}>Your cart is empty.</Text>
               <Text style={styles.emptyBody}>Add items you love and they'll appear here.</Text>
             </View>
           </View>
@@ -400,7 +400,7 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         >
-          {/* ── Bag items ──────────────────────────────────────────────── */}
+          {/* ── Cart items ──────────────────────────────────────────────── */}
           <View style={styles.itemsSection}>
             {isGuest
               ? guestItems.map((item, index) => (
@@ -627,8 +627,8 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
         <ConfirmSheet
           onClose={() => setShowClearConfirm(false)}
           onConfirm={() => { setShowClearConfirm(false); clearCart(); }}
-          title="Clear bag"
-          body="Remove all items from your bag?"
+          title="Clear cart"
+          body="Remove all items from your cart?"
           confirmLabel="Clear"
           destructive
         />

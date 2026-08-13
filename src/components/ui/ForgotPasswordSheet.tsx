@@ -202,6 +202,7 @@ export const ForgotPasswordSheet: React.FC<ForgotPasswordSheetProps> = ({
                     value={otp}
                     onChangeText={setOtp}
                     keyboardType="number-pad"
+                    secureTextEntry
                     returnKeyType="done"
                     onSubmitEditing={handleVerifyOTP}
                     style={styles.input}

@@ -64,7 +64,7 @@ export const QuickAddButton: React.FC<QuickAddButtonProps> = ({ product }) => {
           IsPurchased:          false,
         });
         if (res?.statusCode !== 1) {
-          toast.error({ title: "Couldn't add to bag", description: res?.userMessage ?? 'Something went wrong.' });
+          toast.error({ title: "Couldn't add to cart", description: res?.userMessage ?? 'Something went wrong.' });
           return;
         }
       } else {
@@ -84,10 +84,10 @@ export const QuickAddButton: React.FC<QuickAddButtonProps> = ({ product }) => {
       }
       setCartCount((prev: number) => prev + 1);
       haptic.success();
-      toast.success({ title: 'Added to bag' });
+      toast.success({ title: 'Added to cart' });
     } catch {
       haptic.warning();
-      toast.error({ title: "Couldn't add to bag", description: 'Check your connection and try again.' });
+      toast.error({ title: "Couldn't add to cart", description: 'Check your connection and try again.' });
     } finally {
       setAdding(false);
     }
@@ -103,7 +103,7 @@ export const QuickAddButton: React.FC<QuickAddButtonProps> = ({ product }) => {
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       activeOpacity={0.85}
       accessibilityRole="button"
-      accessibilityLabel="Add to bag"
+      accessibilityLabel="Add to cart"
     >
       <Animated.View style={{ transform: [{ scale }] }}>
         <Icon name="add" size={18} color="#FFFFFF" />
