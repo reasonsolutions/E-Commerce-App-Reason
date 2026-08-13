@@ -10,6 +10,10 @@ export const Colors = {
   // Brighter "Ink & Ember" ember — Orders/Wishlist/Cart handoff's exact hex.
   // Distinct from `accent` (deeper terracotta) — do not merge the two.
   emberBright: '#E8794A',
+  // Darkened ember for small text on brandNavyTint (e.g. StatusBadge "New"/
+  // Order Placed) — #B0592E on #FBEEE3 only cleared 4.27:1, under WCAG AA's
+  // 4.5:1 floor for small text. This shade holds 6.07:1 on the same tint.
+  emberDeep:   '#8F4520',
 
   // ── Surfaces ──────────────────────────────────────────────────────────────
   // Three warm off-white levels replace the flat #FFFFFF + drop-shadow system.

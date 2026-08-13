@@ -71,12 +71,24 @@ const DetailRow: React.FC<{
   label: string;
   value: React.ReactNode;
   isLast?: boolean;
-}> = ({ label, value, isLast }) => (
-  <View style={[detailStyles.row, !isLast && detailStyles.rowDivider]}>
-    <Text style={detailStyles.rowLabel}>{label}</Text>
+  emphasis?: boolean;
+}> = ({ label, value, isLast, emphasis }) => (
+  <View
+    style={[
+      detailStyles.row,
+      emphasis && detailStyles.rowEmphasis,
+      !isLast && !emphasis && detailStyles.rowDivider,
+    ]}
+  >
+    <Text style={[detailStyles.rowLabel, emphasis && detailStyles.rowLabelEmphasis]}>
+      {label}
+    </Text>
     <View style={detailStyles.rowRight}>
       {typeof value === 'string' || typeof value === 'number' ? (
-        <Text style={detailStyles.rowValue} numberOfLines={2}>
+        <Text
+          style={[detailStyles.rowValue, emphasis && detailStyles.rowValueEmphasis]}
+          numberOfLines={2}
+        >
           {value}
         </Text>
       ) : (
@@ -98,10 +110,18 @@ const detailStyles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.rule,
   },
+  rowEmphasis: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.ink1,
+    paddingTop: Space[4],
+  },
   rowLabel: {
     ...Type.label,
     color: Colors.ink4,
     flexShrink: 0,
+  },
+  rowLabelEmphasis: {
+    color: Colors.ink1,
   },
   rowRight: {
     flex: 1,
@@ -113,6 +133,13 @@ const detailStyles = StyleSheet.create({
     color: Colors.ink2,
     letterSpacing: 0.2,
     textAlign: 'right',
+  },
+  rowValueEmphasis: {
+    fontFamily: FontFamily.serif,
+    fontSize: 20,
+    fontWeight: '400',
+    color: Colors.ink1,
+    letterSpacing: -0.2,
   },
 });
 
@@ -155,6 +182,7 @@ const ItemTimeline: React.FC<{ events: OrderEventInterface[] }> = ({
               {event.Date ? (
                 <Text style={timelineStyles.meta}>
                   {formatDate(event.Date)}
+                  {event.Location ? `  ·  ${event.Location}` : ''}
                 </Text>
               ) : null}
             </View>
@@ -728,6 +756,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
             label="TOTAL AMOUNT"
             value={`Rs ${orderPayment.AmountPaid.toLocaleString('en-IN')}`}
             isLast={!orderPayment.PaymentMode?.Description}
+            emphasis
           />
           {orderPayment.PaymentMode?.Description ? (
             <DetailRow
@@ -959,13 +988,13 @@ const styles = StyleSheet.create({
   },
   taxBreakdownLabel: {
     fontSize: 12,
-    color: Colors.ink3,
+    color: Colors.ink4,
     flex: 1,
   },
   taxBreakdownValue: {
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.ink2,
+    fontWeight: '400',
+    color: Colors.ink4,
   },
 });
 

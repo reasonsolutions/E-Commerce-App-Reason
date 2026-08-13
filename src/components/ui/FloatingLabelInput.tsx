@@ -18,6 +18,7 @@ interface FloatingLabelInputProps extends Omit<TextInputProps, 'style'> {
   error?: string | null;
   activeColor?: string;
   showToggle?: boolean;
+  required?: boolean;
 }
 
 export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
@@ -26,6 +27,7 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
   error,
   activeColor = Colors.ink1,
   showToggle = false,
+  required = false,
   onFocus,
   onBlur,
   ...rest
@@ -44,7 +46,7 @@ export const FloatingLabelInput: React.FC<FloatingLabelInputProps> = ({
     <TouchableWithoutFeedback onPress={() => inputRef.current?.focus()}>
       <View style={styles.wrapper}>
         <Text style={[styles.label, { color: labelColor }]} numberOfLines={1}>
-          {label}
+          {label}{required && <Text style={styles.requiredMark}> *</Text>}
         </Text>
 
         <View style={[styles.field, focused && styles.fieldFocused]}>
@@ -96,6 +98,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color:         Colors.ink3,
     marginBottom:  Space[2],
+  },
+  requiredMark: {
+    color: Colors.ink3,
   },
   field: {
     flexDirection:     'row',

@@ -275,8 +275,11 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
 
   const activePrice        = selectedVariant?.PriceDetails?.Price ?? 0;
   const activeComparePrice = selectedVariant?.PriceDetails?.ComparePrice ?? 0;
-  const hasDiscount        = activeComparePrice > activePrice;
+  // Backend-authoritative — ComparePrice can exceed Price by a rounding
+  // sliver the backend itself scores as 0% DiscountPct (e.g. 2299.99 vs
+  // 2298.85), which correctly shouldn't render as a discount.
   const discountPct        = selectedVariant?.PriceDetails?.DiscountPct ?? 0;
+  const hasDiscount         = discountPct >= 1;
 
   const isBackorder = selectedVariant?.StockStatus?.Value === InventoryStockFilter.OutOfStock
                       && hasBackorderCapacity(selectedVariant?.BackOrder);

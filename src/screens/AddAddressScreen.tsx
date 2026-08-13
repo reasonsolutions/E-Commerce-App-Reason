@@ -31,10 +31,15 @@ import type { DeliveryAddress } from './AddressScreen';
 type Props = {
   navigation: {
     goBack: () => void;
+    pop: (count: number) => void;
+    canGoBack: () => boolean;
+    navigate: (screen: string, params?: Record<string, any>) => void;
+    getState: () => { index: number } | undefined;
   };
   route: {
     params?: {
       editAddress?: DeliveryAddress;
+      from?: 'checkout';
     };
   };
 };
@@ -61,6 +66,7 @@ const LABEL_OPTIONS = [AddressLabel.Home, AddressLabel.Work, AddressLabel.Other]
 const AddAddressScreen: React.FC<Props> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const editAddress = route.params?.editAddress ?? null;
+  const isFromCheckout = route.params?.from === 'checkout';
 
   const [form, setForm]                 = useState(
     editAddress
@@ -91,18 +97,41 @@ const AddAddressScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
+  const REQUIRED_FIELDS: (keyof typeof EMPTY_ERRORS)[] = [
+    'CustomerName', 'MobileNumber', 'Address', 'StreetName', 'City', 'Zipcode',
+  ];
+  const REQUIRED_MESSAGE = 'This field is required';
+
   const validateForm = (): boolean => {
-    const errors = {
-      CustomerName: form.CustomerName.trim() ? '' : 'Name is required',
-      MobileNumber: form.MobileNumber.trim() ? '' : 'Mobile number is required',
-      Address:      form.Address.trim()      ? '' : 'Address is required',
-      StreetName:   form.StreetName.trim()   ? '' : 'Street name is required',
-      City:         form.City.trim()         ? '' : 'City is required',
-      Landmark:     '',
-      Zipcode:      form.Zipcode.trim()      ? '' : 'Zipcode is required',
-    };
+    const errors = { ...EMPTY_ERRORS };
+    REQUIRED_FIELDS.forEach(name => {
+      errors[name] = form[name].trim() ? '' : REQUIRED_MESSAGE;
+    });
     setFormErrors(errors);
     return !Object.values(errors).some(Boolean);
+  };
+
+  // Per-field validation on blur, so a mandatory field left empty is flagged
+  // immediately rather than only on Save.
+  const validateFieldOnBlur = (name: keyof typeof EMPTY_ERRORS) => {
+    if (!REQUIRED_FIELDS.includes(name)) return;
+    setFormErrors(prev => ({
+      ...prev,
+      [name]: form[name].trim() ? '' : REQUIRED_MESSAGE,
+    }));
+  };
+
+  // Guards goBack/pop against a stack shorter than expected (e.g. a dev
+  // Fast Refresh mid-flow) — falls back to MainTabs instead of the
+  // unhandled GO_BACK console error / stuck screen. canGoBack() alone only
+  // confirms >=1 screen behind us, not >=popCount, so check index depth too.
+  const safeGoBack = (popCount = 1) => {
+    const depth = navigation.getState()?.index ?? 0;
+    if (navigation.canGoBack() && depth >= popCount) {
+      popCount > 1 ? navigation.pop(popCount) : navigation.goBack();
+    } else {
+      navigation.navigate('MainTabs');
+    }
   };
 
   const handleSave = async () => {
@@ -134,7 +163,7 @@ const AddAddressScreen: React.FC<Props> = ({ navigation, route }) => {
           AddressLabel:             addressLabel ?? undefined,
         });
         if (response.statusCode === 1) {
-          navigation.goBack();
+          safeGoBack();
         } else {
           setFormError(response.userMessage || 'Failed to update address.');
         }
@@ -171,7 +200,14 @@ const AddAddressScreen: React.FC<Props> = ({ navigation, route }) => {
             String(match.OrderDeliveryAddressCode),
           );
         }
-        navigation.goBack();
+        // Coming from checkout with no address yet (list was empty pre-save):
+        // skip back past AddressManagement straight to Checkout, mirroring
+        // the "set as primary" auto-return in AddressManagementScreen.
+        if (isFromCheckout && list.length <= 1) {
+          safeGoBack(2);
+        } else {
+          safeGoBack();
+        }
       } else {
         setFormError(response.userMessage || 'Failed to save address.');
       }
@@ -276,9 +312,11 @@ const AddAddressScreen: React.FC<Props> = ({ navigation, route }) => {
               label="Full name"
               value={form.CustomerName}
               onChangeText={t => handleChange('CustomerName', t)}
+              onBlur={() => validateFieldOnBlur('CustomerName')}
               error={formErrors.CustomerName || null}
               autoCapitalize="words"
               returnKeyType="next"
+              required
             />
             <View style={styles.mobileRow}>
               <TouchableOpacity
@@ -296,9 +334,11 @@ const AddAddressScreen: React.FC<Props> = ({ navigation, route }) => {
                   label="Mobile number"
                   value={form.MobileNumber}
                   onChangeText={t => handleChange('MobileNumber', t)}
+                  onBlur={() => validateFieldOnBlur('MobileNumber')}
                   error={formErrors.MobileNumber || null}
                   keyboardType="numeric"
                   returnKeyType="next"
+                  required
                 />
               </View>
             </View>
@@ -306,25 +346,31 @@ const AddAddressScreen: React.FC<Props> = ({ navigation, route }) => {
               label="Address"
               value={form.Address}
               onChangeText={t => handleChange('Address', t)}
+              onBlur={() => validateFieldOnBlur('Address')}
               error={formErrors.Address || null}
               autoCapitalize="sentences"
               returnKeyType="next"
+              required
             />
             <FloatingLabelInput
               label="Street name"
               value={form.StreetName}
               onChangeText={t => handleChange('StreetName', t)}
+              onBlur={() => validateFieldOnBlur('StreetName')}
               error={formErrors.StreetName || null}
               autoCapitalize="sentences"
               returnKeyType="next"
+              required
             />
             <FloatingLabelInput
               label="City"
               value={form.City}
               onChangeText={t => handleChange('City', t)}
+              onBlur={() => validateFieldOnBlur('City')}
               error={formErrors.City || null}
               autoCapitalize="words"
               returnKeyType="next"
+              required
             />
             <FloatingLabelInput
               label="Landmark (optional)"
@@ -337,10 +383,12 @@ const AddAddressScreen: React.FC<Props> = ({ navigation, route }) => {
               label="Zipcode"
               value={form.Zipcode}
               onChangeText={t => handleChange('Zipcode', t)}
+              onBlur={() => validateFieldOnBlur('Zipcode')}
               error={formErrors.Zipcode || null}
               keyboardType="numeric"
               returnKeyType="done"
               onSubmitEditing={handleSave}
+              required
             />
           </View>
 

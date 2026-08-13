@@ -157,6 +157,12 @@ export const DeliverToRow: React.FC<DeliverToRowProps> = ({ onAddAddress }) => {
                     {[a.Address, a.StreetName].filter(Boolean).join(', ')}
                     {a.City || a.Zipcode ? ` — ${addressLine(a)}` : ''}
                   </Text>
+                  {a.MobileNumber ? (
+                    <View style={styles.optionMobileRow}>
+                      <Icon name="call-outline" size={11} color={Colors.ink4} />
+                      <Text style={styles.optionMobile}>{a.MobileNumber}</Text>
+                    </View>
+                  ) : null}
                 </View>
                 {isSelected ? (
                   <Icon name="checkmark-circle" size={20} color={Colors.ink1} />
@@ -255,6 +261,19 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sans,
     fontSize:   12,
     color:      Colors.ink3,
+  },
+  optionMobileRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           4,
+    marginTop:     2,
+  },
+  optionMobile: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      11,
+    fontWeight:    '500',
+    color:         Colors.ink4,
+    letterSpacing: 0.2,
   },
   optionRadio: {
     width:        20,

@@ -26,7 +26,7 @@ type StatusPalette = { fg: string; bg: string; dot: string };
 // Premium register: ember for placed/in-progress, ink for completed, muted danger for cancelled.
 // Retired: saturated semantic tints (warningTint/infoTint) — too noisy.
 const palette: Record<OrderStatus, StatusPalette> = {
-  New:          { fg: '#B0592E', bg: Colors.brandNavyTint, dot: '#B0592E' },  // ember tint
+  New:          { fg: Colors.emberDeep, bg: Colors.brandNavyTint, dot: Colors.emberDeep },  // ember tint
   Confirmed:    { fg: '#1D4ED8', bg: '#DBEAFE', dot: '#3B82F6' },  // blue
   Processing:   { fg: '#1D4ED8', bg: '#DBEAFE', dot: '#3B82F6' },  // blue
   Fulfilled:    { fg: '#6D28D9', bg: '#EDE9FE', dot: '#8B5CF6' },  // violet
@@ -59,7 +59,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   return (
     <View style={[styles.pill, { backgroundColor: c.bg }]}>
       <View style={[styles.dot, { backgroundColor: c.dot }]} />
-      <Text style={[styles.label, { color: c.fg }]}>{displayLabel[status] ?? status}</Text>
+      <Text
+        style={[styles.label, { color: c.fg }]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {displayLabel[status] ?? status}
+      </Text>
     </View>
   );
 };
@@ -78,8 +84,10 @@ const styles = StyleSheet.create({
     width:        4,
     height:       4,
     borderRadius: 2,
+    flexShrink:   0,
   },
   label: {
+    flexShrink:    1,
     fontSize:      FontSize.xs,
     fontWeight:    FontWeight.medium,
     letterSpacing: 0.3,

@@ -88,7 +88,11 @@ const AddressRow: React.FC<{
           activeOpacity={1}
           onPress={() => {
             haptic.light();
-            onEdit();
+            if (isFromCheckout) {
+              onSetPrimary();
+            } else {
+              onEdit();
+            }
           }}
         >
           <View
@@ -132,9 +136,12 @@ const AddressRow: React.FC<{
             {item.Landmark ? (
               <Text style={styles.addressLineMuted}>{item.Landmark}</Text>
             ) : null}
-            <Text style={styles.addressMobile}>
-              {String(item.MobileNumber)}
-            </Text>
+            <View style={styles.addressMobileRow}>
+              <Icon name="call-outline" size={11} color={Colors.ink4} />
+              <Text style={styles.addressMobile}>
+                {String(item.MobileNumber)}
+              </Text>
+            </View>
             {!item.IsPrimary || isFromCheckout ? (
               <TouchableOpacity
                 onPress={() => {
@@ -298,7 +305,9 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation, route }) => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Addresses</Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('AddAddress')}
+          onPress={() =>
+            navigation.navigate('AddAddress', isFromCheckout ? { from: 'checkout' } : undefined)
+          }
           style={styles.addBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           activeOpacity={0.6}
@@ -361,7 +370,9 @@ const AddressManagementScreen: React.FC<Props> = ({ navigation, route }) => {
                 action={
                   <TouchableOpacity
                     style={styles.emptyAddBtn}
-                    onPress={() => navigation.navigate('AddAddress')}
+                    onPress={() =>
+                      navigation.navigate('AddAddress', isFromCheckout ? { from: 'checkout' } : undefined)
+                    }
                     activeOpacity={0.88}
                     accessibilityRole="button"
                     accessibilityLabel="Add address"
@@ -507,12 +518,17 @@ const styles = StyleSheet.create({
     color: Colors.ink4,
     lineHeight: 13 * 1.5,
   },
+  addressMobileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
   addressMobile: {
     fontSize: 11,
     fontWeight: '500',
     color: Colors.ink4,
     letterSpacing: 0.2,
-    marginTop: 2,
   },
   setPrimaryBtn: {
     alignSelf: 'flex-start',

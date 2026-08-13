@@ -272,33 +272,50 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
         contentContainerStyle={{ paddingBottom: insets.bottom + 240 }}
       >
         {/* Address Section */}
-        {primaryAddress && (
-          <View style={styles.section}>
-            <Text style={styles.sectionEyebrow}>DELIVERING TO</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionEyebrow}>DELIVERING TO</Text>
+          {primaryAddress ? (
+            <>
+              <TouchableOpacity
+                style={styles.addressCard}
+                onPress={() => navigation.navigate('AddressManagement', { from: 'checkout' })}
+                activeOpacity={0.7}
+              >
+                <View style={styles.addressContent}>
+                  <Text style={styles.addressName}>{primaryAddress.CustomerName}</Text>
+                  <Text style={styles.addressText}>
+                    {primaryAddress.Address}{primaryAddress.Address && primaryAddress.City ? '\n' : ''}{primaryAddress.City}
+                  </Text>
+                  {primaryAddress.MobileNumber && (
+                    <View style={styles.addressMobileRow}>
+                      <Icon name="call-outline" size={11} color={Colors.ink4} />
+                      <Text style={styles.addressMobile}>{primaryAddress.MobileNumber}</Text>
+                    </View>
+                  )}
+                </View>
+                <Icon name="chevron-forward" size={20} color={Colors.ink3} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('AddressManagement', { from: 'checkout' })}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.changeAddressLink}>Change delivery address</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
             <TouchableOpacity
               style={styles.addressCard}
               onPress={() => navigation.navigate('AddressManagement', { from: 'checkout' })}
               activeOpacity={0.7}
             >
               <View style={styles.addressContent}>
-                <Text style={styles.addressName}>{primaryAddress.CustomerName}</Text>
-                <Text style={styles.addressText}>
-                  {primaryAddress.Address}{primaryAddress.Address && primaryAddress.City ? '\n' : ''}{primaryAddress.City}
-                </Text>
-                {primaryAddress.MobileNumber && (
-                  <Text style={styles.addressText}>{primaryAddress.MobileNumber}</Text>
-                )}
+                <Text style={styles.addressName}>Add a delivery address</Text>
+                <Text style={styles.addressText}>Required to place your order</Text>
               </View>
-              <Icon name="chevron-forward" size={20} color={Colors.ink3} />
+              <Icon name="add-circle-outline" size={22} color={Colors.ink3} />
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('AddressManagement', { from: 'checkout' })}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.changeAddressLink}>Change delivery address</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
 
         {/* Divider */}
         <View style={styles.divider} />
@@ -649,7 +666,6 @@ const styles = StyleSheet.create({
   },
   addressContent: {
     flex: 1,
-    gap: Space[2],
   },
   addressName: {
     fontFamily: FontFamily.serif,
@@ -662,6 +678,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.ink3,
     lineHeight: 21,
+    marginTop: 2,
+  },
+  addressMobileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  addressMobile: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Colors.ink4,
+    letterSpacing: 0.2,
   },
   changeAddressLink: {
     fontSize: 13.5,

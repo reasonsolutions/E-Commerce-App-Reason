@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StatusBar,
   FlatList,
+  ScrollView,
   Animated,
   ActivityIndicator,
   ListRenderItemInfo,
@@ -29,6 +30,7 @@ import {
   Skeleton,
   OrderFilterSheet,
   ErrorBanner,
+  StatusBadge,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius, Shadow } from '../theme';
@@ -41,6 +43,7 @@ import { useTabRootBackHandler } from '../hooks/useTabRootBackHandler';
 import { useCart } from '../context/CartContext';
 import { formatDate } from '../utils/formatDate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { orderStatusLabel } from '../utils/orderStatus';
 import { OrderStatusCode, type OrderHistoryItemInterface, type OrderDetailItemExtendedInterface } from '../api/interfaces';
 import { LoginPromptSheet } from '../components/ui';
 import { Motion } from '../theme/motion';
@@ -83,8 +86,7 @@ function groupOrders(items: OrderHistoryItemInterface[]): OrderGroup[] {
   return Array.from(map.values());
 }
 
-const THUMB_SIZE = 44;
-const MAX_THUMBS = 3;
+const THUMB_SIZE = 72;
 
 // ── Order summary card ────────────────────────────────────────────────────────
 const OrderCard: React.FC<{
@@ -95,9 +97,6 @@ const OrderCard: React.FC<{
 }> = React.memo(({ group, onPress, onReorder, delay }) => {
   const haptic = useHaptic();
   const entrance = useEntrance(delay);
-  const itemCount = group.items.length;
-  const visibleThumbs = group.items.slice(0, MAX_THUMBS);
-  const overflow = itemCount - MAX_THUMBS;
   const sellerCount = new Set(
     group.items.map(it => it.CompanyName).filter((name): name is string => !!name),
   ).size;
@@ -107,65 +106,82 @@ const OrderCard: React.FC<{
 
   return (
     <Animated.View style={[entrance, cardStyles.wrapper]}>
-      <TouchableOpacity
-        style={cardStyles.card}
-        activeOpacity={0.88}
-        onPress={() => { haptic.light(); onPress(group); }}
-      >
-        {/* Thumbnails */}
-        <View style={cardStyles.thumbRow}>
-          {visibleThumbs.map((item, i) => (
-            <View key={`${item.Inventory_Id}-${i}`} style={cardStyles.thumbWrap}>
-              <FadeImage
-                uri={resolveImageUrl(item.Images)}
-                width={THUMB_SIZE}
-                height={THUMB_SIZE}
-                borderRadius={Radius.sm}
-                resizeMode="contain"
-                showSkeleton
-              />
+      <View style={cardStyles.card}>
+        {/* Product tiles — one per item, each with its own status pill since
+            OrderStatus is per-item on the API (an order can be part-delivered,
+            part-cancelled). Horizontally scrollable so cards with many items
+            keep a fixed card height instead of growing tall.
+            Kept as a sibling of the pressable details area below, not a
+            descendant — nesting a ScrollView inside the card's own
+            TouchableOpacity lets the touchable win the pan gesture on iOS
+            before the ScrollView can claim it. */}
+        <ScrollView
+          horizontal
+          directionalLockEnabled
+          showsHorizontalScrollIndicator={false}
+          style={cardStyles.thumbScroll}
+          contentContainerStyle={cardStyles.thumbRow}
+        >
+          {group.items.map((item, i) => (
+            <View key={`${item.Inventory_Id}-${i}`} style={cardStyles.thumbTile}>
+              <View style={cardStyles.thumbWrap}>
+                <FadeImage
+                  uri={resolveImageUrl(item.Images)}
+                  width={THUMB_SIZE}
+                  height={THUMB_SIZE}
+                  borderRadius={Radius.sm}
+                  resizeMode="contain"
+                  showSkeleton
+                />
+                {item.Quantity > 1 ? (
+                  <View style={cardStyles.qtyBadge}>
+                    <Text style={cardStyles.qtyBadgeText}>Qty {item.Quantity}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <StatusBadge status={orderStatusLabel(item.OrderStatus)} />
             </View>
           ))}
-          {overflow > 0 && (
-            <View style={cardStyles.overflowBadge}>
-              <Text style={cardStyles.overflowText}>+{overflow}</Text>
-            </View>
-          )}
-        </View>
+        </ScrollView>
 
-        {/* Date · seller(s) on the left, total on the right — status is shown on the order details screen instead */}
-        <View style={cardStyles.metaRow}>
-          <View style={cardStyles.metaCol}>
-            <Text style={cardStyles.metaPrimary} numberOfLines={1}>
-              {formatDate(group.orderedDate)}
-              {sellerLabel ? `  ·  ${sellerLabel}` : ''}
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={() => { haptic.light(); onPress(group); }}
+        >
+          {/* Date · seller(s) on the left, total on the right */}
+          <View style={cardStyles.metaRow}>
+            <View style={cardStyles.metaCol}>
+              <Text style={cardStyles.metaPrimary} numberOfLines={1}>
+                {formatDate(group.orderedDate)}
+                {sellerLabel ? `  ·  ${sellerLabel}` : ''}
+              </Text>
+            </View>
+            <Text style={cardStyles.total} numberOfLines={1}>
+              Rs {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </Text>
           </View>
-          <Text style={cardStyles.total} numberOfLines={1}>
-            Rs {group.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-          </Text>
-        </View>
 
-        {/* Actions */}
-        <View style={cardStyles.actions}>
-          <View style={cardStyles.viewDetailsRow}>
-            <Text style={cardStyles.viewDetailsText}>View order details</Text>
-            <Icon name="arrow-forward" size={13} color={Colors.accent} />
-          </View>
-          <View
-            onStartShouldSetResponder={() => true}
-            onResponderTerminationRequest={() => false}
-          >
-            <TouchableOpacity
-              style={cardStyles.reorderLink}
-              activeOpacity={0.7}
-              onPress={() => { haptic.light(); onReorder(group); }}
+          {/* Actions */}
+          <View style={cardStyles.actions}>
+            <View style={cardStyles.viewDetailsRow}>
+              <Text style={cardStyles.viewDetailsText}>View order details</Text>
+              <Icon name="arrow-forward" size={13} color={Colors.accent} />
+            </View>
+            <View
+              onStartShouldSetResponder={() => true}
+              onResponderTerminationRequest={() => false}
             >
-              <Text style={cardStyles.reorderLinkText}>Reorder</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={cardStyles.reorderLink}
+                activeOpacity={0.7}
+                onPress={() => { haptic.light(); onReorder(group); }}
+              >
+                <Text style={cardStyles.reorderLinkText}>Reorder</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 });
@@ -181,29 +197,48 @@ const cardStyles = StyleSheet.create({
     paddingVertical:   Space[4],
     ...Shadow.sm,
   },
+  thumbScroll: {
+    // Explicit style (not just contentContainerStyle) so the ScrollView's
+    // own viewport is bound to the row's width instead of shrink-wrapping
+    // to its content — without this, tiles past what fits on one screen
+    // get clipped by the card instead of becoming scrollable overflow.
+    width:        '100%',
+    marginBottom: Space[4],
+  },
   thumbRow: {
     flexDirection: 'row',
-    flexShrink:    1,
-    gap:           Space[2],
-    marginBottom:  Space[4],
+    gap:           Space[3],
+  },
+  thumbTile: {
+    // minWidth (not width) — the image column stays THUMB_SIZE via its own
+    // fixed width/height below, but the tile itself must be free to grow
+    // wider than that when the real status word (e.g. "Confirmed") needs
+    // more room than the thumbnail does. A fixed width here would clip the
+    // badge text instead of letting the row's horizontal scroll absorb it.
+    minWidth:  THUMB_SIZE,
+    alignItems: 'flex-start',
+    gap:        Space[1] + 2,
   },
   thumbWrap: {
+    position:        'relative',
     backgroundColor: Colors.surfaceSoft,
     borderRadius:    Radius.sm,
     overflow:        'hidden',
   },
-  overflowBadge: {
-    width:           THUMB_SIZE,
-    height:          THUMB_SIZE,
-    borderRadius:    Radius.sm,
-    backgroundColor: Colors.surfaceDeep,
-    alignItems:      'center',
-    justifyContent:  'center',
+  qtyBadge: {
+    position:          'absolute',
+    top:               Space[1],
+    left:              Space[1],
+    backgroundColor:   'rgba(0,0,0,0.65)',
+    borderRadius:      Radius.pill,
+    paddingHorizontal: Space[1] + 2,
+    paddingVertical:   1,
   },
-  overflowText: {
-    fontSize:      12,
-    fontWeight:    '500',
-    color:         Colors.ink3,
+  qtyBadgeText: {
+    fontFamily:    FontFamily.sans,
+    fontSize:      9,
+    fontWeight:    '600',
+    color:         '#FFFFFF',
     letterSpacing: 0.2,
   },
   total: {
