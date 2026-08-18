@@ -52,7 +52,7 @@ import {
   COL_W,
   GRID_IMG_H,
 } from './ResultScreen.styles';
-import { deduplicateProducts, isFeaturedSpan, toServerSortBy, applySort } from '../utils/resultHelpers';
+import { deduplicateProducts, isFeaturedSpan, toServerSortBy } from '../utils/resultHelpers';
 import { useWishlist } from '../context/WishlistContext';
 import { wishlistCache } from '../utils/wishlistCache';
 import { isProductSoldOut, isVariantPurchasable } from '../utils/stock';
@@ -498,14 +498,28 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   // cards today still only read the flattened fields below, unchanged.
   // Pricing (Price/ComparePrice/DiscountPct) no longer comes flattened on the
   // product root — the backend only sends it per-variant under
-  // Variants[].PriceDetails — so it's read off the first purchasable variant
-  // (in-stock, or out-of-stock-but-backorderable), falling back to Variants[0]
-  // only when every variant is truly sold out. Same variant backs
-  // Inventory_Id/Variant/Count so the card's price and its "add to cart"
-  // target always agree.
+  // Variants[].PriceDetails. Which purchasable variant represents the product
+  // depends on the active sort: price_asc shows the cheapest purchasable
+  // variant, price_desc the priciest, so the displayed price agrees with the
+  // server's price-sorted order; any other sort (default/newest) shows the
+  // first purchasable variant. Falls back to Variants[0] only when every
+  // variant is truly sold out. Same variant backs Inventory_Id/Variant/Count
+  // so the card's price and its "add to cart" target always agree.
   const mapProducts = (raw: AllProductsRawItem[]): ProductByCategoryProductDetails[] =>
     raw.map(p => {
-      const variant = p.Variants?.find(isVariantPurchasable) ?? p.Variants?.[0];
+      const purchasable = p.Variants?.filter(isVariantPurchasable) ?? [];
+      let variant = purchasable[0] ?? p.Variants?.[0];
+      if (purchasable.length > 1) {
+        if (sortKey === 'price_asc') {
+          variant = purchasable.reduce((min, v) =>
+            v.PriceDetails.Price < min.PriceDetails.Price ? v : min,
+          );
+        } else if (sortKey === 'price_desc') {
+          variant = purchasable.reduce((max, v) =>
+            v.PriceDetails.Price > max.PriceDetails.Price ? v : max,
+          );
+        }
+      }
       const priceDetails = variant?.PriceDetails;
       return {
         Item_Id: Number(p.ItemID),
@@ -800,11 +814,9 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ navigation }) => {
   const priceFloor   = priceBoundsRef.current?.floor   ?? 0;
   const priceCeiling = priceBoundsRef.current?.ceiling ?? 10000;
 
-  // ── Rendered product list (sort applied client-side, driven by allProducts) ─
-  const deduplicated = useMemo(
-    () => applySort(allProducts, sortKey),
-    [allProducts, sortKey],
-  );
+  // ── Rendered product list — sort is fully server-driven (see buildPayload/
+  // toServerSortBy); allProducts is already in the right order, page over page.
+  const deduplicated = allProducts;
   const rows = useMemo(() => {
     const gridProducts = deduplicated;
     const result: Array<

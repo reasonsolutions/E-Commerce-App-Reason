@@ -1,5 +1,6 @@
 import axiosInstance from '../axiosInstance';
 import { orderEndpoints } from '../endpoints';
+import { OrderStatusCode } from '../interfaces';
 import type {
   PlaceOrderInterface,
   PlaceOrderResponse,
@@ -40,10 +41,11 @@ interface RawOrderHistoryGroup {
 }
 
 export interface OrderHistoryFilters {
-  sortBy?:   'asc' | 'desc';
-  dateFrom?: string | null;
-  dateTo?:   string | null;
-  status?:   'all' | 'delivered' | 'cancelled' | 'returned';
+  sortBy?:      'asc' | 'desc';
+  dateFrom?:    string | null;
+  dateTo?:      string | null;
+  status?:      'all' | 'delivered' | 'cancelled' | 'returned';
+  searchQuery?: string | null;
 }
 
 export const placeOrder = async (data: PlaceOrderInterface): Promise<PlaceOrderResponse> => {
@@ -54,26 +56,30 @@ export const placeOrder = async (data: PlaceOrderInterface): Promise<PlaceOrderR
 // Kept so AddressScreen compiles without changes — delegates to placeOrder
 export const postPlacedMultipleOrder = placeOrder;
 
-// Status isn't a backend filter param on this endpoint (see OrderHistoryRequest) —
-// it's applied client-side in OrderHistoryScreen. When a status filter is active,
-// fetch the full history in one page rather than 10 at a time, otherwise the
-// filter only ever sees whichever page(s) happen to be loaded.
-const UNFILTERED_PAGE_SIZE = 10;
-const STATUS_FILTERED_PAGE_SIZE = 500;
+const PAGE_SIZE_DEFAULT = 10;
+
+const STATUS_TO_CODE: Record<Exclude<OrderHistoryFilters['status'], 'all' | undefined>, number> = {
+  delivered: OrderStatusCode.Delivered,
+  cancelled: OrderStatusCode.Cancelled,
+  returned:  OrderStatusCode.Returned,
+};
 
 export const postOrderHistory = async (
   customerprofilecode: number,
   page: number = 1,
   filters: OrderHistoryFilters = {},
 ): Promise<{ items: any[]; hasMore: boolean; totalRecords: number }> => {
-  const isStatusFiltered = !!filters.status && filters.status !== 'all';
+  const searchQuery = filters.searchQuery?.trim();
+  const statusCode = filters.status && filters.status !== 'all' ? STATUS_TO_CODE[filters.status] : null;
   const payload: OrderHistoryRequest = {
     CustomerProfileCode: customerprofilecode,
-    PageNumber:          isStatusFiltered ? 1 : page,
-    PageSize:            isStatusFiltered ? STATUS_FILTERED_PAGE_SIZE : UNFILTERED_PAGE_SIZE,
+    PageNumber:          page,
+    PageSize:            PAGE_SIZE_DEFAULT,
     SortBy:              filters.sortBy ?? 'desc',
     DateFrom:            filters.dateFrom ?? null,
     DateTo:              filters.dateTo ?? null,
+    OrderStatusList:     statusCode !== null ? [statusCode] : null,
+    SearchQuery:         searchQuery ? `%${searchQuery}%` : null,
   };
   const response = await axiosInstance.post(orderEndpoints.getOrderHistory, payload);
   const raw: { result?: OrderHistoryApiResponse } = response.data;

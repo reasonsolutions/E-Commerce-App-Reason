@@ -31,6 +31,7 @@ import {
   OrderFilterSheet,
   ErrorBanner,
   StatusBadge,
+  SearchBar,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
 import { Colors, Space, Radius, Shadow } from '../theme';
@@ -44,7 +45,7 @@ import { useCart } from '../context/CartContext';
 import { formatDate } from '../utils/formatDate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { orderStatusLabel } from '../utils/orderStatus';
-import { OrderStatusCode, type OrderHistoryItemInterface, type OrderDetailItemExtendedInterface } from '../api/interfaces';
+import type { OrderHistoryItemInterface, OrderDetailItemExtendedInterface } from '../api/interfaces';
 import { LoginPromptSheet } from '../components/ui';
 import { Motion } from '../theme/motion';
 
@@ -338,11 +339,13 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
 
   const [filters, setFilters]             = useState<OrderHistoryFilters>({});
   const [filterVisible, setFilterVisible] = useState(false);
+  const [searchInput, setSearchInput]     = useState('');
 
   const fetchingRef      = useRef(false);
   const pageRef          = useRef(1);
   const filtersRef       = useRef<OrderHistoryFilters>({});
   filtersRef.current     = filters;
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchPage = useCallback(async (
     pageNum: number,
@@ -414,6 +417,18 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
     reload({});
   };
 
+  const handleSearchChange = (text: string) => {
+    setSearchInput(text);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    const trimmed = text.trim();
+    if (trimmed.length > 0 && trimmed.length < 2) return; // wait for more input before searching
+    searchDebounceRef.current = setTimeout(() => {
+      const newFilters = { ...filtersRef.current, searchQuery: trimmed || undefined };
+      setFilters(newFilters);
+      reload(newFilters);
+    }, trimmed ? 300 : 0);
+  };
+
   const handleReorder = useCallback((group: OrderGroup) => {
     guard(async () => {
       const code = await getProfileCode();
@@ -462,16 +477,11 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
     filters.status && filters.status !== 'all',
   ].filter(Boolean).length;
 
-  const groups = useMemo(() => {
-    const allGroups = groupOrders(orders);
-    if (!filters.status || filters.status === 'all') return allGroups;
-    return allGroups.filter(g => {
-      if (filters.status === 'delivered') return g.items.some(it => it.OrderStatus === OrderStatusCode.Delivered);
-      if (filters.status === 'cancelled') return g.items.some(it => it.OrderStatus === OrderStatusCode.Cancelled);
-      if (filters.status === 'returned')  return g.items.some(it => it.OrderStatus === OrderStatusCode.Returned);
-      return true;
-    });
-  }, [orders, filters.status]);
+  const isSearchActive = !!filters.searchQuery;
+
+  // OrderStatusList is now sent to the backend (see postOrderHistory), so
+  // orders already come back pre-filtered by status — no client-side re-filter needed.
+  const groups = useMemo(() => groupOrders(orders), [orders]);
 
   const groupCount = groups.length;
 
@@ -510,7 +520,7 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
     return null;
   };
 
-  const hasActiveFilters = !!(filters.sortBy && filters.sortBy !== 'desc') || !!filters.dateFrom || !!filters.dateTo || !!(filters.status && filters.status !== 'all');
+  const hasActiveFilters = !!(filters.sortBy && filters.sortBy !== 'desc') || !!filters.dateFrom || !!filters.dateTo || !!(filters.status && filters.status !== 'all') || isSearchActive;
 
   const renderEmpty = () => {
     if (isGuest) {
@@ -701,6 +711,15 @@ const OrderHistoryScreen: React.FC<OrderHistoryScreenProps> = ({ navigation, rou
           ) : null}
         </TouchableOpacity>
       </View>
+
+      <View style={styles.searchWrap}>
+        <SearchBar
+          value={searchInput}
+          onChangeText={handleSearchChange}
+          placeholder="Search orders, products…"
+        />
+      </View>
+
       <View style={styles.headerDivider} />
 
       {renderBody()}
@@ -760,6 +779,11 @@ const styles = StyleSheet.create({
   headerDivider: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: Colors.rule,
+  },
+  searchWrap: {
+    paddingHorizontal: Space.screenH,
+    paddingBottom:     Space[3],
+    backgroundColor:   Colors.surfaceSoft,
   },
 
   filterBtn: {

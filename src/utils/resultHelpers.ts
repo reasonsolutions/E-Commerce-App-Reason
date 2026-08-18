@@ -1,7 +1,6 @@
 import { SortBy } from '../config/enum_files/SortBy';
 import type { ProductByCategoryProductDetails } from '../api/interfaces';
 import type { SortKey } from '../components/ui';
-import { parseServerDate } from './parseServerDate';
 
 export function deduplicateProducts(
   products: ProductByCategoryProductDetails[],
@@ -18,30 +17,12 @@ export function isFeaturedSpan(indexInGrid: number): boolean {
   return indexInGrid > 0 && indexInGrid % 5 === 0;
 }
 
+// All sort keys (price_asc/price_desc/newest) are resolved server-side via
+// SortBy — see buildPayload in ResultScreen. No client-side re-sort of
+// allProducts: the list is rendered in server order across pages.
 export function toServerSortBy(sortKey: SortKey): SortBy | null {
   if (sortKey === 'price_asc')  return SortBy.LowToHigh;
   if (sortKey === 'price_desc') return SortBy.HighToLow;
+  if (sortKey === 'newest')     return SortBy.Newest;
   return null;
-}
-
-export function applySort(
-  products: ProductByCategoryProductDetails[],
-  sortKey: SortKey,
-): ProductByCategoryProductDetails[] {
-  if (sortKey === 'newest') {
-    return [...products].sort((a, b) =>
-      parseServerDate(b.Date_Created) - parseServerDate(a.Date_Created),
-    );
-  }
-  // Server-side price sort keys off an arbitrary variant (e.g. Variants[0]),
-  // which can be out of stock — the card always shows the first *purchasable*
-  // variant's price (see mapProducts), so re-sort here on that same Price
-  // field to guarantee the displayed order always matches the displayed price.
-  if (sortKey === 'price_asc') {
-    return [...products].sort((a, b) => a.Price - b.Price);
-  }
-  if (sortKey === 'price_desc') {
-    return [...products].sort((a, b) => b.Price - a.Price);
-  }
-  return products;
 }

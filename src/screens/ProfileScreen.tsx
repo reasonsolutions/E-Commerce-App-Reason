@@ -398,7 +398,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         getWishlist(code)
           .then((res: any) => {
             if (cancelled) return;
-            if (res?.statusCode === 1) setWishlistCount((res.result || []).length);
+            if (res?.statusCode === 1) setWishlistCount(res.totalRecords ?? 0);
           })
           .catch(() => {});
       })

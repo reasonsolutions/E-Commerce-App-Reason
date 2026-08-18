@@ -35,22 +35,33 @@ function normalizeWishlist(raw: WishlistApiResponse): WishlistItemInterface[] {
   });
 }
 
-export const getWishlist = async (customerprofilecode: number): Promise<{
+const WISHLIST_PAGE_SIZE = 50;
+
+export const getWishlist = async (
+  customerprofilecode: number,
+  page: number = 1,
+): Promise<{
   statusCode: number;
   result: WishlistItemInterface[];
   userMessage: string;
+  hasMore: boolean;
+  totalRecords: number;
 }> => {
   const response = await axiosInstance.get(
-    `${wishlistEndpoints.getWishlist}?customerProfileCode=${customerprofilecode}&pageNumber=1&pageSize=50`,
+    `${wishlistEndpoints.getWishlist}?customerProfileCode=${customerprofilecode}&pageNumber=${page}&pageSize=${WISHLIST_PAGE_SIZE}`,
   );
   const data = response.data;
   if (data?.statusCode !== 1) {
-    return { statusCode: data?.statusCode ?? 0, result: [], userMessage: data?.userMessage ?? '' };
+    return { statusCode: data?.statusCode ?? 0, result: [], userMessage: data?.userMessage ?? '', hasMore: false, totalRecords: 0 };
   }
+  const apiResult = data.result as WishlistApiResponse;
+  const totalRecords = apiResult?.TotalRecords ?? 0;
   return {
     statusCode: 1,
-    result:     normalizeWishlist(data.result as WishlistApiResponse),
+    result:     normalizeWishlist(apiResult),
     userMessage: data.userMessage ?? '',
+    hasMore:     page * WISHLIST_PAGE_SIZE < totalRecords,
+    totalRecords,
   };
 };
 

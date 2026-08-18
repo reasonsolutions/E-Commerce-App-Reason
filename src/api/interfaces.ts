@@ -32,6 +32,8 @@ export interface OrderHistoryRequest {
     DateTo?: string | null;
     PageNumber?: number;
     PageSize?: number;
+    OrderStatusList?: number[] | null;
+    SearchQuery?: string | null;
 }
 
 export interface OrderDetailRequest {

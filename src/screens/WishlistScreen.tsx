@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Dimensions,
   ListRenderItemInfo,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -199,32 +200,45 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
   const [isFTU, setIsFTU]         = useState(false);
   const [isGuest, setIsGuest]     = useState(false);
   const [profileCode, setProfileCode] = useState<number | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [hasMore, setHasMore]         = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const STALE_MS = 30_000;
+
+  const fetchingRef = useRef(false);
+  const pageRef      = useRef(1);
 
   const fetchWishlist = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
-        const code = await getProfileCode();
-        if (!code) { setIsGuest(true); return []; }
-        setIsGuest(false);
-        setProfileCode(code);
-        const response = await getWishlist(code);
-        const result = response.statusCode === 1 ? (response.result || []) : [];
-        wishlistCache.markFresh();
-        // FTU detection: empty result + wishlistSeen not yet set
-        if (result.length === 0) {
-          const seen = await AsyncStorage.getItem(scopedKey('wishlistSeen', code));
-          if (!seen) {
-            setIsFTU(true);
-            await AsyncStorage.setItem(scopedKey('wishlistSeen', code), '1');
+        if (fetchingRef.current) return [];
+        fetchingRef.current = true;
+        try {
+          const code = await getProfileCode();
+          if (!code) { setIsGuest(true); return []; }
+          setIsGuest(false);
+          setProfileCode(code);
+          const response = await getWishlist(code, 1);
+          const result = response.statusCode === 1 ? (response.result || []) : [];
+          pageRef.current = 1;
+          setHasMore(response.statusCode === 1 ? response.hasMore : false);
+          wishlistCache.markFresh();
+          // FTU detection: empty result + wishlistSeen not yet set
+          if (result.length === 0) {
+            const seen = await AsyncStorage.getItem(scopedKey('wishlistSeen', code));
+            if (!seen) {
+              setIsFTU(true);
+              await AsyncStorage.setItem(scopedKey('wishlistSeen', code), '1');
+            } else {
+              setIsFTU(false);
+            }
           } else {
             setIsFTU(false);
           }
-        } else {
-          setIsFTU(false);
+          return result;
+        } finally {
+          fetchingRef.current = false;
         }
-        return result;
       }, cancelled),
     [run],
   );
@@ -251,13 +265,39 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
     }, [fetchWishlist]),
   );
 
+  const onEndReached = useCallback(async () => {
+    if (!hasMore || fetchingRef.current || !profileCode) return;
+    fetchingRef.current = true;
+    setLoadingMore(true);
+    try {
+      const nextPage = pageRef.current + 1;
+      const res = await getWishlist(profileCode, nextPage);
+      if (res.statusCode === 1) {
+        setItems(prev => [...prev, ...res.result]);
+        pageRef.current = nextPage;
+        setHasMore(res.hasMore);
+      }
+    } finally {
+      setLoadingMore(false);
+      fetchingRef.current = false;
+    }
+  }, [hasMore, profileCode]);
+
+  // Optimistic: remove locally right away, roll back only if the API call fails —
+  // re-fetching here would only return page 1 and silently drop any later pages
+  // the user had already scrolled to load.
   const handleRemove = useCallback(async (wishlistCode: number) => {
     if (!profileCode) return;
+    const snapshot = items;
     setItems(prev => prev.filter(i => i.WishlistCode !== wishlistCode));
-    await removeFromWishlist(profileCode, wishlistCode);
-    const res = await getWishlist(profileCode);
-    if (res.statusCode === 1) { setItems(res.result); wishlistCache.markFresh(); }
-  }, [profileCode]);
+    try {
+      await removeFromWishlist(profileCode, wishlistCode);
+      wishlistCache.markFresh();
+    } catch {
+      setItems(snapshot);
+      toastEmitter.emit('error', 'Could not remove item — please try again');
+    }
+  }, [profileCode, items]);
 
   const handleAddToBag = useCallback(async (item: WishlistItemInterface) => {
     if (!profileCode || addingIds.has(item.WishlistCode)) return;
@@ -427,6 +467,13 @@ const WishlistScreen: React.FC<WishlistScreenProps> = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={wishlistCache.lastFetchTime && !loading ? renderEmpty : null}
+        ListFooterComponent={loadingMore ? (
+          <View style={styles.footerLoader}>
+            <ActivityIndicator size="small" color={Colors.ink3} />
+          </View>
+        ) : null}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.4}
         style={styles.list}
         initialNumToRender={8}
         maxToRenderPerBatch={8}
@@ -522,6 +569,10 @@ const styles = StyleSheet.create({
   columnWrapper: {
     gap:          COL_GAP,
     marginBottom: Space[6],
+  },
+  footerLoader: {
+    paddingVertical: Space[5],
+    alignItems:      'center',
   },
 
   // ── Card ──────────────────────────────────────────────────────────────────────
