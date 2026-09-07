@@ -217,7 +217,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
             city: primaryAddress?.City ?? '',
           },
           cartItems: (result?.SubOrders ?? []).flatMap(sub =>
-            sub.ItemDetails.map(item => ({
+            (sub.ItemDetails ?? []).map(item => ({
               name: item.ItemName,
               quantity: item.Quantity,
               price: item.Amount,

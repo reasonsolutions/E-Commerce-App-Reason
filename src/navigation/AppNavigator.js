@@ -27,6 +27,7 @@ import HelpCenterScreen from '../screens/HelpCenterScreen';
 import BrandsScreen from '../screens/BrandsScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
 import LegalScreen from '../screens/LegalScreen';
+import ProductReviewsScreen from '../screens/ProductReviewsScreen';
 import { TabBar } from '../components/ui';
 
 const Stack = createNativeStackNavigator();
@@ -84,6 +85,7 @@ const AppNavigator = () => {
             bottom tab bar, not by back gestures. */}
         <Stack.Screen name="MainTabs" component={MainTabs} options={{ animation: 'none', gestureEnabled: false }} />
         <Stack.Screen name="Product" component={ProductScreen} />
+        <Stack.Screen name="ProductReviews" component={ProductReviewsScreen} />
         <Stack.Screen name="Cart" component={CartScreen} options={{ contentStyle: { backgroundColor: '#FFFFFF' } }} />
         <Stack.Screen name="Result" component={ResultScreen} />
         <Stack.Screen name="Checkout" component={CheckoutScreen} />

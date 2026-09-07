@@ -377,6 +377,20 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
     try {
       // Build payment mode from MIPS response — card vs mobile money
       const isCard = paymentDetails.mipsPmtType === 'card';
+
+      // Payment already succeeded at this point (StatusCode === 1) — if MIPS
+      // omitted the card proof fields, don't silently place the order with
+      // blank audit data. Stop and let the user contact support instead.
+      if (isCard && (!paymentDetails.cardNo || !paymentDetails.authCode)) {
+        successRef.current = true;
+        Alert.alert(
+          'Order could not be placed',
+          'Payment was received but the confirmation was incomplete. Please contact support before retrying payment.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
+        return;
+      }
+
       const modeOfPayments = isCard
         ? [
             {
@@ -492,7 +506,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
   if (loadError) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" />
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         {header}
         <View style={styles.centred}>
           <Text style={styles.errorText}>{loadError}</Text>
@@ -504,7 +518,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
   if (!mipsUrl) {
     return (
       <View style={styles.root}>
-        <StatusBar barStyle="dark-content" />
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         {header}
         <View style={styles.centred}>
           <Text style={styles.loadingText}>Preparing payment…</Text>
@@ -516,7 +530,7 @@ const EcomPaymentScreen: React.FC<PaymentScreenProps> = ({
   // ── Render — WebView + status strip ───────────────────────────────────────
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       {header}
 
       {/* Status strip */}

@@ -39,8 +39,14 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow camera access to add photos to your product reviews.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app does not use your location.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allow photo library access to save photos from your product reviews.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow photo library access to add photos to your product reviews.</string>
 	<key>RCTNewArchEnabled</key>
 	<false/>
 	<key>UIAppFonts</key>
@@ -74,8 +80,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>

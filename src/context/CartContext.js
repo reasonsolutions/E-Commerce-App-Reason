@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { isLoggedIn } from '../utils/auth';
 import { getGuestCart } from '../api/cart/guestCartApi';
 
@@ -39,10 +39,10 @@ export const CartProvider = ({ children }) => {
     return () => { cancelled = true; };
   }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     cartCount,
     setCartCount,
-  };
+  }), [cartCount]);
 
   return (
     <CartContext.Provider value={value}>

@@ -86,4 +86,8 @@ export type RootStackParamList = {
   Brands:             undefined;
   Categories:         undefined;
   Legal:              { type: 'privacy' | 'terms' };
+  ProductReviews: {
+    itemId:   number;
+    itemName?: string;
+  };
 };

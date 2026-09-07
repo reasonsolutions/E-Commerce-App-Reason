@@ -56,6 +56,23 @@ export interface CancelOrderInterface {
     Remarks:                    string;
 }
 
+export interface ReturnReasonInterface {
+    value:       number;
+    description: string;
+}
+
+export interface ReturnOrderInterface {
+    CustomerProfileCode: number;
+    OrderNumber:         string;
+    ReturnReasonType:    number;
+    ReturnReasonRemark:  string;
+    OrderDetailsCode:    number;
+    OrderMasterCode:     number;
+    // Omitted entirely for Cash on Delivery — nothing was paid upfront, so no
+    // refund method applies. See isCOD handling in OrderDetailScreen.
+    RefundMode?:         number;
+}
+
 export interface CartQuantityRequest {
     CartDetailsCode: number;
     Inventory_Id: number;
@@ -265,6 +282,12 @@ export interface ProductShippingInfo {
     RestrictedCountries:      string[] | null;
 }
 
+export interface CustomerRatingInterface {
+    AvgRating:         number;
+    RatingDistribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+    TotalReviews:      number;
+}
+
 // allProducts variant
 export interface ProductVariant {
     InventoryID:       string;
@@ -333,6 +356,7 @@ export interface ProductInterface {
     };
     ShippingInfo: ProductShippingInfo;
     Variants:     ProductVariant[];
+    CustomerRating?: CustomerRatingInterface;
 }
 
 
@@ -430,6 +454,7 @@ export interface CategoryFeedProduct {
     };
     ShippingInfo: ProductShippingInfo;
     Variants:     ProductVariant[];
+    CustomerRating?: CustomerRatingInterface;
 }
 
 // raw row from getAllProducts (productEndpoints.allProducts) — full merchant-portal payload.
@@ -465,6 +490,7 @@ export interface AllProductsRawItem {
     };
     ShippingInfo: ProductShippingInfo;
     Variants:     ProductVariant[];
+    CustomerRating?: CustomerRatingInterface;
 }
 
 //get products by category api result
@@ -599,6 +625,7 @@ export interface ProductDetailInterface {
     };
     ShippingInfo: ProductShippingInfo;
     Variants:     VariantInterface[];
+    CustomerRating?: CustomerRatingInterface;
 }
 
 export interface LoggedInCustomerInterface {
@@ -890,6 +917,7 @@ export interface postOrderHistoryDetailsInterface {
 }
 
 import { OrderStatusCode } from '../config/enum_files/OrderStatus';
+import { ItemEvents }      from '../config/enum_files/ItemEvents';
 export { OrderStatusCode };
 
 export interface OrderHistoryItemInterface {
@@ -923,7 +951,13 @@ export interface OrderHistoryApiResponse {
     }[];
 }
 
+export interface OrderReturnEligibilityInterface {
+    IsReturnWindowExpired: boolean;
+    ReturnWindowClosesAt:  string | null;
+}
+
 export interface OrderDetailItemExtendedInterface extends OrderHistoryItemInterface {
+    OrderDetailsCode: number;
     InventoryID:     number;
     ItemID:          number;
     BrandID:         number;
@@ -932,6 +966,7 @@ export interface OrderDetailItemExtendedInterface extends OrderHistoryItemInterf
     Images:          string;
     Events:          OrderEventInterface[];
     PricingDetails:  OrderPricingDetailsInterface;
+    ReturnEligibility?: OrderReturnEligibilityInterface;
 }
 
 export interface SubOrderDetail {
@@ -993,16 +1028,99 @@ export interface OrderPaymentInfoInterface {
     TotalSaved?:                 number;
 }
 
+export interface OrderShipmentEventInterface {
+    ItemStatusCode: ItemEvents;
+    Description:    string;
+    Date:           string;
+}
+
 export interface OrderEventInterface {
-    StatusCode:  number;
-    Description: string;
-    Date:        string;
-    Location:    string | null;
-    IsCompleted: boolean;
+    StatusCode:      number;
+    Description:     string;
+    Date:            string;
+    Location:        string | null;
+    IsCompleted:     boolean;
+    ShipementEvent?: OrderShipmentEventInterface[];
 }
 
 export interface OrderDetailResponseInterface {
     OrderDetails:   OrderDetailItemExtendedInterface[];
     DeliveryDetail: DeliveryAddressInterface;
     PaymentInfo:    OrderPaymentInfoInterface;
+}
+
+// ─── Product Reviews (ecomm/addProductReview, ecomm/editProductReview, ecomm/getProductReview) ────
+// Images accepts a mix: existing photos as their hosted URL (pass through
+// unchanged from what getProductReview returned) and newly-added photos as
+// base64 data URIs — the backend uploads the base64 entries and stores/
+// returns a hosted URL for them on the next read.
+
+export interface AddProductReviewInterface {
+    LoggedInCustomerDetails: {
+        CustomerProfileCode: number;
+    };
+    ItemId:      number;
+    Title:       string;
+    Description: string;
+    Rating:      number;
+    Images:      string[];
+}
+
+export interface EditProductReviewInterface {
+    ReviewId: number;
+    LoggedInCustomerDetails: {
+        CustomerProfileCode: number;
+    };
+    ItemId:      number;
+    Title:       string;
+    Description: string;
+    Rating:      number;
+    Images:      string[];
+}
+
+export interface AddProductReviewResultInterface {
+    ReviewId: number;
+}
+
+export interface GetProductReviewRequest {
+    ItemId:               number;
+    CustomerProfileCode?: number | null;
+    PageNumber?:          number;
+    PageSize?:             number;
+}
+
+export interface ReviewPurchaseHistoryItem {
+    PurchaseDate:            string;
+    Variant:                 string;
+    InventoryId:             number;
+    OrderId:                 number;
+    OrderDetailsCode:        number;
+    OrderStatus:             string;
+    OrderStatusDescription:  string;
+}
+
+export interface ProductReviewItem {
+    ReviewId:    number;
+    Rating:      number;
+    Customer: {
+        ProfileCode: number;
+        Name:        string;
+    };
+    Title:            string;
+    Description:      string;
+    Images:            string[];
+    PurchaseHistory:   ReviewPurchaseHistoryItem[];
+    LastUpdatedDate:   string | null;
+}
+
+export interface GetProductReviewResultInterface {
+    TotalRecords:      number;
+    PageNumber:        number;
+    PageSize:          number;
+    LoggedInCustomer: {
+        IsProductPurchasedBefore: boolean;
+        Review:                   ProductReviewItem | null;
+    } | null;
+    CustomerRating: CustomerRatingInterface | null;
+    Reviews: ProductReviewItem[];
 }

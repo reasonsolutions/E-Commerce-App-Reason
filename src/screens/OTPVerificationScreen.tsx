@@ -46,6 +46,13 @@ const OTPVerificationScreen: React.FC = () => {
   ).current;
   const shakeAnim  = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
+  const navigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (navigateTimeoutRef.current) clearTimeout(navigateTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     Animated.spring(contentAnim, {
@@ -119,7 +126,7 @@ const OTPVerificationScreen: React.FC = () => {
       // Wait for the keyboard-dismiss animation to finish before mounting Login —
       // otherwise its KeyboardAvoidingView reacts to the closing keyboard and the
       // form content below the password field jumps/flickers on arrival.
-      setTimeout(() => {
+      navigateTimeoutRef.current = setTimeout(() => {
         navigation.reset({ index: 0, routes: [{ name: 'Login', params: { skipEntrance: true } }] });
       }, 250);
     } catch (err) {

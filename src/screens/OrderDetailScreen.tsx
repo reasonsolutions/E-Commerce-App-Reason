@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/types';
-import { postCnfOrderDetail, cancelOrder } from '../api/order';
+import { postCnfOrderDetail, cancelOrder, postReturnRequest } from '../api/order';
 import { userFacingMessage } from '../api/apiError';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
@@ -26,6 +26,7 @@ import {
   StatusBadge,
   FadeImage,
   CancelOrderSheet,
+  ReturnOrderSheet,
   OrderItemCard,
 } from '../components/ui';
 import { ErrorState } from '../components/system';
@@ -56,6 +57,7 @@ const THUMB_W = 72;
 const THUMB_H = 72;
 const ACTION_BAR_HEIGHT = 64;
 const CANCELLABLE_STATUSES: OrderStatusCode[] = [1, 2, 3];
+const RETURNABLE_STATUS: OrderStatusCode = 6 as OrderStatusCode; // Delivered
 
 type OrderDetailScreenRouteParams = {
   orderItem: OrderDetailItemExtendedInterface;
@@ -185,6 +187,25 @@ const ItemTimeline: React.FC<{ events: OrderEventInterface[] }> = ({
                   {event.Location ? `  ·  ${event.Location}` : ''}
                 </Text>
               ) : null}
+              {event.ShipementEvent && event.ShipementEvent.length > 0 ? (
+                <View style={timelineStyles.subWrap}>
+                  {event.ShipementEvent.map((shipEvent, shipIndex) => (
+                    <View key={shipIndex} style={timelineStyles.subRow}>
+                      <View style={timelineStyles.subDot} />
+                      <View style={timelineStyles.subContent}>
+                        <Text style={timelineStyles.subDesc}>
+                          {shipEvent.Description}
+                        </Text>
+                        {shipEvent.Date ? (
+                          <Text style={timelineStyles.meta}>
+                            {formatDate(shipEvent.Date)}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </View>
           </View>
         );
@@ -235,6 +256,27 @@ const timelineStyles = StyleSheet.create({
     ...Type.caption,
     color: Colors.ink4,
     marginTop: Space[1],
+  },
+  subWrap: {
+    marginTop: Space[2],
+    gap: Space[2],
+  },
+  subRow: {
+    flexDirection: 'row',
+    gap: Space[2],
+  },
+  subDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    marginTop: 5,
+    flexShrink: 0,
+    backgroundColor: Colors.ink4,
+  },
+  subContent: { flex: 1 },
+  subDesc: {
+    ...Type.caption,
+    color: Colors.ink3,
   },
 });
 
@@ -310,6 +352,20 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [expandedItemIds, setExpandedItemIds] = useState<string[]>([]);
 
+  const [showReturnSheet, setShowReturnSheet] = useState(false);
+  const [returnTarget, setReturnTarget] =
+    useState<OrderDetailItemExtendedInterface | null>(null);
+  const [selectedReturnReason, setSelectedReturnReason] =
+    useState<number | null>(null);
+  const [selectedReturnReasonLabel, setSelectedReturnReasonLabel] =
+    useState<string>('');
+  const [selectedReturnRefundMode, setSelectedReturnRefundMode] =
+    useState<RefundMode | null>(null);
+  const [returnRemarks, setReturnRemarks] = useState('');
+  const [returnLoading, setReturnLoading] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
+  const [returnSuccess, setReturnSuccess] = useState(false);
+
   const fetchOrderDetails = useCallback(
     (cancelled?: { current: boolean }) =>
       run(async () => {
@@ -353,6 +409,21 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
     setShowCancelSheet(true);
   };
 
+  const openReturnSheet = (item: OrderDetailItemExtendedInterface) => {
+    const payment = orderDetails?.PaymentInfo;
+    const cod =
+      !!payment?.PaymentDetails?.CashOnDelivery?.[0]?.CollectionReference ||
+      payment?.PaymentMode?.Code === PaymentModes.CashOnDelivery;
+    setReturnTarget(item);
+    setReturnError(null);
+    setSelectedReturnReason(null);
+    setSelectedReturnReasonLabel('');
+    setSelectedReturnRefundMode(cod ? RefundMode.NO_REFUND : null);
+    setReturnRemarks('');
+    haptic.light();
+    setShowReturnSheet(true);
+  };
+
   const toggleExpandItem = (itemId: string) => {
     setExpandedItemIds(current =>
       current.includes(itemId)
@@ -367,6 +438,7 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       !selectedReason ||
       !selectedRefundMode ||
       !cancelTarget ||
+      !cancelTarget.SubOrder ||
       !orderNumber
     ) {
       setCancelError('Please select a reason and a refund mode.');
@@ -409,6 +481,52 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
       setCancelError(userFacingMessage(err));
     } finally {
       setCancelLoading(false);
+    }
+  };
+
+  const handleConfirmReturn = async () => {
+    if (
+      !selectedReturnReason ||
+      !selectedReturnRefundMode ||
+      !returnTarget ||
+      !orderNumber
+    ) {
+      setReturnError('Please select a reason and a refund mode.');
+      return;
+    }
+    try {
+      setReturnLoading(true);
+      setReturnError(null);
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.userData);
+      if (!raw) throw new Error('Session expired. Please log in again.');
+      const user = JSON.parse(raw);
+      const payment = orderDetails?.PaymentInfo;
+      const cod =
+        !!payment?.PaymentDetails?.CashOnDelivery?.[0]?.CollectionReference ||
+        payment?.PaymentMode?.Code === PaymentModes.CashOnDelivery;
+      const response = await postReturnRequest({
+        CustomerProfileCode: user.CustomerProfileCode,
+        OrderNumber: orderNumber,
+        ReturnReasonType: selectedReturnReason,
+        ReturnReasonRemark: returnRemarks.trim() || selectedReturnReasonLabel,
+        OrderDetailsCode: returnTarget.OrderDetailsCode,
+        OrderMasterCode: returnTarget.OrderMasterCode,
+        ...(cod ? {} : { RefundMode: selectedReturnRefundMode }),
+      });
+      if (response?.statusCode !== 1) {
+        setReturnError(
+          response?.userMessage ?? 'Could not submit return. Please try again.',
+        );
+        return;
+      }
+      haptic.success();
+      setShowReturnSheet(false);
+      setReturnSuccess(true);
+      fetchOrderDetails();
+    } catch (err) {
+      setReturnError(userFacingMessage(err));
+    } finally {
+      setReturnLoading(false);
     }
   };
 
@@ -614,6 +732,9 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     const status = orderStatusLabel(derivedStatus);
                     const isCancellable =
                       CANCELLABLE_STATUSES.includes(derivedStatus);
+                    const isReturnable =
+                      derivedStatus === RETURNABLE_STATUS &&
+                      !item.ReturnEligibility?.IsReturnWindowExpired;
                     const isExpanded = expandedItemIds.includes(
                       item.InventoryID.toString(),
                     );
@@ -631,6 +752,8 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                         statusLabel={status}
                         isCancellable={isCancellable}
                         onCancel={() => openCancelSheet(item)}
+                        isReturnable={isReturnable}
+                        onReturn={() => openReturnSheet(item)}
                         expanded={isExpanded}
                         onToggle={toggleExpandItem}
                         renderTimeline={() => (
@@ -649,6 +772,9 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                 const status = orderStatusLabel(derivedStatus);
                 const isCancellable =
                   CANCELLABLE_STATUSES.includes(derivedStatus);
+                const isReturnable =
+                  derivedStatus === RETURNABLE_STATUS &&
+                  !item.ReturnEligibility?.IsReturnWindowExpired;
                 const isExpanded = expandedItemIds.includes(
                   item.InventoryID.toString(),
                 );
@@ -666,6 +792,8 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
                     statusLabel={status}
                     isCancellable={isCancellable}
                     onCancel={() => openCancelSheet(item)}
+                    isReturnable={isReturnable}
+                    onReturn={() => openReturnSheet(item)}
                     expanded={isExpanded}
                     onToggle={toggleExpandItem}
                     renderTimeline={() => (
@@ -837,6 +965,63 @@ const OrderDetailScreen: React.FC<OrderDetailScreenProps> = ({
           onChangeRemarks={setRemarks}
           onConfirm={handleConfirmCancel}
           onClose={() => setShowCancelSheet(false)}
+        />
+      )}
+
+      {/* ── Return success modal ── */}
+      <Modal
+        visible={returnSuccess}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Return Requested</Text>
+            <Text style={styles.modalBody}>
+              Your return request has been submitted successfully.
+            </Text>
+            <TouchableOpacity
+              style={styles.modalCta}
+              activeOpacity={0.8}
+              onPress={() => {
+                setReturnSuccess(false);
+                (
+                  navigation.navigate as (
+                    screen: string,
+                    params?: Record<string, unknown>,
+                  ) => void
+                )('MainTabs', { screen: 'Orders', params: { refresh: true } });
+              }}
+            >
+              <Text style={styles.modalCtaText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Return order sheet ── same rendering pattern as CancelOrderSheet above. */}
+      {showReturnSheet && (
+        <ReturnOrderSheet
+          itemName={returnTarget?.Name}
+          selectedReason={selectedReturnReason}
+          selectedRefundMode={selectedReturnRefundMode}
+          showRefundMode={!isCOD}
+          remarks={returnRemarks}
+          returnError={returnError}
+          returnLoading={returnLoading}
+          onSelectReason={(reason, description) => {
+            haptic.light();
+            setSelectedReturnReason(reason);
+            setSelectedReturnReasonLabel(description);
+          }}
+          onSelectRefundMode={mode => {
+            haptic.light();
+            setSelectedReturnRefundMode(mode);
+          }}
+          onChangeRemarks={setReturnRemarks}
+          onConfirm={handleConfirmReturn}
+          onClose={() => setShowReturnSheet(false)}
         />
       )}
     </View>

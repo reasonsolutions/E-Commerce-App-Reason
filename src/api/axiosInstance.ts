@@ -118,7 +118,16 @@ axiosInstance.interceptors.response.use(
     const is401 = err?.response?.status === 401;
     const isRefreshEndpoint = config?.url?.includes('getEcommAccessToken');
 
-    if (is401 && !isRefreshEndpoint && !config?._retried) {
+    // A 401 only means "session expired" if there was a session to expire.
+    // Guests (no cached/Keychain token) hit auth-optional endpoints like
+    // getProductReview with CustomerProfileCode: null — a 401 there is just
+    // "not logged in", not an expired session, and must never force-navigate
+    // a browsing guest to Login.
+    const hadToken = !!_cachedToken || !!(await Keychain.getGenericPassword({
+      service: STORAGE_KEYS.authToken,
+    }).catch(() => null));
+
+    if (is401 && hadToken && !isRefreshEndpoint && !config?._retried) {
       config._retried = true;
       if (!_refreshPromise) {
         _refreshPromise = refreshAccessToken().finally(() => {
@@ -137,7 +146,7 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(classified);
     }
 
-    if (is401) {
+    if (is401 && hadToken) {
       await clearSession();
       resetToLogin();
     }

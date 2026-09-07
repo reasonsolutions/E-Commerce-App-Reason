@@ -12,6 +12,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@bam.tech/react-native-image-resizer": "^3.0.11",
     "@gluestack-ui/actionsheet": "^0.2.53",
     "@gluestack-ui/nativewind-utils": "^1.0.28",
     "@gorhom/bottom-sheet": "^5.2.13",
@@ -27,7 +28,9 @@
     "nativewind": "^4.1.23",
     "react": "19.1.0",
     "react-native": "0.81.4",
+    "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^2.28.0",
+    "react-native-image-picker": "^8.2.1",
     "react-native-keychain": "^10.0.0",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-reanimated": "~3.19.1",

@@ -32,10 +32,12 @@ export const cartEndpoints = {
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 export const orderEndpoints = {
-  placeOrder:      'ecomm/placeOrder',
-  getOrderHistory: 'ecomm/getOrderHistory',
-  getOrderStatus:  'ecomm/getOrderStatus',
-  cancelOrder:     'merchant/postCancelledPlaceOrderByCustomer',
+  placeOrder:        'ecomm/placeOrder',
+  getOrderHistory:   'ecomm/getOrderHistory',
+  getOrderStatus:    'ecomm/getOrderStatus',
+  cancelOrder:       'merchant/postCancelledPlaceOrderByCustomer',
+  getReturnReasons:  'ecomm/getReturnReasons',
+  postReturnRequest: 'ecomm/postReturnRequest',
 } as const;
 
 // ─── Addresses ────────────────────────────────────────────────────────────────
@@ -60,6 +62,13 @@ export const paymentEndpoints = {
   getPaymentStatus: 'mips/getPaymentStatus'
 }
 
+// ─── Product Reviews ────────────────────────────────────────────────────────
+export const reviewEndpoints = {
+  addProductReview:  'ecomm/addProductReview',
+  editProductReview: 'ecomm/editProductReview',
+  getProductReview:  'ecomm/getProductReview',
+} as const;
+
 // Flat merged object for any reference that needs a single import
 export const endpoints = {
   ...authEndpoints,
@@ -68,5 +77,6 @@ export const endpoints = {
   ...orderEndpoints,
   ...addressEndpoints,
   ...wishlistEndpoints,
-  ...paymentEndpoints
+  ...paymentEndpoints,
+  ...reviewEndpoints,
 } as const;

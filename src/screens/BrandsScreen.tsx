@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -58,30 +59,31 @@ const BrandCard: React.FC<{
   );
 };
 
+const PAGE_SIZE = 50;
+
 const BrandsScreen: React.FC<BrandsScreenProps> = ({ navigation }) => {
   const [query, setQuery] = useState('');
+  const [brands, setBrands] = useState<GetBrandItem[] | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [pageNumber, setPageNumber] = useState(1);
 
-  const { data: brands, loading, isError, error, run } = useAsyncState<GetBrandItem[]>(null);
+  const { loading, isError, error, run } = useAsyncState<GetBrandItem[]>(null);
 
-  const fetchInitiated = React.useRef(false);
+  const fetchInitiated = useRef(false);
+  const loadMoreInFlight = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestRequestId = useRef(0);
 
-  const fetchBrands = useCallback((cancelled: { current: boolean }) => {
+  const fetchBrands = useCallback((cancelled: { current: boolean }, search: string) => {
+    const requestId = ++latestRequestId.current;
     run(async () => {
-      const PAGE_SIZE = 50;
-      const first = await getBrands(1, PAGE_SIZE);
-      if (first?.statusCode !== 1) return [];
-      const total: number = first.result?.TotalRecords ?? 0;
-      let list: GetBrandItem[] = Array.isArray(first.result?.Brands) ? first.result.Brands : [];
-
-      let page = 1;
-      while (list.length < total && !cancelled.current) {
-        page += 1;
-        const res = await getBrands(page, PAGE_SIZE);
-        const next: GetBrandItem[] = (res?.statusCode === 1 && Array.isArray(res.result?.Brands)) ? res.result.Brands : [];
-        if (next.length === 0) break;
-        list = list.concat(next);
-      }
-
+      const res = await getBrands(1, PAGE_SIZE, search || undefined);
+      if (requestId !== latestRequestId.current || cancelled.current) return [];
+      const list: GetBrandItem[] = (res?.statusCode === 1 && Array.isArray(res.result?.Brands)) ? res.result.Brands : [];
+      setBrands(list);
+      setPageNumber(1);
+      setHasMore(list.length >= PAGE_SIZE);
       return list;
     }, cancelled);
   }, [run]);
@@ -91,23 +93,55 @@ const BrandsScreen: React.FC<BrandsScreenProps> = ({ navigation }) => {
       const cancelled = { current: false };
       if (fetchInitiated.current) return () => { cancelled.current = true; };
       fetchInitiated.current = true;
-      fetchBrands(cancelled);
+      fetchBrands(cancelled, '');
       return () => { cancelled.current = true; };
     }, [fetchBrands]),
   );
 
-  const filtered = useMemo(() => {
-    if (!brands) return null;
-    const q = query.trim().toLowerCase();
-    if (!q) return brands;
-    return brands.filter(b => b.BrandName.toLowerCase().includes(q));
-  }, [brands, query]);
+  useEffect(() => {
+    if (!fetchInitiated.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const cancelled = { current: false };
+      fetchBrands(cancelled, query.trim());
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  const loadMore = useCallback(async () => {
+    if (loadMoreInFlight.current || !hasMore || loading || !brands) return;
+    loadMoreInFlight.current = true;
+    setLoadingMore(true);
+    try {
+      const requestId = latestRequestId.current;
+      const nextPage = pageNumber + 1;
+      const res = await getBrands(nextPage, PAGE_SIZE, query.trim() || undefined);
+      if (requestId !== latestRequestId.current) return;
+      const next: GetBrandItem[] = (res?.statusCode === 1 && Array.isArray(res.result?.Brands)) ? res.result.Brands : [];
+      if (next.length > 0) {
+        setBrands(prev => {
+          const seen = new Set((prev ?? []).map(b => b.BrandId));
+          return [...(prev ?? []), ...next.filter(b => !seen.has(b.BrandId))];
+        });
+        setPageNumber(nextPage);
+      }
+      if (next.length < PAGE_SIZE) setHasMore(false);
+    } catch {
+    } finally {
+      loadMoreInFlight.current = false;
+      setLoadingMore(false);
+    }
+  }, [hasMore, loading, brands, pageNumber, query]);
+
+  const filtered = brands;
 
   const handleRetry = useCallback(() => {
-    fetchInitiated.current = false;
     const cancelled = { current: false };
-    fetchBrands(cancelled);
-  }, [fetchBrands]);
+    fetchBrands(cancelled, query.trim());
+  }, [fetchBrands, query]);
 
   if (isError) {
     return (
@@ -189,10 +223,19 @@ const BrandsScreen: React.FC<BrandsScreenProps> = ({ navigation }) => {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Text style={styles.emptyText}>No brands found</Text>
             </View>
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.listFooter}>
+                <ActivityIndicator size="small" color={Colors.ink3} />
+              </View>
+            ) : null
           }
           renderItem={({ item }) => (
             <BrandCard
@@ -324,6 +367,10 @@ const styles = StyleSheet.create({
   emptyText: {
     ...Type.caption,
     color: Colors.ink4,
+  },
+  listFooter: {
+    paddingVertical: Space[5],
+    alignItems:      'center',
   },
 });
 

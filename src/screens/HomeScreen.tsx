@@ -19,6 +19,7 @@ import {
   Animated,
   RefreshControl,
   AccessibilityInfo,
+  Platform,
 } from 'react-native';
 import styles from './HomeScreen.styles';
 import {
@@ -618,7 +619,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       toValue: next ? 1 : 0,
       duration: Motion.duration.settle,
       easing: Motion.easing.out,
-      useNativeDriver: false,
+      // Android-only: opacity/translateY are native-driver-safe here, and moving
+      // this off the JS thread avoids stutter on Android's more contended JS
+      // thread. Left as-is (false) on iOS to keep its behavior byte-identical.
+      useNativeDriver: Platform.OS === 'android',
     }).start();
   }, [searchOpen, searchAnim]);
 
@@ -1190,6 +1194,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.categoryRail}
+                  initialNumToRender={4}
+                  maxToRenderPerBatch={4}
+                  windowSize={5}
                   renderItem={({ item, index }) => (
                     <CategoryTile
                       name={item.CategoryName}
@@ -1347,6 +1354,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.brandsRail}
+                initialNumToRender={4}
+                maxToRenderPerBatch={4}
+                windowSize={5}
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     activeOpacity={0.75}

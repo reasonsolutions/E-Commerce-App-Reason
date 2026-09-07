@@ -1,4 +1,4 @@
-import { TextStyle } from 'react-native';
+import { Platform, TextStyle } from 'react-native';
 import { Colors, FontSize, FontWeight, LineHeight } from './tokens';
 import { FontFamily } from './fonts';
 
@@ -29,7 +29,9 @@ export const Type = {
     fontSize:      40,
     fontWeight:    FontWeight.regular,  // Instrument Serif reads well at regular weight
     letterSpacing: -0.8,
-    lineHeight:    40 * 1.05,
+    // Android's text layout clips serif descenders at iOS's 1.05 leading — give
+    // Android extra leading via LineHeight.tight, iOS keeps its original value.
+    lineHeight:    Platform.OS === 'android' ? 40 * LineHeight.tight : 40 * 1.05,
     color:         Colors.ink1,
   } satisfies TextStyle,
 
@@ -73,7 +75,9 @@ export const Type = {
     fontSize:      32,
     fontWeight:    FontWeight.regular,
     letterSpacing: -0.6,
-    lineHeight:    32 * 1.0,
+    // Android's text layout clips serif descenders at iOS's 1.0 (zero-leading)
+    // value — give Android extra leading via LineHeight.tight, iOS unchanged.
+    lineHeight:    Platform.OS === 'android' ? 32 * LineHeight.tight : 32 * 1.0,
     color:         Colors.ink1,
   } satisfies TextStyle,
 

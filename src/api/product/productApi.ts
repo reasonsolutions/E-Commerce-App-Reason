@@ -29,16 +29,18 @@ export const getAllProducts = async (
   return products;
 };
 
-export const getBrands = async (pageNumber = 1, pageSize = 50) => {
+export const getBrands = async (pageNumber = 1, pageSize = 50, search?: string) => {
+  const searchParam = search ? `&search=${search}` : '';
   const response = await axiosInstance.get(
-    `${productEndpoints.getBrands}?pageNumber=${pageNumber}&pageSize=${pageSize}`,
+    `${productEndpoints.getBrands}?pageNumber=${pageNumber}&pageSize=${pageSize}${searchParam}`,
   );
   return response.data;
 };
 
-export const getCategories = async (pageNumber = 1, pageSize = 50) => {
+export const getCategories = async (pageNumber = 1, pageSize = 50, search?: string) => {
+  const searchParam = search ? `&search=${search}` : '';
   const response = await axiosInstance.get(
-    `${productEndpoints.getCategory}?pageNumber=${pageNumber}&pageSize=${pageSize}`,
+    `${productEndpoints.getCategory}?pageNumber=${pageNumber}&pageSize=${pageSize}${searchParam}`,
   );
   return response.data;
 };

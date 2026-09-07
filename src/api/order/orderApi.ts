@@ -9,6 +9,8 @@ import type {
   CancelOrderInterface,
   OrderHistoryApiResponse,
   OrderPaymentInfoInterface,
+  ReturnReasonInterface,
+  ReturnOrderInterface,
 } from '../interfaces';
 
 interface RawOrderHistoryItem {
@@ -126,5 +128,15 @@ export const cancelOrder = async (data: CancelOrderInterface) => {
 export const postCnfOrderDetail = async (OrderMasterCode: string, CustomerProfileCode: number) => {
   const payload: OrderDetailRequest = { OrderNumber: OrderMasterCode, CustomerProfileCode };
   const response = await axiosInstance.post(orderEndpoints.getOrderStatus, payload);
+  return response.data;
+};
+
+export const getReturnReasons = async (): Promise<{ statusCode: 1 | 0; result: ReturnReasonInterface[]; userMessage: string }> => {
+  const response = await axiosInstance.get(orderEndpoints.getReturnReasons);
+  return response.data;
+};
+
+export const postReturnRequest = async (data: ReturnOrderInterface) => {
+  const response = await axiosInstance.post(orderEndpoints.postReturnRequest, data);
   return response.data;
 };

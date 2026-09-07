@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -75,59 +76,101 @@ const CategoryCard: React.FC<{
   );
 };
 
+const PAGE_SIZE = 50;
+
 const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
   const [query, setQuery] = useState('');
+  const [categories, setCategories] = useState<CategoryInterface[] | null>(null);
   const [counts, setCounts] = useState<Record<number, number>>({});
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [pageNumber, setPageNumber] = useState(1);
 
-  const { data: categories, loading, isError, error, run } = useAsyncState<CategoryInterface[]>(null);
+  const { loading, isError, error, run } = useAsyncState<CategoryInterface[]>(null);
 
-  const fetchInitiated = React.useRef(false);
+  const fetchInitiated = useRef(false);
+  const loadMoreInFlight = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestRequestId = useRef(0);
 
-  const fetchCategories = useCallback((cancelled: { current: boolean }) => {
+  // Fetches product counts only for the categories currently on screen,
+  // not the whole collection — avoids one API call per category up front.
+  const fetchCountsFor = useCallback((list: CategoryInterface[], cancelled: { current: boolean }) => {
+    list.forEach(c => {
+      getCategoryProductCount(c.CategoryId)
+        .then(count => {
+          if (!cancelled.current) {
+            setCounts(prev => ({ ...prev, [c.CategoryId]: count }));
+          }
+        })
+        .catch(() => {});
+    });
+  }, []);
+
+  const fetchCategories = useCallback((cancelled: { current: boolean }, search: string) => {
+    const requestId = ++latestRequestId.current;
     run(async () => {
-      const PAGE_SIZE = 50;
-      const first = await getCategories(1, PAGE_SIZE);
-      const total: number = first?.statusCode === 1 ? (first.result?.TotalRecords ?? 0) : 0;
-      let list: CategoryInterface[] =
-        (first?.statusCode === 1 && Array.isArray(first.result?.Categories)) ? first.result.Categories : [];
-
-      // Fetch remaining pages if the category count exceeds one page
-      let page = 1;
-      while (list.length < total && !cancelled.current) {
-        page += 1;
-        const res = await getCategories(page, PAGE_SIZE);
-        const next: CategoryInterface[] =
-          (res?.statusCode === 1 && Array.isArray(res.result?.Categories)) ? res.result.Categories : [];
-        if (next.length === 0) break;
-        list = list.concat(next);
-      }
-
-      // Fire all count fetches in parallel — lightweight pageSize:1 calls
-      Promise.all(
-        list.map(c =>
-          getCategoryProductCount(c.CategoryId)
-            .then(count => {
-              if (!cancelled.current) {
-                setCounts(prev => ({ ...prev, [c.CategoryId]: count }));
-              }
-            })
-            .catch(() => {}),
-        ),
-      );
-
+      const res = await getCategories(1, PAGE_SIZE, search || undefined);
+      if (requestId !== latestRequestId.current || cancelled.current) return [];
+      const list: CategoryInterface[] =
+        (res?.statusCode === 1 && Array.isArray(res.result?.Categories)) ? res.result.Categories : [];
+      setCategories(list);
+      setPageNumber(1);
+      setHasMore(list.length >= PAGE_SIZE);
+      fetchCountsFor(list, cancelled);
       return list;
     }, cancelled);
-  }, [run]);
+  }, [run, fetchCountsFor]);
 
   useFocusEffect(
     useCallback(() => {
       const cancelled = { current: false };
       if (fetchInitiated.current) return () => { cancelled.current = true; };
       fetchInitiated.current = true;
-      fetchCategories(cancelled);
+      fetchCategories(cancelled, '');
       return () => { cancelled.current = true; };
     }, [fetchCategories]),
   );
+
+  useEffect(() => {
+    if (!fetchInitiated.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const cancelled = { current: false };
+      fetchCategories(cancelled, query.trim());
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  const loadMore = useCallback(async () => {
+    if (loadMoreInFlight.current || !hasMore || loading || !categories) return;
+    loadMoreInFlight.current = true;
+    setLoadingMore(true);
+    const cancelled = { current: false };
+    try {
+      const requestId = latestRequestId.current;
+      const nextPage = pageNumber + 1;
+      const res = await getCategories(nextPage, PAGE_SIZE, query.trim() || undefined);
+      if (requestId !== latestRequestId.current) return;
+      const next: CategoryInterface[] =
+        (res?.statusCode === 1 && Array.isArray(res.result?.Categories)) ? res.result.Categories : [];
+      if (next.length > 0) {
+        const seen = new Set((categories ?? []).map(c => c.CategoryId));
+        const deduped = next.filter(c => !seen.has(c.CategoryId));
+        setCategories(prev => [...(prev ?? []), ...deduped]);
+        setPageNumber(nextPage);
+        fetchCountsFor(deduped, cancelled);
+      }
+      if (next.length < PAGE_SIZE) setHasMore(false);
+    } catch {
+    } finally {
+      loadMoreInFlight.current = false;
+      setLoadingMore(false);
+    }
+  }, [hasMore, loading, categories, pageNumber, query, fetchCountsFor]);
 
   const categoriesWithCounts = useMemo((): CategoryWithCount[] | null => {
     if (!categories) return null;
@@ -137,19 +180,12 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
     }));
   }, [categories, counts]);
 
-  const filtered = useMemo(() => {
-    if (!categoriesWithCounts) return null;
-    const q = query.trim().toLowerCase();
-    if (!q) return categoriesWithCounts;
-    return categoriesWithCounts.filter(c => c.CategoryName.toLowerCase().includes(q));
-  }, [categoriesWithCounts, query]);
+  const filtered = categoriesWithCounts;
 
   const handleRetry = useCallback(() => {
-    fetchInitiated.current = false;
-    setCounts({});
     const cancelled = { current: false };
-    fetchCategories(cancelled);
-  }, [fetchCategories]);
+    fetchCategories(cancelled, query.trim());
+  }, [fetchCategories, query]);
 
   if (isError) {
     return (
@@ -230,13 +266,19 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Text style={styles.emptyText}>No categories found</Text>
             </View>
           }
           ListFooterComponent={
-            filtered && filtered.length > 0 ? (
+            loadingMore ? (
+              <View style={styles.listFooter}>
+                <ActivityIndicator size="small" color={Colors.ink3} />
+              </View>
+            ) : filtered && filtered.length > 0 ? (
               <View style={styles.listFooter}>
                 <View style={styles.listFooterRule} />
                 <Text style={styles.listFooterText}>

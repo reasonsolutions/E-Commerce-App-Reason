@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/storageKeys';
 import { getWishlist } from '../api/wishlist';
@@ -80,12 +80,12 @@ export const WishlistProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     wishlistMap,
     getWishlistCode,
     setWishlistCode,
     refresh,
-  };
+  }), [wishlistMap, getWishlistCode, setWishlistCode, refresh]);
 
   return (
     <WishlistContext.Provider value={value}>

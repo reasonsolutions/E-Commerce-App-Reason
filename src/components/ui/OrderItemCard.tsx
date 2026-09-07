@@ -24,6 +24,8 @@ interface OrderItemCardProps {
   statusLabel: string;
   isCancellable?: boolean;
   onCancel?: () => void;
+  isReturnable?: boolean;
+  onReturn?: () => void;
   expanded?: boolean;
   onToggle?: (id: string) => void;
   renderTimeline?: () => React.ReactNode;
@@ -44,11 +46,14 @@ export const OrderItemCard: React.FC<OrderItemCardProps> = ({
   statusLabel,
   isCancellable = false,
   onCancel,
+  isReturnable = false,
+  onReturn,
   expanded = false,
   onToggle,
   renderTimeline,
 }) => {
   const [expandAnim] = useState(new Animated.Value(expanded ? 1 : 0));
+  const [contentHeight, setContentHeight] = useState(0);
   const lineTotal = price * quantity;
 
   React.useEffect(() => {
@@ -59,9 +64,12 @@ export const OrderItemCard: React.FC<OrderItemCardProps> = ({
     }).start();
   }, [expanded, expandAnim]);
 
+  // Content height varies with timeline length and whether cancel/return
+  // messaging is present — measure it instead of a fixed cap so long
+  // timelines (or the return button) never get clipped by overflow: hidden.
   const maxHeight = expandAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 500],
+    outputRange: [0, contentHeight || 1],
   });
 
   const opacity = expandAnim.interpolate({
@@ -133,7 +141,10 @@ export const OrderItemCard: React.FC<OrderItemCardProps> = ({
         ]}
       >
         <View style={styles.divider} />
-        <View style={styles.contentInner}>
+        <View
+          style={styles.contentInner}
+          onLayout={e => setContentHeight(e.nativeEvent.layout.height)}
+        >
           {/* Price breakdown */}
           <View>
             <Text style={styles.detailLabel}>
@@ -179,6 +190,24 @@ export const OrderItemCard: React.FC<OrderItemCardProps> = ({
               >
                 <Icon name="close-circle-outline" size={15} color={Colors.danger} />
                 <Text style={styles.cancelButtonText}>Cancel this item</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Return button */}
+          {isReturnable && onReturn ? (
+            <View>
+              <View style={styles.divider} />
+              <Text style={styles.cancelMessage}>
+                This item is eligible for return.
+              </Text>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={onReturn}
+                activeOpacity={0.7}
+              >
+                <Icon name="keyboard-return" size={15} color={Colors.danger} />
+                <Text style={styles.cancelButtonText}>Return this item</Text>
               </TouchableOpacity>
             </View>
           ) : null}

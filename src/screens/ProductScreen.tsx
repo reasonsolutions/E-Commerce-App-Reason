@@ -28,6 +28,9 @@ import { postSaveCartItems, getSavedCartItems } from '../api/cart';
 import { getProductByItemId } from '../api/product';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../api/wishlist';
 import { addToGuestCart } from '../api/cart';
+import { addProductReview, editProductReview, getProductReview } from '../api/review';
+import type { AddProductReviewInterface, EditProductReviewInterface, ProductReviewItem, CustomerRatingInterface } from '../api/interfaces';
+import { userFacingMessage } from '../api/apiError';
 import ProductCard from '../components/ProductCard';
 
 import {
@@ -42,6 +45,9 @@ import {
   ProductSpecs,
   SellerCard,
   LoginPromptSheet,
+  Rating,
+  ReviewsSection,
+  AddReviewSheet,
 } from '../components/ui';
 
 import { Colors, Space, Shadow, Radius } from '../theme';
@@ -149,6 +155,14 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
   const [wishlistItemCode, setWishlistItemCode] = useState<number | null>(null);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
   const [relatedProducts, setRelatedProducts] = useState<ProductDetailInterface[]>([]);
+  const [reviews, setReviews] = useState<ProductReviewItem[]>([]);
+  const [myReview, setMyReview] = useState<ProductReviewItem | null>(null);
+  const [isProductPurchasedBefore, setIsProductPurchasedBefore] = useState(false);
+  const [customerRating, setCustomerRating] = useState<CustomerRatingInterface | null>(null);
+  const [reviewsTotal, setReviewsTotal] = useState(0);
+  const [showAddReview, setShowAddReview] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(null);
 
   // ── Animated values ──────────────────────────────────────────────────────────
   const scrollY     = useRef(new Animated.Value(0)).current;
@@ -260,6 +274,30 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
       });
     return () => { cancelled = true; };
   }, [data]);
+
+  // Reviews fetch — reruns after a successful submit so the sheet's result
+  // (own review + updated list) reflects immediately without a full product refetch.
+  const fetchReviews = useCallback((cancelled?: { current: boolean }) => {
+    const itemId = parseInt(route?.params?.product ?? '0', 10);
+    if (!itemId) return;
+    getProductReview({ ItemId: itemId, CustomerProfileCode: profileCode ?? null })
+      .then(res => {
+        if (cancelled?.current) return;
+        if (res?.statusCode !== 1) return;
+        setReviews(res.result?.Reviews ?? []);
+        setMyReview(res.result?.LoggedInCustomer?.Review ?? null);
+        setIsProductPurchasedBefore(res.result?.LoggedInCustomer?.IsProductPurchasedBefore ?? false);
+        setCustomerRating(res.result?.CustomerRating ?? null);
+        setReviewsTotal(res.result?.TotalRecords ?? 0);
+      })
+      .catch(() => {});
+  }, [route?.params?.product, profileCode]);
+
+  useEffect(() => {
+    const cancelled = { current: false };
+    fetchReviews(cancelled);
+    return () => { cancelled.current = true; };
+  }, [fetchReviews]);
 
   // ── Derived values ───────────────────────────────────────────────────────────
   const productDetails = data?.product ?? null;
@@ -441,6 +479,53 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
     });
   }, [guard, profileCode, wishlisted, wishlistItemCode, haptic, data, selectedVariantId, toast]);
 
+  const handleWriteReview = useCallback(() => {
+    guard(() => {
+      setReviewSubmitError(null);
+      setShowAddReview(true);
+    });
+  }, [guard]);
+
+  const handleSubmitReview = useCallback(async (payload: {
+    rating: number; title: string; description: string; images: string[];
+  }) => {
+    if (!profileCode || !productDetails) return;
+    setReviewSubmitting(true);
+    setReviewSubmitError(null);
+    try {
+      const res = myReview
+        ? await editProductReview({
+            ReviewId:    myReview.ReviewId,
+            LoggedInCustomerDetails: { CustomerProfileCode: profileCode },
+            ItemId:      parseInt(productDetails.ItemId, 10),
+            Title:       payload.title,
+            Description: payload.description,
+            Rating:      payload.rating,
+            Images:      payload.images,
+          } satisfies EditProductReviewInterface)
+        : await addProductReview({
+            LoggedInCustomerDetails: { CustomerProfileCode: profileCode },
+            ItemId:      parseInt(productDetails.ItemId, 10),
+            Title:       payload.title,
+            Description: payload.description,
+            Rating:      payload.rating,
+            Images:      payload.images,
+          } satisfies AddProductReviewInterface);
+      if (res?.statusCode !== 1) {
+        setReviewSubmitError(res?.userMessage ?? 'Failed to submit your review. Please try again.');
+        return;
+      }
+      haptic.success();
+      toast.success({ title: myReview ? 'Review updated' : 'Review submitted' });
+      setShowAddReview(false);
+      fetchReviews();
+    } catch (err) {
+      setReviewSubmitError(userFacingMessage(err));
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }, [profileCode, productDetails, myReview, haptic, toast, fetchReviews]);
+
   // ── Error state ──────────────────────────────────────────────────────────────
   if (isError) {
     return (
@@ -610,6 +695,14 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
                 ) : null}
               </View>
 
+              {/* Rating — only when the product has real reviews */}
+              {productDetails.CustomerRating && productDetails.CustomerRating.TotalReviews > 0 ? (
+                <Rating
+                  value={productDetails.CustomerRating.AvgRating}
+                  count={productDetails.CustomerRating.TotalReviews}
+                />
+              ) : null}
+
               {/* Price row */}
               <View style={styles.priceRow}>
                 <Text style={styles.price}>Rs {activePrice.toLocaleString('en-IN')}</Text>
@@ -698,6 +791,22 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           </View>
         ) : null}
 
+        {/* Ratings & reviews */}
+        {productDetails ? (
+          <ReviewsSection
+            reviews={reviews}
+            totalReviewCount={reviewsTotal}
+            myReview={myReview}
+            isProductPurchasedBefore={isProductPurchasedBefore}
+            customerRating={customerRating}
+            onWriteReview={handleWriteReview}
+            onSeeAllReviews={() => navigation.navigate('ProductReviews', {
+              itemId: parseInt(productDetails?.ItemId ?? '0', 10),
+              itemName: productDetails?.Name,
+            })}
+          />
+        ) : null}
+
         {/* Seller card */}
         <SellerCard
           sellerName={productDetails?.OrganisationName}
@@ -761,7 +870,7 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
               label="Add to Cart"
               loading={addingToCart}
               onPress={handleAddToCart}
-              isDisabled={false}
+              isDisabled={addingToCart}
               height={44}
             />
           </View>
@@ -773,6 +882,22 @@ const ProductScreen: React.FC<ProductScreenProps> = ({ navigation, route }) => {
           onClose={dismissLoginPrompt}
           onSignIn={() => { dismissLoginPrompt(); navigation.navigate('Login'); }}
           onRegister={() => { dismissLoginPrompt(); navigation.navigate('Register'); }}
+        />
+      ) : null}
+
+      {showAddReview ? (
+        <AddReviewSheet
+          itemName={productDetails?.Name}
+          submitting={reviewSubmitting}
+          submitError={reviewSubmitError}
+          initialReview={myReview ? {
+            rating:      myReview.Rating,
+            title:       myReview.Title,
+            description: myReview.Description,
+            images:      (myReview.Images ?? []).map(resolveImageUrl),
+          } : null}
+          onSubmit={handleSubmitReview}
+          onClose={() => setShowAddReview(false)}
         />
       ) : null}
 

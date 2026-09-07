@@ -40,7 +40,6 @@ export const CartRow = React.memo<{
 
   const comparePrice = item.PriceDetails?.ComparePrice ?? 0;
   const unitPrice    = item.PriceDetails?.Price ?? item.Price;
-  const lineTotal    = unitPrice * item.Quantity;
   const hasDiscount  = comparePrice > unitPrice;
   // Count is live stock at fetch time — an item added while in stock can go
   // to 0 by the time the cart is reopened. Kept visible (not silently
@@ -106,9 +105,9 @@ export const CartRow = React.memo<{
           </View>
         ) : (
           <View style={styles.cartPriceRow}>
-            <Text style={styles.cartLineTotal}>Rs {lineTotal.toLocaleString('en-IN')}</Text>
+            <Text style={styles.cartLineTotal}>Rs {unitPrice.toLocaleString('en-IN')}</Text>
             {hasDiscount && (
-              <Text style={styles.cartUnitWas}>Rs {(comparePrice * item.Quantity).toLocaleString('en-IN')}</Text>
+              <Text style={styles.cartUnitWas}>Rs {comparePrice.toLocaleString('en-IN')}</Text>
             )}
           </View>
         )}
@@ -239,7 +238,7 @@ export const GuestCartRow = React.memo<{
         <Text style={styles.cartName} numberOfLines={2}>{item.name}</Text>
         {item.variant ? <Text style={styles.cartVariant}>{item.variant}</Text> : null}
         <View style={styles.cartPriceRow}>
-          <Text style={styles.cartLineTotal}>Rs {(item.price * item.quantity).toLocaleString('en-IN')}</Text>
+          <Text style={styles.cartLineTotal}>Rs {item.price.toLocaleString('en-IN')}</Text>
           {hasDiscount && <Text style={styles.cartUnitWas}>Rs {item.comparePrice.toLocaleString('en-IN')}</Text>}
         </View>
         <View style={styles.cartBottom}>

@@ -5,6 +5,8 @@ export type { OrderHistoryFilters } from './orderApi';
 export const placeOrder              = real.placeOrder;
 export const postPlacedMultipleOrder = real.postPlacedMultipleOrder;
 export const cancelOrder             = real.cancelOrder;
+export const getReturnReasons        = real.getReturnReasons;
+export const postReturnRequest       = real.postReturnRequest;
 
 export async function postOrderHistory(
   customerProfileCode: number,
