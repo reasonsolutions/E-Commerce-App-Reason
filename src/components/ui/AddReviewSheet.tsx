@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
   TextInput,
+  KeyboardAvoidingView,
   Platform,
   Keyboard,
   Image,
@@ -59,26 +60,7 @@ export const AddReviewSheet: React.FC<AddReviewSheetProps> = ({
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const isEditing = !!initialReview;
-
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, e => setKeyboardHeight(e.endCoordinates.height));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
-
-  // Keyboard pushes the sheet up (marginBottom) so fields stay visible without
-  // extra scrolling. The push is capped so the sheet top can never rise above
-  // the safe area and collide with the status bar — any keyboard height beyond
-  // that cap instead shrinks the sheet's maxHeight.
-  const availableHeight = SCREEN_H - insets.top - Space[4];
-  const sheetBottomMargin = Math.min(keyboardHeight, Math.max(0, availableHeight - SHEET_H));
-  const maxSheetHeight = Math.min(SHEET_H, availableHeight - keyboardHeight + sheetBottomMargin);
+  const sheetHeight = Math.min(SHEET_H, SCREEN_H - insets.top - Space[4]);
 
   const [rating, setRating] = useState(initialReview?.rating ?? 0);
   const [title, setTitle] = useState(initialReview?.title ?? '');
@@ -147,7 +129,7 @@ export const AddReviewSheet: React.FC<AddReviewSheetProps> = ({
           onPress={() => { Keyboard.dismiss(); onClose(); }}
         />
 
-        <View style={[styles.sheet, { maxHeight: maxSheetHeight, marginBottom: sheetBottomMargin }]}>
+        <View style={[styles.sheet, { height: sheetHeight }]}>
           <View style={styles.handle} />
 
           <View style={styles.sheetHeaderRow}>
@@ -167,90 +149,95 @@ export const AddReviewSheet: React.FC<AddReviewSheetProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView
-            style={styles.sheetScroll}
-            contentContainerStyle={styles.sheetContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
+          <KeyboardAvoidingView
+            style={styles.keyboardArea}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
-            <Text style={styles.sheetSectionLabel}>YOUR RATING</Text>
-            <View style={styles.starsRow}>
-              {STAR_VALUES.map(value => (
-                <TouchableOpacity
-                  key={value}
-                  onPress={() => { haptic.light(); setRating(value); }}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <Icon
-                    name={value <= rating ? 'star' : 'star-outline'}
-                    size={30}
-                    color={Colors.star}
-                    style={styles.star}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>TITLE</Text>
-            <TextInput
-              style={styles.titleInput}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Summarize your review"
-              placeholderTextColor={Colors.ink4}
-              maxLength={TITLE_MAX}
-            />
-
-            <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>REVIEW</Text>
-            <TextInput
-              style={styles.descriptionInput}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="What did you like or dislike?"
-              placeholderTextColor={Colors.ink4}
-              multiline
-              maxLength={DESCRIPTION_MAX}
-              textAlignVertical="top"
-            />
-            <Text style={styles.charCount}>{description.length}/{DESCRIPTION_MAX}</Text>
-
-            <Text style={[styles.sheetSectionLabel, { marginTop: Space[3] }]}>
-              PHOTOS (OPTIONAL)
-            </Text>
-            <View style={styles.photosRow}>
-              {images.map((uri, i) => (
-                <View key={i} style={styles.photoThumbWrap}>
-                  <Image source={{ uri }} style={styles.photoThumb} />
+            <ScrollView
+              style={styles.sheetScroll}
+              contentContainerStyle={styles.sheetContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            >
+              <Text style={styles.sheetSectionLabel}>YOUR RATING</Text>
+              <View style={styles.starsRow}>
+                {STAR_VALUES.map(value => (
                   <TouchableOpacity
-                    style={styles.photoRemoveBtn}
-                    onPress={() => removeAt(i)}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    key={value}
+                    onPress={() => { haptic.light(); setRating(value); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
-                    <Icon name="close" size={12} color="#FFFFFF" />
+                    <Icon
+                      name={value <= rating ? 'star' : 'star-outline'}
+                      size={30}
+                      color={Colors.star}
+                      style={styles.star}
+                    />
                   </TouchableOpacity>
-                </View>
-              ))}
-              {canAddMore ? (
-                <TouchableOpacity style={styles.photoAddBtn} onPress={handleAddPhoto}>
-                  <Icon name="camera-outline" size={22} color={Colors.ink3} />
-                </TouchableOpacity>
-              ) : null}
+                ))}
+              </View>
+
+              <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>TITLE</Text>
+              <TextInput
+                style={styles.titleInput}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Summarize your review"
+                placeholderTextColor={Colors.ink4}
+                maxLength={TITLE_MAX}
+              />
+
+              <Text style={[styles.sheetSectionLabel, { marginTop: Space[5] }]}>REVIEW</Text>
+              <TextInput
+                style={styles.descriptionInput}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="What did you like or dislike?"
+                placeholderTextColor={Colors.ink4}
+                multiline
+                maxLength={DESCRIPTION_MAX}
+                textAlignVertical="top"
+              />
+              <Text style={styles.charCount}>{description.length}/{DESCRIPTION_MAX}</Text>
+
+              <Text style={[styles.sheetSectionLabel, { marginTop: Space[3] }]}>
+                PHOTOS (OPTIONAL)
+              </Text>
+              <View style={styles.photosRow}>
+                {images.map((uri, i) => (
+                  <View key={i} style={styles.photoThumbWrap}>
+                    <Image source={{ uri }} style={styles.photoThumb} />
+                    <TouchableOpacity
+                      style={styles.photoRemoveBtn}
+                      onPress={() => removeAt(i)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Icon name="close" size={12} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {canAddMore ? (
+                  <TouchableOpacity style={styles.photoAddBtn} onPress={handleAddPhoto}>
+                    <Icon name="camera-outline" size={22} color={Colors.ink3} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <Text style={styles.charCount}>{images.length}/{MAX_REVIEW_IMAGES} photos</Text>
+
+              {pickerError ? <Text style={styles.sheetError}>{pickerError}</Text> : null}
+              {submitError ? <ErrorBanner body={submitError} /> : null}
+            </ScrollView>
+
+            <View style={[styles.ctaWrap, { paddingBottom: insets.bottom + Space[4] }]}>
+              <PrimaryButton
+                label={isEditing ? 'Update Review' : 'Submit Review'}
+                onPress={handleSubmit}
+                isDisabled={!canSubmit}
+                loading={submitting}
+              />
             </View>
-            <Text style={styles.charCount}>{images.length}/{MAX_REVIEW_IMAGES} photos</Text>
-
-            {pickerError ? <Text style={styles.sheetError}>{pickerError}</Text> : null}
-            {submitError ? <ErrorBanner body={submitError} /> : null}
-          </ScrollView>
-
-          <View style={[styles.ctaWrap, { paddingBottom: (keyboardHeight > 0 ? 0 : insets.bottom) + Space[4] }]}>
-            <PrimaryButton
-              label={isEditing ? 'Update Review' : 'Submit Review'}
-              onPress={handleSubmit}
-              isDisabled={!canSubmit}
-              loading={submitting}
-            />
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </View>
     </Modal>
@@ -273,6 +260,9 @@ const styles = StyleSheet.create({
     maxHeight:            SHEET_H,
     flexShrink:           1,
     overflow:             'hidden',
+  },
+  keyboardArea: {
+    flex: 1,
   },
   handle: {
     backgroundColor: Colors.rule,
