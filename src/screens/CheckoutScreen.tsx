@@ -18,7 +18,7 @@ import { Colors, Space, Radius } from '../theme';
 import { Type } from '../theme/typography';
 import { FontFamily } from '../theme/fonts';
 import { getDeliveryAddresses } from '../api/address';
-import { userFacingMessage } from '../api/apiError';
+import { applicationError, userFacingMessage } from '../api/apiError';
 import { placeOrder } from '../api/order';
 import { getSavedCartItems } from '../api/cart';
 import { useCart } from '../context/CartContext';
@@ -90,8 +90,13 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
 
   const { loading: fetchLoading, isError: fetchError, run: runAddressFetch } =
     useAsyncState<DeliveryAddress[]>([]);
-  const { data: cartSummary, loading: cartLoading, run: runCartFetch } =
-    useAsyncState<SavedCartSummaryInterface | null>(null);
+  const {
+    data: cartSummary,
+    loading: cartLoading,
+    isError: cartFetchError,
+    error: cartError,
+    run: runCartFetch,
+  } = useAsyncState<SavedCartSummaryInterface | null>(null);
 
   const [summary, setSummary] = useState<SavedCartSummaryInterface | null>(null);
   const [primaryAddress, setPrimaryAddress] = useState<DeliveryAddress | null>(null);
@@ -128,10 +133,10 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
         if (!userData) return null;
         const user = JSON.parse(userData);
         const response = await getSavedCartItems(user.CustomerProfileCode);
-        if (response.statusCode === 1 && response.result) {
-          return response.result;
+        if (response.statusCode !== 1 || !response.result) {
+          throw applicationError(response, 'Could not load your cart.');
         }
-        return null;
+        return response.result;
       }, cancelled),
     [runCartFetch],
   );
@@ -146,13 +151,11 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
   );
 
   React.useEffect(() => {
-    if (cartSummary) {
-      setSummary(cartSummary);
-    }
+    setSummary(cartSummary);
   }, [cartSummary]);
 
   const placeOrderHandler = async () => {
-    if (orderSubmitting || !summary || !primaryAddress) return;
+    if (orderSubmitting || !summary?.Items?.length || !primaryAddress) return;
     setOrderError(null);
     setOrderSubmitting(true);
 
@@ -239,13 +242,16 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
   const itemCount = summary?.Items?.length || 0;
   const totalItems = summary?.Items?.reduce((sum, item) => sum + item.Quantity, 0) || 0;
 
-  if (fetchError) {
+  if (fetchError || cartFetchError) {
     return (
       <ErrorState
         title="Couldn't load checkout."
-        message="Check your connection and try again."
-        onRetry={() => fetchAddresses()}
-        retryLoading={fetchLoading}
+        message={cartError ?? 'Check your connection and try again.'}
+        onRetry={() => {
+          fetchAddresses();
+          fetchCart();
+        }}
+        retryLoading={fetchLoading || cartLoading}
       />
     );
   }
@@ -511,7 +517,7 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({ navigation }) => {
         <PlaceOrderButton
           onPress={placeOrderHandler}
           submitting={orderSubmitting}
-          disabled={!primaryAddress || orderSubmitting}
+          disabled={!primaryAddress || !summary?.Items?.length || cartLoading || orderSubmitting}
         />
       </Animated.View>
 

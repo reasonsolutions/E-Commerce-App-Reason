@@ -298,7 +298,9 @@ const CartScreen: React.FC<CartScreenProps> = ({ navigation }) => {
         const results = await Promise.allSettled(
           cartItems.map(item => postDeleteCartItem(item.CartDetailsCode)),
         );
-        const failed = results.filter(r => r.status === 'rejected').length;
+        const failed = results.filter(
+          result => result.status === 'rejected' || result.value?.statusCode !== 1,
+        ).length;
         if (failed > 0) {
           // Some deletes succeeded so re-fetch the true server state rather
           // than guessing which items remain.
